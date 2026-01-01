@@ -19,9 +19,6 @@ export default function StepPreview({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const pax = Math.max(1, parseInt(basics?.pax_total || 1, 10));
-  const perPerson = (totals?.totals_sell_price || 0) / pax;
-
   // Snapshot completo (cabecera + items + totales + metadata)
   const snapshot = useMemo(() => {
     const header = {
@@ -30,10 +27,10 @@ export default function StepPreview({
       customer_email: basics.customer_email,
       customer_country: basics.customer_country,
       customer_language: basics.customer_language,
-      start_date: basics.start_date,
-      end_date: basics.end_date,
-      pax_total: basics.pax_total,
-      currency: basics.currency,
+      start_date: snapshotHeader.start_date,
+      end_date: snapshotHeader.end_date,
+      pax_total: snapshotHeader.pax_total,
+      currency: snapshotHeader.currency,
       status: 'sent',
     };
 
@@ -48,6 +45,11 @@ export default function StepPreview({
       giav_entity_id: it.giav_entity_id ?? null,
       giav_supplier_id: it.giav_supplier_id ?? null,
       giav_supplier_name: it.giav_supplier_name ?? null,
+      supplier_source: it.supplier_source ?? null,
+      supplier_resolution_chain: Array.isArray(it.supplier_resolution_chain) ? it.supplier_resolution_chain : [],
+      preflight_ok: it.preflight_ok ?? null,
+      warnings: Array.isArray(it.warnings) ? it.warnings : [],
+      blocking: Array.isArray(it.blocking) ? it.blocking : [],
       supplier_override: !!it.supplier_override,
 
       title: it.title ?? `Item ${index + 1}`,
@@ -109,6 +111,42 @@ export default function StepPreview({
     };
   }, [basics, items, totals]);
 
+  // Snapshot = fuente de verdad (sin recalcular ni consultar backends en este paso).
+  const snapshotHeader = snapshot?.header || {};
+  const snapshotTotals = snapshot?.totals || {};
+  const snapshotItems = Array.isArray(snapshot?.items) ? snapshot.items : [];
+
+  const issueSummary = useMemo(() => {
+    let warningCount = 0;
+    let blockingCount = 0;
+
+    snapshotItems.forEach((it) => {
+      const warnings = Array.isArray(it?.warnings) ? it.warnings : [];
+      const blocking = Array.isArray(it?.blocking) ? it.blocking : [];
+      warningCount += warnings.length;
+      blockingCount += blocking.length;
+    });
+
+    return { warningCount, blockingCount };
+  }, [snapshotItems]);
+
+  const statusType =
+    issueSummary.blockingCount > 0
+      ? 'error'
+      : issueSummary.warningCount > 0
+      ? 'warning'
+      : 'success';
+
+  const statusLabel =
+    issueSummary.blockingCount > 0
+      ? 'No se puede confirmar'
+      : issueSummary.warningCount > 0
+      ? `Listo para confirmar (${issueSummary.warningCount} avisos)`
+      : 'Listo para confirmar';
+
+  const pax = Math.max(1, parseInt(snapshotHeader?.pax_total || 1, 10));
+  const perPerson = (snapshotTotals?.totals_sell_price || 0) / pax;
+
   const send = async () => {
     setLoading(true);
     setError('');
@@ -120,6 +158,7 @@ export default function StepPreview({
         versionId: res.version_id,
         publicToken: res.public_token,
         publicUrl: res.public_url,
+        snapshot,
       });
     } catch (e) {
       setError(e?.message || 'Error enviando la propuesta.');
@@ -131,7 +170,7 @@ export default function StepPreview({
   return (
     <Card>
       <CardHeader>
-        <strong>Preview & envío</strong>
+        <strong>Preview y envio</strong>
       </CardHeader>
 
       <CardBody>
@@ -141,8 +180,12 @@ export default function StepPreview({
           </Notice>
         )}
 
+        <Notice status={statusType} isDismissible={false}>
+          {statusLabel}
+        </Notice>
+
         <Notice status="info" isDismissible={false}>
-          El cliente verá solo el total del paquete. El desglose por líneas queda guardado internamente en la versión.
+          El cliente vera solo el total del paquete. El desglose por lineas queda guardado internamente en la version.
         </Notice>
 
         <div
@@ -154,41 +197,92 @@ export default function StepPreview({
             background: '#fff',
           }}
         >
-          <div style={{ fontWeight: 800 }}>{basics.customer_name}</div>
+          <div style={{ fontWeight: 800 }}>{snapshotHeader.customer_name}</div>
           <div style={{ opacity: 0.8 }}>
-            {basics.start_date} → {basics.end_date} | Pax: {basics.pax_total} | Moneda: {basics.currency}
+            {snapshotHeader.start_date} - {snapshotHeader.end_date} | Pax: {snapshotHeader.pax_total} | Moneda: {snapshotHeader.currency}
           </div>
 
-          <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
-            {(items || []).map((it, idx) => (
-              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                <div style={{ opacity: 0.9 }}>
-                  <strong>{it.service_type?.toUpperCase()}</strong> · {it.title}
-                  {it.service_type === 'hotel' && it.hotel_room_type ? ` · ${it.hotel_room_type}` : ''}
-                  {it.service_type === 'package' && it.package_components_text
-                    ? ` · Incluye: ${it.package_components_text.split('\n').filter(Boolean).join(', ')}`
-                    : ''}
+
+          <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>
+            {snapshotItems.map((it, idx) => {
+              const warnings = Array.isArray(it?.warnings) ? it.warnings : [];
+              const blocking = Array.isArray(it?.blocking) ? it.blocking : [];
+              const displayName = it.display_name || it.title || `Item ${idx + 1}`;
+              const supplierName = it.giav_supplier_name || 'Proveedor no especificado';
+              const hasBlocking = blocking.length > 0;
+              const hasWarnings = warnings.length > 0;
+
+              return (
+                <div key={idx} className="preview-item">
+                  <div className="preview-item__main">
+                    <div className="preview-item__title">
+                      <strong>{it.service_type?.toUpperCase()}</strong> - {displayName}
+                    </div>
+                    <div className="preview-item__supplier">Proveedor: {supplierName}</div>
+
+                    {it.service_type === 'hotel' && it.hotel_room_type ? (
+                      <div className="preview-item__meta">Habitacion: {it.hotel_room_type}</div>
+                    ) : null}
+
+                    {it.service_type === 'package' && it.package_components_text ? (
+                      <div className="preview-item__meta">
+                        Incluye: {it.package_components_text.split('\n').filter(Boolean).join(', ')}
+                      </div>
+                    ) : null}
+
+                    {hasBlocking && (
+                      <div className="preview-item__blocking">
+                        <span className="preview-item__badge preview-item__badge--error">Error</span>
+                        Este servicio impide la confirmacion.
+                      </div>
+                    )}
+
+                    {hasBlocking && (
+                      <details className="preview-item__details">
+                        <summary>Ver motivos</summary>
+                        <ul>
+                          {blocking.map((b, i) => (
+                            <li key={i}>{b?.message || 'Revision requerida'}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+
+                    {hasWarnings && (
+                      <details className="preview-item__details">
+                        <summary>
+                          <span className="preview-item__badge preview-item__badge--warning">Aviso</span>
+                          Ver avisos ({warnings.length})
+                        </summary>
+                        <ul>
+                          {warnings.map((w, i) => (
+                            <li key={i}>{w?.message || 'Aviso'}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
+                  <div className="preview-item__price">
+                    {snapshotHeader.currency} {round2(it.line_sell_price || 0).toFixed(2)}
+                  </div>
                 </div>
-                <div style={{ fontWeight: 700 }}>
-                  {basics.currency} {round2(it.line_sell_price || 0).toFixed(2)}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div style={{ marginTop: 12, borderTop: '1px solid #eee', paddingTop: 12 }}>
             <div style={{ fontSize: 12, opacity: 0.7 }}>Total paquete</div>
             <div style={{ fontSize: 20, fontWeight: 900 }}>
-              {basics.currency} {round2(totals?.totals_sell_price || 0).toFixed(2)}
+              {snapshotHeader.currency} {round2(snapshotTotals?.totals_sell_price || 0).toFixed(2)}
             </div>
 
             <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
-              Precio por persona: {basics.currency} {round2(perPerson).toFixed(2)}
+              Precio por persona: {snapshotHeader.currency} {round2(perPerson).toFixed(2)}
             </div>
 
             <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
-              Margen interno: {basics.currency} {round2(totals?.totals_margin_abs || 0).toFixed(2)} (
-              {round2(totals?.totals_margin_pct || 0).toFixed(2)}%)
+              Margen interno: {snapshotHeader.currency} {round2(snapshotTotals?.totals_margin_abs || 0).toFixed(2)} (
+              {round2(snapshotTotals?.totals_margin_pct || 0).toFixed(2)}%)
             </div>
           </div>
         </div>

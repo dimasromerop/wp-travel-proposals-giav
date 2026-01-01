@@ -1,4 +1,4 @@
-import { useEffect, useState } from '@wordpress/element';
+import { useState } from '@wordpress/element';
 import { Notice, Button, Spinner } from '@wordpress/components';
 import StepBasics from './steps/StepBasics';
 import StepServices from './steps/StepServices';
@@ -14,37 +14,14 @@ export default function ProposalWizard({ onExit }) {
   const [items, setItems] = useState([]);
   const [totals, setTotals] = useState(null);
 
+  const [snapshot, setSnapshot] = useState(null);
   const [versionId, setVersionId] = useState(null);
 
   // GIAV preflight & confirm
-  const [preflight, setPreflight] = useState(null);
-  const [preflightLoading, setPreflightLoading] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [confirmError, setConfirmError] = useState('');
   const [confirmOk, setConfirmOk] = useState(false);
 
-
-  useEffect(() => {
-    if (!versionId || step !== 4) return;
-
-    let cancelled = false;
-    (async () => {
-      setPreflightLoading(true);
-      setConfirmError('');
-      try {
-        const res = await API.giavPreflight(versionId);
-        if (!cancelled) setPreflight(res);
-      } catch (e) {
-        if (!cancelled) setConfirmError(e?.message || 'No se pudo comprobar el estado GIAV.');
-      } finally {
-        if (!cancelled) setPreflightLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [versionId, step]);
 
   const onConfirmGiav = async () => {
     if (!versionId) return;
@@ -55,14 +32,6 @@ export default function ProposalWizard({ onExit }) {
     try {
       await API.confirmGiav(versionId);
       setConfirmOk(true);
-
-      // Refresh preflight after confirming/queuing
-      try {
-        const res = await API.giavPreflight(versionId);
-        setPreflight(res);
-      } catch (e) {
-        // ignore refresh errors, confirmation already triggered
-      }
     } catch (e) {
       setConfirmError(e?.message || 'Error confirmando en GIAV.');
     } finally {
@@ -118,32 +87,45 @@ export default function ProposalWizard({ onExit }) {
         items={items}
         totals={totals}
         onBack={() => setStep(2)}
-        onSent={({ versionId: vId }) => {
+        onSent={({ versionId: vId, snapshot: sentSnapshot }) => {
           setVersionId(vId);
+          setSnapshot(sentSnapshot || null);
           setStep(4);
         }}
       />
     );
   }
 
+
   if (step === 4) {
-    const canConfirm = !!preflight?.ok;
-    const warnings = Array.isArray(preflight?.warnings) ? preflight.warnings : [];
-    const warningLabels = {
-      manual_item_with_supplier: 'Ítem manual con proveedor',
-      missing_active_mapping_fallback_generic_supplier: 'Usa proveedor genérico (sin mapeo activo)',
-      generic_supplier: 'Usa proveedor genérico (mapeo)',
-    };
+    const snapshotItems = Array.isArray(snapshot?.items) ? snapshot.items : [];
+    const warningCount = snapshotItems.reduce((acc, it) => {
+      const warnings = Array.isArray(it?.warnings) ? it.warnings : [];
+      return acc + warnings.length;
+    }, 0);
+    const blockingCount = snapshotItems.reduce((acc, it) => {
+      const blocking = Array.isArray(it?.blocking) ? it.blocking : [];
+      return acc + blocking.length;
+    }, 0);
+
+    const statusType = blockingCount > 0 ? 'error' : warningCount > 0 ? 'warning' : 'success';
+    const statusLabel = blockingCount > 0
+      ? 'No se puede confirmar'
+      : warningCount > 0
+      ? `Listo para confirmar (${warningCount} avisos)`
+      : 'Listo para confirmar';
+
+    const canConfirm = blockingCount === 0;
 
     return (
       <div>
         <Notice status="success" isDismissible={false}>
-          Propuesta enviada. Versión creada: <strong>{versionId}</strong>
+          Propuesta enviada. Version creada: <strong>{versionId}</strong>
         </Notice>
 
         {confirmOk && (
           <Notice status="success" isDismissible={false}>
-            Confirmación GIAV iniciada (encolada).
+            Confirmacion GIAV iniciada (encolada).
           </Notice>
         )}
 
@@ -156,62 +138,13 @@ export default function ProposalWizard({ onExit }) {
         <div style={{ marginTop: 12 }}>
           <strong>Estado GIAV</strong>
           <div style={{ marginTop: 8 }}>
-            {preflightLoading ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Spinner />
-                <span>Comprobando mapeos...</span>
-              </div>
-            ) : preflight ? (
-              preflight.ok ? (
-                <Notice status="success" isDismissible={false}>
-                  Todo mapeado. Lista para confirmar en GIAV.
-                </Notice>
-              ) : (
-                <Notice status="warning" isDismissible={false}>
-                  Faltan mapeos GIAV. No se puede confirmar hasta resolverlo.
-                  {Array.isArray(preflight.blocking) && preflight.blocking.length > 0 && (
-                    <ul style={{ marginTop: 8, paddingLeft: 18 }}>
-                      {preflight.blocking.map((b, i) => (
-                        <li key={i}>
-                          <strong>{(b.service_type || '').toUpperCase()}</strong> · {b.title || 'Sin título'}{' '}
-                          <span style={{ opacity: 0.8 }}>
-                            ({b.reason || 'sin mapeo'})
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </Notice>
-              )
-            ) : (
-              <Notice status="warning" isDismissible={false}>
-                No se pudo obtener el estado GIAV.
-              </Notice>
-            )}
+            <Notice status={statusType} isDismissible={false}>
+              {statusLabel}
+            </Notice>
           </div>
         </div>
 
-        {!!warnings.length && (
-          <div style={{ marginTop: 12 }}>
-            <Notice status="info" isDismissible={false}>
-              Hay advertencias de GIAV que no bloquean la confirmación:
-              <ul style={{ marginTop: 8, paddingLeft: 18 }}>
-                {warnings.map((w, i) => (
-                  <li key={i}>
-                    <strong>{(w.service_type || '').toUpperCase()}</strong>
-                    {w.title ? ` · ${w.title}` : ''}
-                    <span style={{ opacity: 0.8 }}>
-                      {' '}
-                      ({warningLabels[w.reason] || w.reason || 'advertencia'})
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Notice>
-          </div>
-        )}
-
-        <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <Button variant="primary" onClick={onExit}>
             Salir
           </Button>
@@ -230,11 +163,17 @@ export default function ProposalWizard({ onExit }) {
               'Confirmar en GIAV'
             )}
           </Button>
+
+          {!canConfirm && (
+            <span style={{ fontSize: 12, color: '#b91c1c' }}>
+              Hay servicios que requieren correccion.
+            </span>
+          )}
         </div>
       </div>
     );
   }
-return null;
+  return null;
 }
     
 
