@@ -23,6 +23,10 @@ console.log('components', {
 
 import API from '../../api';
 import CatalogSelect from '../CatalogSelect';
+import SupplierSearchSelect from '../SupplierSearchSelect';
+
+const DEFAULT_SUPPLIER_ID = '1734698';
+const DEFAULT_SUPPLIER_NAME = 'Proveedores varios';
 
 
 const SERVICE_TYPES = [
@@ -109,8 +113,10 @@ function defaultItem(basics, defaultMarkupPct = 0) {
     // --- GIAV mapping snapshot ---
     giav_entity_type: null,     // 'supplier' | 'service' | 'product'
     giav_entity_id: null,
-    giav_supplier_id: null,
-    giav_mapping_status: 'missing', // 'active' | 'needs_review' | 'deprecated' | 'missing'
+    // Default supplier: generic bucket in GIAV (valid, but should be reviewed)
+    giav_supplier_id: DEFAULT_SUPPLIER_ID,
+    giav_supplier_name: DEFAULT_SUPPLIER_NAME,
+    giav_mapping_status: 'needs_review', // 'active' | 'needs_review' | 'deprecated' | 'missing'
 
   };
 }
@@ -353,45 +359,118 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                   />
 
                   {(it.service_type === 'hotel' || it.service_type === 'golf') ? (
-  <CatalogSelect
-    label={it.service_type === 'hotel' ? 'Hotel' : 'Campo de golf'}
-    type={it.service_type === 'hotel' ? 'hotel' : 'golf'}
-    valueTitle={it.title}
-    onPick={async (r) => {
-      updateItem(idx, {
-        title: r.title,
-        wp_object_type: it.service_type === 'hotel' ? 'hotel' : 'course',
-        wp_object_id: r.id,
-      });
+                    <>
+                      <ToggleControl
+                        label="Entrada manual (fuera de catálogo)"
+                        checked={!!it.use_manual_entry}
+                        onChange={() => {
+                          const next = !it.use_manual_entry;
+                          if (next) {
+                            // Manual: detach from WP catalog reference
+                            updateItem(idx, {
+                              use_manual_entry: true,
+                              wp_object_type: 'manual',
+                              wp_object_id: 0,
+                              giav_entity_type: 'supplier',
+                              giav_entity_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
+                              giav_mapping_status: it.giav_supplier_id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
+                            });
+                          } else {
+                            // Back to catalog mode: clear wp ref until user picks one
+                            updateItem(idx, {
+                              use_manual_entry: false,
+                              wp_object_type: null,
+                              wp_object_id: null,
+                              giav_mapping_status: 'missing',
+                            });
+                          }
+                        }}
+                      />
 
-      try {
-        const m = await API.getGiavMapping({
-          wp_object_type: it.service_type === 'hotel' ? 'hotel' : 'course',
-          wp_object_id: r.id,
-        });
+                      {!it.use_manual_entry ? (
+                        <CatalogSelect
+                          label={it.service_type === 'hotel' ? 'Hotel' : 'Campo de golf'}
+                          type={it.service_type === 'hotel' ? 'hotel' : 'golf'}
+                          valueTitle={it.title}
+                          onPick={async (r) => {
+                            const wpType = it.service_type === 'hotel' ? 'hotel' : 'course';
+                            updateItem(idx, {
+                              title: r.title,
+                              wp_object_type: wpType,
+                              wp_object_id: r.id,
+                            });
 
-        if (m?.status && m.status !== 'missing') {
-          updateItem(idx, {
-            giav_mapping_status: m.status,
-            giav_entity_type: m.giav_entity_type,
-            giav_entity_id: m.giav_entity_id,
-            giav_supplier_id: m.giav_supplier_id ?? null,
-          });
-        } else {
-          updateItem(idx, { giav_mapping_status: 'missing' });
-        }
-      } catch {
-        updateItem(idx, { giav_mapping_status: 'missing' });
-      }
-    }}
-  />
-) : (
-  <TextControl
-    label="Título / descripción *"
-    value={it.title}
-    onChange={(v) => updateItem(idx, { title: v })}
-  />
-)}
+                            try {
+                              const m = await API.getGiavMapping({
+                                wp_object_type: wpType,
+                                wp_object_id: r.id,
+                              });
+
+                              // Backend may return a generic fallback. Treat it as needs_review.
+                              if (m?.status && m.status !== 'missing') {
+                                updateItem(idx, {
+                                  giav_mapping_status: m.status,
+                                  giav_entity_type: m.giav_entity_type,
+                                  giav_entity_id: m.giav_entity_id,
+                                  giav_supplier_id: m.giav_supplier_id ?? DEFAULT_SUPPLIER_ID,
+                                  giav_supplier_name: m.giav_supplier_name ?? DEFAULT_SUPPLIER_NAME,
+                                });
+                              } else {
+                                updateItem(idx, {
+                                  giav_mapping_status: 'needs_review',
+                                  giav_entity_type: 'supplier',
+                                  giav_entity_id: DEFAULT_SUPPLIER_ID,
+                                  giav_supplier_id: DEFAULT_SUPPLIER_ID,
+                                  giav_supplier_name: DEFAULT_SUPPLIER_NAME,
+                                });
+                              }
+                            } catch {
+                              updateItem(idx, {
+                                giav_mapping_status: 'needs_review',
+                                giav_entity_type: 'supplier',
+                                giav_entity_id: DEFAULT_SUPPLIER_ID,
+                                giav_supplier_id: DEFAULT_SUPPLIER_ID,
+                                giav_supplier_name: DEFAULT_SUPPLIER_NAME,
+                              });
+                            }
+                          }}
+                        />
+                      ) : (
+                        <TextControl
+                          label={it.service_type === 'hotel' ? 'Hotel (manual) *' : 'Campo de golf (manual) *'}
+                          value={it.title}
+                          onChange={(v) => updateItem(idx, { title: v })}
+                          placeholder={it.service_type === 'hotel' ? 'Ej: Hotel X (fuera de catálogo)' : 'Ej: Campo Y (fuera de catálogo)'}
+                        />
+                      )}
+
+                      <div style={{ minWidth: 280 }}>
+                        <SupplierSearchSelect
+                          selectedId={it.giav_supplier_id || DEFAULT_SUPPLIER_ID}
+                          selectedLabel={it.giav_supplier_name || DEFAULT_SUPPLIER_NAME}
+                          disabled={false}
+                          onPick={(prov) => {
+                            const id = String(prov?.id || '');
+                            const label = String(prov?.label || '');
+                            if (!id) return;
+                            updateItem(idx, {
+                              giav_entity_type: 'supplier',
+                              giav_entity_id: id,
+                              giav_supplier_id: id,
+                              giav_supplier_name: label,
+                              giav_mapping_status: id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
+                            });
+                          }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <TextControl
+                      label="Título / descripción *"
+                      value={it.title}
+                      onChange={(v) => updateItem(idx, { title: v })}
+                    />
+                  )}
 
 
                   <TextControl
@@ -522,8 +601,12 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
     }}
   >
     {it.giav_mapping_status === 'active'
-      ? 'Mapeado GIAV'
-      : 'Sin mapeo GIAV'}
+      ? (String(it.giav_supplier_id || '') === DEFAULT_SUPPLIER_ID
+          ? 'Proveedor genérico (GIAV)'
+          : 'Mapeado GIAV')
+      : (it.giav_mapping_status === 'needs_review'
+          ? 'Pendiente de revisar'
+          : 'Sin mapeo GIAV')}
   </div>
 )}
 

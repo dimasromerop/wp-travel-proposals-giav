@@ -43,14 +43,30 @@ class WP_Travel_GIAV_Preflight {
             $wp_object_type = isset( $item['wp_object_type'] ) ? (string) $item['wp_object_type'] : '';
             $wp_object_id   = isset( $item['wp_object_id'] ) ? (int) $item['wp_object_id'] : 0;
 
-            if ( $wp_object_type === '' || $wp_object_id <= 0 ) {
-                $blocking[] = [
-                    'item_id'        => $item_id,
-                    'service_type'   => $service_type,
-                    'wp_object_type' => $wp_object_type,
-                    'wp_object_id'   => $wp_object_id,
-                    'reason'         => 'missing_wp_reference',
-                ];
+            // Manual/out-of-catalog items are allowed: they just need a GIAV supplier selected.
+            if ( $wp_object_type === '' || $wp_object_id <= 0 || $wp_object_type === 'manual' ) {
+                $supplier_id = isset( $item['giav_supplier_id'] ) ? (string) $item['giav_supplier_id'] : '';
+                if ( $supplier_id === '' ) {
+                    $blocking[] = [
+                        'item_id'        => $item_id,
+                        'service_type'   => $service_type,
+                        'wp_object_type' => $wp_object_type,
+                        'wp_object_id'   => $wp_object_id,
+                        'reason'         => 'missing_giav_supplier_id',
+                    ];
+                } else {
+                    $warnings[] = [
+                        'item_id'        => $item_id,
+                        'service_type'   => $service_type,
+                        'wp_object_type' => $wp_object_type,
+                        'wp_object_id'   => $wp_object_id,
+                        'reason'         => 'manual_or_missing_wp_reference_using_item_supplier',
+                        'fallback'       => [
+                            'giav_supplier_id'   => $supplier_id,
+                            'giav_supplier_name' => isset( $item['giav_supplier_name'] ) ? (string) $item['giav_supplier_name'] : '',
+                        ],
+                    ];
+                }
                 continue;
             }
 
