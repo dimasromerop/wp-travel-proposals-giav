@@ -6,3 +6,210 @@
 .wp-travel-giav-app {
   max-width: 1200px;
 }
+
+.services-step {
+  background: #f7f8fb;
+  border: 1px solid #e4e7ec;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+}
+
+.services-step__title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.services-step__subtitle {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.services-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.services-toolbar__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+
+.services-toolbar__controls .components-base-control {
+  min-width: 220px;
+}
+
+.services-toolbar__summary {
+  margin-left: auto;
+  text-align: right;
+}
+
+.services-toolbar__label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.services-toolbar__value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.services-toolbar__hint {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.services-items {
+  display: grid;
+  gap: 16px;
+}
+
+.service-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.service-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.service-card__title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.service-card__eyebrow {
+  font-size: 11px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.service-card__name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.service-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.service-card__badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.service-card__badge--active {
+  background: #ecfdf3;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.service-card__badge--needs_review,
+.service-card__badge--missing {
+  background: #fff7ed;
+  color: #b45309;
+  border-color: #fed7aa;
+}
+
+.service-card__total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.service-card__total strong {
+  color: #0f172a;
+  font-size: 16px;
+}
+
+.service-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.service-card__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  align-items: end;
+}
+
+.service-card__supplier {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 240px;
+}
+
+.service-card__package {
+  margin-top: 8px;
+}
+
+.service-card__notes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.services-add {
+  margin-top: 16px;
+}
+
+.services-summary {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.services-summary__label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.services-summary__value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.services-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+}

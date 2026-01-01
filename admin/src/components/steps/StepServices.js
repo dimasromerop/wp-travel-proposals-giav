@@ -10,17 +10,6 @@ import {
   ToggleControl,
 } from '@wordpress/components';
 
-console.log('components', {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  Notice,
-  TextControl,
-  SelectControl,
-  ToggleControl,
-});
-
 import API from '../../api';
 import CatalogSelect from '../CatalogSelect';
 import SupplierSearchSelect from '../SupplierSearchSelect';
@@ -119,6 +108,7 @@ function defaultItem(basics, defaultMarkupPct = 0) {
     giav_supplier_id: DEFAULT_SUPPLIER_ID,
     giav_supplier_name: DEFAULT_SUPPLIER_NAME,
     giav_mapping_status: 'needs_review', // 'active' | 'needs_review' | 'deprecated' | 'missing'
+    show_supplier_picker: false,
 
   };
 }
@@ -229,6 +219,16 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
     });
   };
 
+  const toggleSupplierPicker = (idx) => {
+    setItems((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], show_supplier_picker: !next[idx].show_supplier_picker };
+      return next;
+    });
+  };
+
+  const isSupplierPickerVisible = (item) => item.use_manual_entry || item.show_supplier_picker;
+
   const addItem = () => {
     setItems((prev) => {
       const it = defaultItem(basics, applyMarkupToNew ? globalMarkupPct : 0);
@@ -285,9 +285,12 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
   };
 
   return (
-    <Card>
+    <Card className="services-step">
       <CardHeader>
-        <strong>Servicios & precios</strong>
+        <div className="services-step__title">
+          <strong>Servicios &amp; precios</strong>
+          <span className="services-step__subtitle">Añade servicios con detalle, márgenes y proveedor.</span>
+        </div>
       </CardHeader>
 
       <CardBody>
@@ -298,62 +301,80 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
         )}
 
         {/* Global markup bar */}
-        <div
-          style={{
-            border: '1px solid #e5e5e5',
-            borderRadius: 10,
-            padding: 12,
-            background: '#fafafa',
-            marginBottom: 12,
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 12,
-            alignItems: 'flex-end',
-          }}
-        >
-          <TextControl
-            label="Margen por defecto (%)"
-            type="number"
-            min={0}
-            value={String(globalMarkupPct)}
-            onChange={(v) => setGlobalMarkupPct(toNumber(v))}
-            style={{ width: 220 }}
-          />
+        <div className="services-toolbar">
+          <div className="services-toolbar__controls">
+            <TextControl
+              label="Margen por defecto (%)"
+              type="number"
+              min={0}
+              value={String(globalMarkupPct)}
+              onChange={(v) => setGlobalMarkupPct(toNumber(v))}
+            />
 
-          <ToggleControl
-            label="Aplicar a nuevas líneas"
-            checked={applyMarkupToNew}
-            onChange={() => setApplyMarkupToNew((s) => !s)}
-          />
+            <ToggleControl
+              label="Aplicar a nuevas líneas"
+              checked={applyMarkupToNew}
+              onChange={() => setApplyMarkupToNew((s) => !s)}
+            />
 
-          <Button variant="secondary" onClick={applyGlobalMarkupToAll}>
-            Aplicar a todas
-          </Button>
+            <Button variant="secondary" onClick={applyGlobalMarkupToAll}>
+              Aplicar a todas
+            </Button>
+          </div>
 
-          <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>PVP total</div>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>
+          <div className="services-toolbar__summary">
+            <div className="services-toolbar__label">PVP total</div>
+            <div className="services-toolbar__value">
               {currency} {totals.totals_sell_price.toFixed(2)}
             </div>
-            <div style={{ fontSize: 12, opacity: 0.75 }}>
+            <div className="services-toolbar__hint">
               {currency} {round2(perPerson).toFixed(2)} / pax
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div className="services-items">
           {items.map((it, idx) => (
             <div
               key={idx}
-              style={{
-                border: '1px solid #e5e5e5',
-                borderRadius: 10,
-                padding: 12,
-                background: '#fff',
-              }}
+              className="service-card"
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', flex: 1 }}>
+              <div className="service-card__header">
+                <div className="service-card__title">
+                  <div className="service-card__eyebrow">Servicio {idx + 1}</div>
+                  <div className="service-card__name">{it.title?.trim() || 'Sin título'}</div>
+                </div>
+
+                <div className="service-card__meta">
+                  {(it.service_type === 'hotel' || it.service_type === 'golf') && (
+                    <div
+                      className={`service-card__badge service-card__badge--${it.giav_mapping_status}`}
+                    >
+                      {it.giav_mapping_status === 'active'
+                        ? (String(it.giav_supplier_id || '') === DEFAULT_SUPPLIER_ID
+                          ? 'Proveedor genérico (GIAV)'
+                          : 'Mapeado GIAV')
+                        : (it.giav_mapping_status === 'needs_review'
+                          ? 'Pendiente de revisar'
+                          : 'Sin mapeo GIAV')}
+                    </div>
+                  )}
+
+                  <div className="service-card__total">
+                    <span>Total línea</span>
+                    <strong>
+                      {currency} {round2(it.line_sell_price || 0).toFixed(2)}
+                    </strong>
+                  </div>
+
+                  <Button variant="tertiary" onClick={() => removeItem(idx)} disabled={items.length === 1}>
+                    Eliminar
+                  </Button>
+                </div>
+              </div>
+
+              <div className="service-card__content">
+                <div className="service-card__grid">
                   <SelectControl
                     label="Tipo"
                     value={it.service_type}
@@ -375,6 +396,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                               use_manual_entry: true,
                               wp_object_type: 'manual',
                               wp_object_id: 0,
+                              show_supplier_picker: true,
                               giav_entity_type: 'supplier',
                               giav_entity_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
                               giav_mapping_status: it.giav_supplier_id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
@@ -389,6 +411,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                               use_manual_entry: false,
                               wp_object_type: null,
                               wp_object_id: null,
+                              show_supplier_picker: false,
                               giav_mapping_status: 'missing',
                               display_name: '',
                             });
@@ -454,24 +477,45 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                         />
                       )}
 
-                      <div style={{ minWidth: 280 }}>
-                        <SupplierSearchSelect
-                          selectedId={it.giav_supplier_id || DEFAULT_SUPPLIER_ID}
-                          selectedLabel={it.giav_supplier_name || DEFAULT_SUPPLIER_NAME}
-                          disabled={false}
-                          onPick={(prov) => {
-                            const id = String(prov?.id || '');
-                            const label = String(prov?.label || '');
-                            if (!id) return;
-                            updateItem(idx, {
-                              giav_entity_type: 'supplier',
-                              giav_entity_id: id,
-                              giav_supplier_id: id,
-                              giav_supplier_name: label,
-                              giav_mapping_status: id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
-                            });
-                          }}
-                        />
+                      <div className="service-card__supplier">
+                        {!isSupplierPickerVisible(it) && (
+                          <Button
+                            variant="tertiary"
+                            onClick={() => toggleSupplierPicker(idx)}
+                          >
+                            Cambiar proveedor
+                          </Button>
+                        )}
+
+                        {isSupplierPickerVisible(it) && (
+                          <>
+                            {!it.use_manual_entry && (
+                              <ToggleControl
+                                label="Proveedor (opcional)"
+                                checked={!!it.show_supplier_picker}
+                                onChange={() => toggleSupplierPicker(idx)}
+                              />
+                            )}
+
+                            <SupplierSearchSelect
+                              selectedId={it.giav_supplier_id || DEFAULT_SUPPLIER_ID}
+                              selectedLabel={it.giav_supplier_name || DEFAULT_SUPPLIER_NAME}
+                              disabled={false}
+                              onPick={(prov) => {
+                                const id = String(prov?.id || '');
+                                const label = String(prov?.label || '');
+                                if (!id) return;
+                                updateItem(idx, {
+                                  giav_entity_type: 'supplier',
+                                  giav_entity_id: id,
+                                  giav_supplier_id: id,
+                                  giav_supplier_name: label,
+                                  giav_mapping_status: id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
+                                });
+                              }}
+                            />
+                          </>
+                        )}
                       </div>
                     </>
                   ) : (
@@ -592,52 +636,11 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                     style={{ width: 160 }}
                   />
                 </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-                  {(it.service_type === 'hotel' || it.service_type === 'golf') && (
-  <div
-    style={{
-      fontSize: 12,
-      padding: '2px 8px',
-      borderRadius: 999,
-      background:
-        it.giav_mapping_status === 'active'
-          ? '#e7f7ed'
-          : '#fff4e5',
-      color:
-        it.giav_mapping_status === 'active'
-          ? '#0a6b2b'
-          : '#7a4b00',
-    }}
-  >
-    {it.use_manual_entry
-      ? (String(it.giav_supplier_id || '') === DEFAULT_SUPPLIER_ID
-          ? 'Manual · Proveedor genérico'
-          : 'Manual · Proveedor específico')
-      : (it.giav_mapping_status === 'active'
-          ? (String(it.giav_supplier_id || '') === DEFAULT_SUPPLIER_ID
-              ? 'Proveedor genérico (GIAV)'
-              : 'Mapeado GIAV')
-          : (it.giav_mapping_status === 'needs_review'
-              ? 'Pendiente de revisar'
-              : 'Sin mapeo GIAV'))}
-  </div>
-)}
-
-                  <div style={{ fontSize: 12, opacity: 0.7 }}>Total línea</div>
-                  <div style={{ fontWeight: 800 }}>
-                    {currency} {round2(it.line_sell_price || 0).toFixed(2)}
-                  </div>
-
-                  <Button variant="tertiary" onClick={() => removeItem(idx)} disabled={items.length === 1}>
-                    Eliminar
-                  </Button>
-                </div>
               </div>
 
               {/* Paquete: detalle de qué incluye */}
               {it.service_type === 'package' && (
-                <div style={{ marginTop: 12 }}>
+                <div className="service-card__package">
                   <TextControl
                     label="Incluye (una línea por item)"
                     value={it.package_components_text || ''}
@@ -647,7 +650,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+              <div className="service-card__notes">
                 <TextControl
                   label="Notas públicas (itinerario)"
                   value={it.notes_public || ''}
@@ -665,55 +668,43 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
           ))}
         </div>
 
-        <div style={{ marginTop: 12 }}>
+        <div className="services-add">
           <Button variant="secondary" onClick={addItem}>
             + Añadir servicio
           </Button>
         </div>
 
-        <div
-          style={{
-            marginTop: 16,
-            border: '1px solid #e5e5e5',
-            borderRadius: 10,
-            padding: 12,
-            background: '#fafafa',
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: 12,
-            flexWrap: 'wrap',
-          }}
-        >
+        <div className="services-summary">
           <div>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>Coste total</div>
-            <div style={{ fontWeight: 800 }}>
+            <div className="services-summary__label">Coste total</div>
+            <div className="services-summary__value">
               {currency} {totals.totals_cost_net.toFixed(2)}
             </div>
           </div>
 
           <div>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>PVP total</div>
-            <div style={{ fontWeight: 800 }}>
+            <div className="services-summary__label">PVP total</div>
+            <div className="services-summary__value">
               {currency} {totals.totals_sell_price.toFixed(2)}
             </div>
           </div>
 
           <div>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>Precio por persona</div>
-            <div style={{ fontWeight: 800 }}>
+            <div className="services-summary__label">Precio por persona</div>
+            <div className="services-summary__value">
               {currency} {round2(perPerson).toFixed(2)}
             </div>
           </div>
 
           <div>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>Margen</div>
-            <div style={{ fontWeight: 800 }}>
+            <div className="services-summary__label">Margen</div>
+            <div className="services-summary__value">
               {currency} {totals.totals_margin_abs.toFixed(2)} ({totals.totals_margin_pct.toFixed(2)}%)
             </div>
           </div>
         </div>
 
-        <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+        <div className="services-actions">
           <Button variant="secondary" onClick={onBack}>
             Volver
           </Button>
