@@ -45,57 +45,45 @@ if ( empty( $preflight['ok'] ) ) {
     // Marcar estado queued
     $version_repo->mark_sync_status( $version_id, 'queued' );
 
-    $items = $item_repo->get_by_version( $version_id );
+    $snapshot = [];
+    $items = [];
+    if ( ! empty( $version['json_snapshot'] ) ) {
+        $snapshot = json_decode( $version['json_snapshot'], true );
+        if ( is_array( $snapshot ) && ! empty( $snapshot['items'] ) && is_array( $snapshot['items'] ) ) {
+            $items = $snapshot['items'];
+        }
+    }
 
-    // Fallback: if a required service has no explicit supplier mapping yet,
-    // use the generic GIAV supplier and keep a warning in audit log.
+    if ( empty( $items ) ) {
+        $items = $item_repo->get_by_version( $version_id );
+    }
+
     $requires_mapping = apply_filters(
         'wp_travel_giav_requires_mapping_service_types',
         [ 'hotel', 'golf' ]
     );
 
-    $default_supplier_id = defined('WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_ID') ? WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_ID : '1734698';
-
-    $fallback_applied = [];
-    foreach ( $items as &$it ) {
+    foreach ( $items as $it ) {
         $service_type = isset( $it['service_type'] ) ? (string) $it['service_type'] : '';
         if ( ! in_array( $service_type, (array) $requires_mapping, true ) ) {
             continue;
         }
 
-        $has_supplier = ! empty( $it['giav_supplier_id'] );
-        $has_entity   = ! empty( $it['giav_entity_id'] );
-
-        if ( $has_supplier && $has_entity ) {
-            continue;
+        if ( empty( $it['giav_supplier_id'] ) ) {
+            $version_repo->mark_sync_status( $version_id, 'error' );
+            $audit_repo->log(
+                0,
+                'sync_missing_supplier',
+                'version',
+                $version_id,
+                [ 'service_type' => $service_type ]
+            );
+            return;
         }
-
-        $fallback_applied[] = [
-            'item_id'      => isset($it['id']) ? (int) $it['id'] : 0,
-            'service_type' => $service_type,
-        ];
-
-        $it['giav_entity_type'] = 'supplier';
-        $it['giav_entity_id']   = $default_supplier_id;
-        $it['giav_supplier_id'] = $default_supplier_id;
-    }
-    unset( $it );
-
-    if ( ! empty( $fallback_applied ) ) {
-        $audit_repo->log(
-            get_current_user_id(),
-            'generic_supplier_fallback',
-            'version',
-            $version_id,
-            [
-                'default_supplier_id' => $default_supplier_id,
-                'items' => $fallback_applied,
-            ]
-        );
     }
 
     // Construir payload (stub)
-    $payload = wp_travel_giav_build_payload( $version, $items );
+    $payload = wp_travel_giav_build_payload( $version, $items, $snapshot );
 
     $payload_hash = hash( 'sha256', wp_json_encode( $payload ) );
 

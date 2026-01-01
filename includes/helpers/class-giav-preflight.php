@@ -18,6 +18,66 @@ class WP_Travel_GIAV_Preflight {
      */
     public static function check_version( int $version_id ) : array {
 
+        $version_repo = new WP_Travel_Proposal_Version_Repository();
+        $version = $version_repo->get_by_id( $version_id );
+
+        if ( $version && ! empty( $version['json_snapshot'] ) ) {
+            $snapshot = json_decode( $version['json_snapshot'], true );
+            if ( is_array( $snapshot ) ) {
+                $snapshot_check = self::check_snapshot( $snapshot );
+                if ( $snapshot_check['source'] === 'snapshot' ) {
+                    return $snapshot_check['result'];
+                }
+            }
+        }
+
+        return self::check_version_legacy( $version_id );
+    }
+
+    private static function check_snapshot( array $snapshot ) : array {
+        $items = isset( $snapshot['items'] ) && is_array( $snapshot['items'] )
+            ? $snapshot['items']
+            : [];
+
+        $warnings = [];
+        $blocking = [];
+        $has_preflight = false;
+
+        foreach ( $items as $item ) {
+            if ( array_key_exists( 'preflight_ok', $item ) || isset( $item['warnings'] ) || isset( $item['blocking'] ) ) {
+                $has_preflight = true;
+            }
+
+            if ( isset( $item['warnings'] ) && is_array( $item['warnings'] ) ) {
+                $warnings = array_merge( $warnings, $item['warnings'] );
+            }
+            if ( isset( $item['blocking'] ) && is_array( $item['blocking'] ) ) {
+                $blocking = array_merge( $blocking, $item['blocking'] );
+            }
+        }
+
+        if ( ! $has_preflight ) {
+            return [
+                'source' => 'legacy',
+                'result' => [
+                    'ok'       => true,
+                    'blocking' => [],
+                    'warnings' => [],
+                ],
+            ];
+        }
+
+        return [
+            'source' => 'snapshot',
+            'result' => [
+                'ok'       => empty( $blocking ),
+                'blocking' => $blocking,
+                'warnings' => $warnings,
+            ],
+        ];
+    }
+
+    private static function check_version_legacy( int $version_id ) : array {
         $item_repo    = new WP_Travel_Proposal_Item_Repository();
         $mapping_repo = new WP_Travel_GIAV_Mapping_Repository();
 

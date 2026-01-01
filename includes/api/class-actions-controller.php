@@ -62,18 +62,57 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
 
         // Snapshot viene ya calculado desde frontend/backend previo
         $snapshot = $request->get_param( 'snapshot' );
-        if ( empty( $snapshot ) ) {
+        if ( empty( $snapshot ) || ! is_array( $snapshot ) ) {
             return $this->error( 'Snapshot is required' );
         }
 
         $version_number = (int) $request->get_param( 'version_number' );
 
+        $resolved = WP_Travel_GIAV_Snapshot_Resolver::resolve_snapshot(
+            $snapshot,
+            [
+                'proposal_id'    => $proposal_id,
+                'version_number' => $version_number,
+            ]
+        );
+
+        if ( ! empty( $resolved['errors'] ) ) {
+            return new WP_Error(
+                'wp_travel_snapshot_invalid',
+                'Snapshot validation failed',
+                [
+                    'status'    => 422,
+                    'errors'    => $resolved['errors'],
+                    'preflight' => $resolved['preflight'],
+                ]
+            );
+        }
+
+        $snapshot = $resolved['snapshot'];
+        $totals = isset( $snapshot['totals'] ) && is_array( $snapshot['totals'] ) ? $snapshot['totals'] : [];
+        $public_token = wp_generate_password( 32, false );
+
         $version_id = $version_repo->create_version( [
-            'proposal_id'   => $proposal_id,
-            'version_number'=> $version_number,
-            'json_snapshot' => wp_json_encode( $snapshot ),
-            'public_token'  => wp_generate_password( 32, false ),
+            'proposal_id'       => $proposal_id,
+            'version_number'    => $version_number,
+            'json_snapshot'     => wp_json_encode( $snapshot ),
+            'totals_cost_net'   => isset( $totals['totals_cost_net'] ) ? (float) $totals['totals_cost_net'] : 0,
+            'totals_sell_price' => isset( $totals['totals_sell_price'] ) ? (float) $totals['totals_sell_price'] : 0,
+            'totals_margin_abs' => isset( $totals['totals_margin_abs'] ) ? (float) $totals['totals_margin_abs'] : 0,
+            'totals_margin_pct' => isset( $totals['totals_margin_pct'] ) ? (float) $totals['totals_margin_pct'] : 0,
+            'template_id'       => isset( $snapshot['template_id'] ) ? $snapshot['template_id'] : null,
+            'terms_version'     => isset( $snapshot['terms_version'] ) ? $snapshot['terms_version'] : null,
+            'public_token'      => $public_token,
         ] );
+
+        $item_repo = new WP_Travel_Proposal_Item_Repository();
+        if ( ! empty( $snapshot['items'] ) && is_array( $snapshot['items'] ) ) {
+            foreach ( $snapshot['items'] as $item ) {
+                $item_repo->add_item( WP_Travel_GIAV_Snapshot_Resolver::build_item_row( $version_id, $item ) );
+            }
+        }
+
+        $this->log_snapshot_resolution( $proposal_id, $version_id, $resolved['logs'] );
 
         $proposal_repo->update_status( $proposal_id, 'sent' );
         $proposal_repo->set_current_version( $proposal_id, $version_id );

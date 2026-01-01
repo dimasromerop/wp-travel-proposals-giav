@@ -48,6 +48,7 @@ export default function StepPreview({
       giav_entity_id: it.giav_entity_id ?? null,
       giav_supplier_id: it.giav_supplier_id ?? null,
       giav_supplier_name: it.giav_supplier_name ?? null,
+      supplier_override: !!it.supplier_override,
 
       title: it.title ?? `Item ${index + 1}`,
       display_name: it.display_name ?? null,

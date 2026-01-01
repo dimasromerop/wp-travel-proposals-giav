@@ -20,6 +20,7 @@ global $wpdb;
  * Plugin constants
  */
 define( 'WP_TRAVEL_GIAV_VERSION', '0.1.0' );
+define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.2.0' );
 define( 'WP_TRAVEL_GIAV_PLUGIN_FILE', __FILE__ );
 define( 'WP_TRAVEL_GIAV_TABLE_PROPOSALS', $wpdb->prefix . 'travel_proposals' );
 define( 'WP_TRAVEL_GIAV_TABLE_VERSIONS', $wpdb->prefix . 'travel_proposal_versions' );
@@ -33,6 +34,41 @@ define( 'WP_TRAVEL_GIAV_TABLE_SYNC_LOG', $wpdb->prefix . 'travel_giav_sync_log' 
 define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_ID', '1734698' );
 define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_NAME', 'Proveedores varios' );
 
+function wp_travel_giav_get_items_schema( $charset_collate ) {
+    return "
+    CREATE TABLE " . WP_TRAVEL_GIAV_TABLE_ITEMS . " (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        version_id BIGINT(20) UNSIGNED NOT NULL,
+        day_index INT(11) DEFAULT 1,
+        service_type ENUM('hotel','golf','transfer','extra') NOT NULL,
+        display_name VARCHAR(255) NULL,
+        wp_object_type ENUM('hotel','course','other','manual') NULL,
+        wp_object_id BIGINT(20) UNSIGNED NULL,
+        giav_entity_type ENUM('supplier','service','product') NULL,
+        giav_entity_id VARCHAR(100) NULL,
+        giav_supplier_id VARCHAR(100) NULL,
+        giav_supplier_name VARCHAR(255) NULL,
+        supplier_source VARCHAR(20) NULL,
+        supplier_resolution_chain LONGTEXT NULL,
+        warnings_json LONGTEXT NULL,
+        blocking_json LONGTEXT NULL,
+        preflight_ok TINYINT(1) DEFAULT 1,
+        start_date DATE NULL,
+        end_date DATE NULL,
+        quantity INT(11) DEFAULT 1,
+        pax_quantity INT(11) DEFAULT 1,
+        unit_cost_net DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        unit_sell_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        line_cost_net DECIMAL(10,2) GENERATED ALWAYS AS (quantity * unit_cost_net) STORED,
+        line_sell_price DECIMAL(10,2) GENERATED ALWAYS AS (quantity * unit_sell_price) STORED,
+        notes_internal TEXT NULL,
+        notes_public TEXT NULL,
+        PRIMARY KEY (id),
+        KEY idx_version (version_id)
+    ) $charset_collate;
+    ";
+}
+
 /**
  * Core includes (DB + repositories).
  *
@@ -40,6 +76,7 @@ define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_NAME', 'Proveedores varios' );
  * without ordering issues.
  */
 require_once __DIR__ . '/includes/helpers/class-db.php';
+require_once __DIR__ . '/includes/helpers/class-giav-snapshot-resolver.php';
 require_once __DIR__ . '/includes/helpers/class-giav-preflight.php';
 require_once __DIR__ . '/includes/integrations/class-giav-soap-client.php';
 
@@ -54,6 +91,7 @@ require_once __DIR__ . '/includes/repositories/class-audit-log-repository.php';
  * Plugin activation hook
  */
 register_activation_hook( __FILE__, 'wp_travel_giav_activate' );
+add_action( 'plugins_loaded', 'wp_travel_giav_maybe_upgrade_schema' );
 
 function wp_travel_giav_activate() {
     global $wpdb;
@@ -123,33 +161,7 @@ function wp_travel_giav_activate() {
     /**
      * 3. Proposal Items (Líneas)
      */
-    $sql_items = "
-    CREATE TABLE " . WP_TRAVEL_GIAV_TABLE_ITEMS . " (
-        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        version_id BIGINT(20) UNSIGNED NOT NULL,
-        day_index INT(11) DEFAULT 1,
-        service_type ENUM('hotel','golf','transfer','extra') NOT NULL,
-        display_name VARCHAR(255) NULL,
-        wp_object_type ENUM('hotel','course','other','manual') NULL,
-        wp_object_id BIGINT(20) UNSIGNED NULL,
-        giav_entity_type ENUM('supplier','service','product') NULL,
-        giav_entity_id VARCHAR(100) NULL,
-        giav_supplier_id VARCHAR(100) NULL,
-        giav_supplier_name VARCHAR(255) NULL,
-        start_date DATE NULL,
-        end_date DATE NULL,
-        quantity INT(11) DEFAULT 1,
-        pax_quantity INT(11) DEFAULT 1,
-        unit_cost_net DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-        unit_sell_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-        line_cost_net DECIMAL(10,2) GENERATED ALWAYS AS (quantity * unit_cost_net) STORED,
-        line_sell_price DECIMAL(10,2) GENERATED ALWAYS AS (quantity * unit_sell_price) STORED,
-        notes_internal TEXT NULL,
-        notes_public TEXT NULL,
-        PRIMARY KEY (id),
-        KEY idx_version (version_id)
-    ) $charset_collate;
-    ";
+    $sql_items = wp_travel_giav_get_items_schema( $charset_collate );
 
     /**
      * 4. GIAV Mapping
@@ -216,7 +228,27 @@ function wp_travel_giav_activate() {
     dbDelta( $sql_audit );
     dbDelta( $sql_sync_log );
 
-    update_option( 'wp_travel_giav_db_version', WP_TRAVEL_GIAV_VERSION );
+    update_option( 'wp_travel_giav_db_version', WP_TRAVEL_GIAV_DB_VERSION );
+}
+
+function wp_travel_giav_maybe_upgrade_schema() {
+    $current = get_option( 'wp_travel_giav_db_version' );
+    if ( $current === WP_TRAVEL_GIAV_DB_VERSION ) {
+        return;
+    }
+
+    if ( ! is_admin() ) {
+        return;
+    }
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    global $wpdb;
+
+    $charset_collate = $wpdb->get_charset_collate();
+    $sql_items = wp_travel_giav_get_items_schema( $charset_collate );
+    dbDelta( $sql_items );
+
+    update_option( 'wp_travel_giav_db_version', WP_TRAVEL_GIAV_DB_VERSION );
 }
 
 add_action( 'rest_api_init', 'wp_travel_giav_register_api' );

@@ -109,6 +109,7 @@ function defaultItem(basics, defaultMarkupPct = 0) {
     giav_supplier_name: DEFAULT_SUPPLIER_NAME,
     giav_mapping_status: 'needs_review', // 'active' | 'needs_review' | 'deprecated' | 'missing'
     show_supplier_picker: false,
+    supplier_override: false,
 
   };
 }
@@ -396,6 +397,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                               display_name: r.title,
                               wp_object_type: wpType,
                               wp_object_id: r.id,
+                              supplier_override: false,
                             });
 
                             try {
@@ -462,6 +464,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                                   giav_mapping_status: it.giav_supplier_id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
                                   giav_supplier_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
                                   giav_supplier_name: it.giav_supplier_name || DEFAULT_SUPPLIER_NAME,
+                                  supplier_override: false,
                                   display_name: manualLabel,
                                   title: manualLabel,
                                 });
@@ -473,6 +476,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                                   wp_object_id: null,
                                   show_supplier_picker: false,
                                   giav_mapping_status: 'missing',
+                                  supplier_override: false,
                                   display_name: '',
                                 });
                               }
@@ -508,15 +512,16 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                               const id = String(prov?.id || '');
                               const label = String(prov?.label || '');
                               if (!id) return;
-                              updateItem(idx, {
-                                giav_entity_type: 'supplier',
-                                giav_entity_id: id,
-                                giav_supplier_id: id,
-                                giav_supplier_name: label,
-                                giav_mapping_status: id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
-                              });
-                            }}
-                          />
+                                updateItem(idx, {
+                                  giav_entity_type: 'supplier',
+                                  giav_entity_id: id,
+                                  giav_supplier_id: id,
+                                  giav_supplier_name: label,
+                                  giav_mapping_status: id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
+                                  supplier_override: !it.use_manual_entry,
+                                });
+                              }}
+                            />
                         </div>
                       )}
                     </>
