@@ -40,36 +40,40 @@ class WP_Travel_GIAV_Preflight {
                 continue;
             }
 
-            // ...
-$wp_object_type = isset( $item['wp_object_type'] ) ? (string) $item['wp_object_type'] : '';
-$wp_object_id   = isset( $item['wp_object_id'] ) ? (int) $item['wp_object_id'] : 0;
+            $wp_object_type = isset( $item['wp_object_type'] ) ? (string) $item['wp_object_type'] : '';
+            $wp_object_id   = isset( $item['wp_object_id'] ) ? (int) $item['wp_object_id'] : 0;
+            $title          = isset( $item['title'] ) ? (string) $item['title'] : '';
 
-// NUEVO: soportar items "manuales" (sin WP ref) si tienen proveedor GIAV
-$giav_supplier_id   = isset( $item['giav_supplier_id'] ) ? trim( (string) $item['giav_supplier_id'] ) : '';
-$giav_supplier_name = isset( $item['giav_supplier_name'] ) ? trim( (string) $item['giav_supplier_name'] ) : '';
+            $giav_supplier_id   = isset( $item['giav_supplier_id'] ) ? trim( (string) $item['giav_supplier_id'] ) : '';
+            $giav_supplier_name = isset( $item['giav_supplier_name'] ) ? trim( (string) $item['giav_supplier_name'] ) : '';
 
-if ( $wp_object_type === '' || $wp_object_id <= 0 ) {
+            $default_supplier_id = defined( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_ID' )
+                ? WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_ID
+                : '1734698';
 
-    if ( $giav_supplier_id !== '' ) {
-        $warnings[] = [
-            'item_id'      => $item_id,
-            'service_type' => $service_type,
-            'reason'       => 'manual_item_with_supplier',
-            'supplier'     => [
-                'giav_supplier_id'   => $giav_supplier_id,
-                'giav_supplier_name' => $giav_supplier_name,
-            ],
-        ];
-        continue;
-    }
+            if ( $wp_object_type === '' || $wp_object_id <= 0 ) {
+                if ( $giav_supplier_id !== '' ) {
+                    $warnings[] = [
+                        'item_id'      => $item_id,
+                        'service_type' => $service_type,
+                        'title'        => $title,
+                        'reason'       => 'manual_item_with_supplier',
+                        'supplier'     => [
+                            'giav_supplier_id'   => $giav_supplier_id,
+                            'giav_supplier_name' => $giav_supplier_name,
+                        ],
+                    ];
+                    continue;
+                }
 
-    $blocking[] = [
-        'item_id'      => $item_id,
-        'service_type' => $service_type,
-        'reason'       => 'missing_supplier_for_manual_item',
-    ];
-    continue;
-}
+                $blocking[] = [
+                    'item_id'      => $item_id,
+                    'service_type' => $service_type,
+                    'title'        => $title,
+                    'reason'       => 'missing_supplier_for_manual_item',
+                ];
+                continue;
+            }
 
 
             $mapping = $mapping_repo->get_active_mapping( $wp_object_type, $wp_object_id );
@@ -82,6 +86,7 @@ if ( $wp_object_type === '' || $wp_object_id <= 0 ) {
                     'service_type'   => $service_type,
                     'wp_object_type' => $wp_object_type,
                     'wp_object_id'   => $wp_object_id,
+                    'title'          => $title,
                     'reason'         => 'missing_active_mapping_fallback_generic_supplier',
                     'fallback'       => [
                         'giav_supplier_id'   => $fallback['giav_supplier_id'],
@@ -91,6 +96,21 @@ if ( $wp_object_type === '' || $wp_object_id <= 0 ) {
                     ],
                 ];
                 continue;
+            }
+
+            if ( ! empty( $mapping['giav_supplier_id'] ) && $mapping['giav_supplier_id'] === $default_supplier_id ) {
+                $warnings[] = [
+                    'item_id'      => $item_id,
+                    'service_type' => $service_type,
+                    'wp_object_type' => $wp_object_type,
+                    'wp_object_id' => $wp_object_id,
+                    'title'        => $title,
+                    'reason'       => 'generic_supplier',
+                    'supplier'     => [
+                        'giav_supplier_id'   => $mapping['giav_supplier_id'],
+                        'giav_supplier_name' => $mapping['giav_supplier_name'] ?? '',
+                    ],
+                ];
             }
         }
 

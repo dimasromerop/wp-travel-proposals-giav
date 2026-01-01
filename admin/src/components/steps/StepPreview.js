@@ -47,8 +47,10 @@ export default function StepPreview({
       giav_entity_type: it.giav_entity_type ?? null,
       giav_entity_id: it.giav_entity_id ?? null,
       giav_supplier_id: it.giav_supplier_id ?? null,
+      giav_supplier_name: it.giav_supplier_name ?? null,
 
       title: it.title ?? `Item ${index + 1}`,
+      display_name: it.display_name ?? null,
 
       start_date: it.start_date || null,
       end_date: it.end_date || null,

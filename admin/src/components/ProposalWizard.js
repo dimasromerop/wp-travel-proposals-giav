@@ -128,6 +128,12 @@ export default function ProposalWizard({ onExit }) {
 
   if (step === 4) {
     const canConfirm = !!preflight?.ok;
+    const warnings = Array.isArray(preflight?.warnings) ? preflight.warnings : [];
+    const warningLabels = {
+      manual_item_with_supplier: 'Ítem manual con proveedor',
+      missing_active_mapping_fallback_generic_supplier: 'Usa proveedor genérico (sin mapeo activo)',
+      generic_supplier: 'Usa proveedor genérico (mapeo)',
+    };
 
     return (
       <div>
@@ -184,6 +190,26 @@ export default function ProposalWizard({ onExit }) {
             )}
           </div>
         </div>
+
+        {!!warnings.length && (
+          <div style={{ marginTop: 12 }}>
+            <Notice status="info" isDismissible={false}>
+              Hay advertencias de GIAV que no bloquean la confirmación:
+              <ul style={{ marginTop: 8, paddingLeft: 18 }}>
+                {warnings.map((w, i) => (
+                  <li key={i}>
+                    <strong>{(w.service_type || '').toUpperCase()}</strong>
+                    {w.title ? ` · ${w.title}` : ''}
+                    <span style={{ opacity: 0.8 }}>
+                      {' '}
+                      ({warningLabels[w.reason] || w.reason || 'advertencia'})
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Notice>
+          </div>
+        )}
 
         <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button variant="primary" onClick={onExit}>

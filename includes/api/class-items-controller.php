@@ -26,8 +26,13 @@ class WP_Travel_Proposal_Items_Controller extends WP_Travel_REST_Controller {
         $data = [
             'version_id'        => (int) $request->get_param( 'version_id' ),
             'service_type'      => $request->get_param( 'service_type' ),
+            'display_name'      => $request->get_param( 'display_name' ),
             'wp_object_type'    => $request->get_param( 'wp_object_type' ),
             'wp_object_id'      => (int) $request->get_param( 'wp_object_id' ),
+            'giav_entity_type'  => $request->get_param( 'giav_entity_type' ),
+            'giav_entity_id'    => $request->get_param( 'giav_entity_id' ),
+            'giav_supplier_id'  => $request->get_param( 'giav_supplier_id' ),
+            'giav_supplier_name'=> $request->get_param( 'giav_supplier_name' ),
             'start_date'        => $request->get_param( 'start_date' ),
             'end_date'          => $request->get_param( 'end_date' ),
             'quantity'          => (int) $request->get_param( 'quantity' ),

@@ -106,7 +106,9 @@ function defaultItem(basics, defaultMarkupPct = 0) {
 
     // Paquete: descripción de lo que incluye (solo texto, sin precios por línea)
     package_components_text: '',
-        // --- WP refs (catalog) ---
+    display_name: '',
+    use_manual_entry: false,
+    // --- WP refs (catalog) ---
     wp_object_type: null, // 'hotel' | 'course'
     wp_object_id: null,
 
@@ -247,7 +249,8 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       if (!it.service_type) return `Línea ${i + 1}: tipo obligatorio.`;
-      if (!it.title?.trim()) return `Línea ${i + 1}: título/descripcion obligatorio.`;
+      const effectiveTitle = it.use_manual_entry ? it.display_name : it.title;
+      if (!effectiveTitle?.trim()) return `Línea ${i + 1}: título/descripcion obligatorio.`;
 
       if (it.end_date && it.start_date && it.end_date < it.start_date)
         return `Línea ${i + 1}: fecha fin anterior a fecha inicio.`;
@@ -366,6 +369,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                         onChange={() => {
                           const next = !it.use_manual_entry;
                           if (next) {
+                            const manualLabel = it.display_name || it.title || '';
                             // Manual: detach from WP catalog reference
                             updateItem(idx, {
                               use_manual_entry: true,
@@ -374,6 +378,10 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                               giav_entity_type: 'supplier',
                               giav_entity_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
                               giav_mapping_status: it.giav_supplier_id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
+                              giav_supplier_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
+                              giav_supplier_name: it.giav_supplier_name || DEFAULT_SUPPLIER_NAME,
+                              display_name: manualLabel,
+                              title: manualLabel,
                             });
                           } else {
                             // Back to catalog mode: clear wp ref until user picks one
@@ -382,6 +390,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                               wp_object_type: null,
                               wp_object_id: null,
                               giav_mapping_status: 'missing',
+                              display_name: '',
                             });
                           }
                         }}
@@ -396,6 +405,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                             const wpType = it.service_type === 'hotel' ? 'hotel' : 'course';
                             updateItem(idx, {
                               title: r.title,
+                              display_name: r.title,
                               wp_object_type: wpType,
                               wp_object_id: r.id,
                             });
@@ -438,8 +448,8 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                       ) : (
                         <TextControl
                           label={it.service_type === 'hotel' ? 'Hotel (manual) *' : 'Campo de golf (manual) *'}
-                          value={it.title}
-                          onChange={(v) => updateItem(idx, { title: v })}
+                          value={it.display_name || ''}
+                          onChange={(v) => updateItem(idx, { display_name: v, title: v })}
                           placeholder={it.service_type === 'hotel' ? 'Ej: Hotel X (fuera de catálogo)' : 'Ej: Campo Y (fuera de catálogo)'}
                         />
                       )}
@@ -600,13 +610,17 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
           : '#7a4b00',
     }}
   >
-    {it.giav_mapping_status === 'active'
+    {it.use_manual_entry
       ? (String(it.giav_supplier_id || '') === DEFAULT_SUPPLIER_ID
-          ? 'Proveedor genérico (GIAV)'
-          : 'Mapeado GIAV')
-      : (it.giav_mapping_status === 'needs_review'
-          ? 'Pendiente de revisar'
-          : 'Sin mapeo GIAV')}
+          ? 'Manual · Proveedor genérico'
+          : 'Manual · Proveedor específico')
+      : (it.giav_mapping_status === 'active'
+          ? (String(it.giav_supplier_id || '') === DEFAULT_SUPPLIER_ID
+              ? 'Proveedor genérico (GIAV)'
+              : 'Mapeado GIAV')
+          : (it.giav_mapping_status === 'needs_review'
+              ? 'Pendiente de revisar'
+              : 'Sin mapeo GIAV'))}
   </div>
 )}
 
@@ -711,6 +725,5 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
     </Card>
   );
 }
-
 
 
