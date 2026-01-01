@@ -313,6 +313,17 @@ function wp_travel_giav_admin_assets( $hook ) {
         true
     );
 
+
+    $css_file = plugin_dir_path( __FILE__ ) . 'admin/build/index.css';
+    if ( file_exists( $css_file ) ) {
+        wp_enqueue_style(
+            'wp-travel-giav-admin-style',
+            plugins_url( 'admin/build/index.css', __FILE__ ),
+            [ 'wp-components' ],
+            $asset['version']
+        );
+    }
+
     wp_localize_script(
         'wp-travel-giav-admin', // 👈 TIENE QUE SER EL MISMO
         'WP_TRAVEL_GIAV',
