@@ -384,41 +384,6 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
 
                   {(it.service_type === 'hotel' || it.service_type === 'golf') ? (
                     <>
-                      <ToggleControl
-                        label="Entrada manual (fuera de catálogo)"
-                        checked={!!it.use_manual_entry}
-                        onChange={() => {
-                          const next = !it.use_manual_entry;
-                          if (next) {
-                            const manualLabel = it.display_name || it.title || '';
-                            // Manual: detach from WP catalog reference
-                            updateItem(idx, {
-                              use_manual_entry: true,
-                              wp_object_type: 'manual',
-                              wp_object_id: 0,
-                              show_supplier_picker: true,
-                              giav_entity_type: 'supplier',
-                              giav_entity_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
-                              giav_mapping_status: it.giav_supplier_id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
-                              giav_supplier_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
-                              giav_supplier_name: it.giav_supplier_name || DEFAULT_SUPPLIER_NAME,
-                              display_name: manualLabel,
-                              title: manualLabel,
-                            });
-                          } else {
-                            // Back to catalog mode: clear wp ref until user picks one
-                            updateItem(idx, {
-                              use_manual_entry: false,
-                              wp_object_type: null,
-                              wp_object_id: null,
-                              show_supplier_picker: false,
-                              giav_mapping_status: 'missing',
-                              display_name: '',
-                            });
-                          }
-                        }}
-                      />
-
                       {!it.use_manual_entry ? (
                         <CatalogSelect
                           label={it.service_type === 'hotel' ? 'Hotel' : 'Campo de golf'}
@@ -477,7 +442,44 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                         />
                       )}
 
-                      <div className="service-card__supplier">
+                      <div className="service-card__inline-options">
+                        <div className="service-card__inline-toggle">
+                          <ToggleControl
+                            label="Entrada manual (fuera de catálogo)"
+                            checked={!!it.use_manual_entry}
+                            onChange={() => {
+                              const next = !it.use_manual_entry;
+                              if (next) {
+                                const manualLabel = it.display_name || it.title || '';
+                                // Manual: detach from WP catalog reference
+                                updateItem(idx, {
+                                  use_manual_entry: true,
+                                  wp_object_type: 'manual',
+                                  wp_object_id: 0,
+                                  show_supplier_picker: true,
+                                  giav_entity_type: 'supplier',
+                                  giav_entity_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
+                                  giav_mapping_status: it.giav_supplier_id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
+                                  giav_supplier_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
+                                  giav_supplier_name: it.giav_supplier_name || DEFAULT_SUPPLIER_NAME,
+                                  display_name: manualLabel,
+                                  title: manualLabel,
+                                });
+                              } else {
+                                // Back to catalog mode: clear wp ref until user picks one
+                                updateItem(idx, {
+                                  use_manual_entry: false,
+                                  wp_object_type: null,
+                                  wp_object_id: null,
+                                  show_supplier_picker: false,
+                                  giav_mapping_status: 'missing',
+                                  display_name: '',
+                                });
+                              }
+                            }}
+                          />
+                        </div>
+
                         {!isSupplierPickerVisible(it) && (
                           <Button
                             variant="tertiary"
@@ -486,37 +488,37 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                             Cambiar proveedor
                           </Button>
                         )}
-
-                        {isSupplierPickerVisible(it) && (
-                          <>
-                            {!it.use_manual_entry && (
-                              <ToggleControl
-                                label="Proveedor (opcional)"
-                                checked={!!it.show_supplier_picker}
-                                onChange={() => toggleSupplierPicker(idx)}
-                              />
-                            )}
-
-                            <SupplierSearchSelect
-                              selectedId={it.giav_supplier_id || DEFAULT_SUPPLIER_ID}
-                              selectedLabel={it.giav_supplier_name || DEFAULT_SUPPLIER_NAME}
-                              disabled={false}
-                              onPick={(prov) => {
-                                const id = String(prov?.id || '');
-                                const label = String(prov?.label || '');
-                                if (!id) return;
-                                updateItem(idx, {
-                                  giav_entity_type: 'supplier',
-                                  giav_entity_id: id,
-                                  giav_supplier_id: id,
-                                  giav_supplier_name: label,
-                                  giav_mapping_status: id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
-                                });
-                              }}
-                            />
-                          </>
-                        )}
                       </div>
+
+                      {isSupplierPickerVisible(it) && (
+                        <div className="service-card__supplier">
+                          {!it.use_manual_entry && (
+                            <ToggleControl
+                              label="Proveedor (opcional)"
+                              checked={!!it.show_supplier_picker}
+                              onChange={() => toggleSupplierPicker(idx)}
+                            />
+                          )}
+
+                          <SupplierSearchSelect
+                            selectedId={it.giav_supplier_id || DEFAULT_SUPPLIER_ID}
+                            selectedLabel={it.giav_supplier_name || DEFAULT_SUPPLIER_NAME}
+                            disabled={false}
+                            onPick={(prov) => {
+                              const id = String(prov?.id || '');
+                              const label = String(prov?.label || '');
+                              if (!id) return;
+                              updateItem(idx, {
+                                giav_entity_type: 'supplier',
+                                giav_entity_id: id,
+                                giav_supplier_id: id,
+                                giav_supplier_name: label,
+                                giav_mapping_status: id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
+                              });
+                            }}
+                          />
+                        </div>
+                      )}
                     </>
                   ) : (
                     <TextControl
