@@ -73,12 +73,12 @@
   grid-template-columns:
     36px
     80px
-    minmax(180px, 1.1fr)
-    minmax(180px, 1.3fr)
-    minmax(140px, 0.8fr)
-    minmax(180px, 1fr)
-    minmax(140px, 0.8fr)
-    minmax(200px, 1fr);
+    minmax(160px, 1.1fr)
+    minmax(160px, 1.3fr)
+    minmax(120px, 0.8fr)
+    minmax(160px, 1fr)
+    minmax(120px, 0.8fr)
+    minmax(200px, max-content);
   gap: 12px;
   align-items: center;
   padding: 12px 16px;
@@ -144,8 +144,24 @@
 
 .proposal-list__actions {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+  white-space: nowrap;
+  justify-self: end;
+}
+
+.proposal-list__actions-menu .components-dropdown-menu__toggle {
+  min-width: 36px;
+  justify-content: center;
+}
+
+.proposal-list__actions-menu .components-button {
+  border-radius: 999px;
+}
+
+.proposal-list__actions-menu .components-button.is-destructive {
+  color: #b91c1c;
 }
 
 .proposal-status {

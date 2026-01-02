@@ -5,6 +5,7 @@ import {
   CardBody,
   CardHeader,
   CheckboxControl,
+  DropdownMenu,
   Notice,
   SelectControl,
   Spinner,
@@ -481,27 +482,40 @@ export default function App() {
                     <div>{formatDate(proposal.updated_at)}</div>
                     <div>{proposal.author_name || '—'}</div>
                     <div className="proposal-list__actions">
-                      <Button variant="secondary" onClick={() => openProposalDetail(proposal)}>
+                      <Button variant="primary" onClick={() => openProposalDetail(proposal)}>
                         Ver detalle
                       </Button>
-                      <Button
-                        variant="tertiary"
-                        href={buildAdminUrl({ proposal_id: proposal.id, action: 'edit' })}
-                      >
-                        Editar
-                      </Button>
-                      <Button
-                        variant="tertiary"
-                        isDestructive
-                        onClick={() => handleDelete(proposal.id)}
-                      >
-                        Eliminar
-                      </Button>
-                      {proposal.public_url ? (
-                        <Button variant="tertiary" href={proposal.public_url} target="_blank" rel="noreferrer">
-                          Vista pública
-                        </Button>
-                      ) : null}
+                      <DropdownMenu
+                        className="proposal-list__actions-menu"
+                        icon="ellipsis"
+                        label="Más acciones"
+                        controls={[
+                          {
+                            title: 'Editar',
+                            onClick: () => {
+                              window.location.href = buildAdminUrl({
+                                proposal_id: proposal.id,
+                                action: 'edit',
+                              });
+                            },
+                          },
+                          ...(proposal.public_url
+                            ? [
+                                {
+                                  title: 'Vista pública',
+                                  onClick: () => {
+                                    window.open(proposal.public_url, '_blank', 'noopener,noreferrer');
+                                  },
+                                },
+                              ]
+                            : []),
+                          {
+                            title: 'Eliminar',
+                            isDestructive: true,
+                            onClick: () => handleDelete(proposal.id),
+                          },
+                        ]}
+                      />
                     </div>
                   </div>
                 );
