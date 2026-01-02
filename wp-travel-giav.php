@@ -20,7 +20,7 @@ global $wpdb;
  * Plugin constants
  */
 define( 'WP_TRAVEL_GIAV_VERSION', '0.1.0' );
-define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.3.0' );
+define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.4.0' );
 define( 'WP_TRAVEL_GIAV_PLUGIN_FILE', __FILE__ );
 define( 'WP_TRAVEL_GIAV_TABLE_PROPOSALS', $wpdb->prefix . 'travel_proposals' );
 define( 'WP_TRAVEL_GIAV_TABLE_VERSIONS', $wpdb->prefix . 'travel_proposal_versions' );
@@ -125,6 +125,7 @@ function wp_travel_giav_activate() {
         id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         crm_customer_id VARCHAR(50) NULL,
         customer_name VARCHAR(255) NOT NULL,
+        proposal_title VARCHAR(255) NULL,
         customer_email VARCHAR(255) NULL,
         customer_country CHAR(2) NULL,
         customer_language CHAR(2) DEFAULT 'es',
@@ -277,6 +278,10 @@ function wp_travel_giav_maybe_upgrade_schema() {
         wp_travel_giav_upgrade_proposals_to_0_3_0();
     }
 
+    if ( version_compare( $current ?: '0.0.0', '0.4.0', '<' ) ) {
+        wp_travel_giav_upgrade_proposals_to_0_4_0();
+    }
+
     update_option( 'wp_travel_giav_db_version', WP_TRAVEL_GIAV_DB_VERSION );
 }
 
@@ -312,6 +317,18 @@ function wp_travel_giav_upgrade_proposals_to_0_3_0() {
     if ( ! wp_travel_giav_table_has_index( $table, 'idx_proposal_token' ) ) {
         $wpdb->query(
             "ALTER TABLE {$table} ADD UNIQUE KEY idx_proposal_token (proposal_token)"
+        );
+    }
+}
+
+function wp_travel_giav_upgrade_proposals_to_0_4_0() {
+    global $wpdb;
+
+    $table = WP_TRAVEL_GIAV_TABLE_PROPOSALS;
+
+    if ( ! wp_travel_giav_table_has_column( $table, 'proposal_title' ) ) {
+        $wpdb->query(
+            "ALTER TABLE {$table} ADD COLUMN proposal_title VARCHAR(255) NULL"
         );
     }
 }

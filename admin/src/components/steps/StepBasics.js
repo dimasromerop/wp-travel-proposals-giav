@@ -29,6 +29,7 @@ function todayISO() {
 export default function StepBasics({ initialValues = {}, onCreated, onNext, proposalId }) {
   const defaults = useMemo(
     () => ({
+      proposal_title: '',
       customer_name: '',
       customer_email: '',
       customer_country: '', // ISO2 opcional
@@ -123,6 +124,7 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
     try {
       if (proposalId) {
         // ya existe: no recrear propuesta, solo avanzar guardando basics
+        await API.updateProposal(proposalId, payload);
         onNext?.({ basics: payload });
         return;
       }
@@ -154,6 +156,13 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <TextControl
+            label="Título de la propuesta"
+            value={values.proposal_title}
+            onChange={set('proposal_title')}
+            placeholder="Escapada a la Costa del Sol"
+          />
+
           <TextControl
             label="Nombre del cliente *"
             value={values.customer_name}

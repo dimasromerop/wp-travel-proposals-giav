@@ -4,9 +4,11 @@ import {
   Card,
   CardBody,
   CardHeader,
+  CheckboxControl,
   Notice,
   SelectControl,
   Spinner,
+  TextControl,
 } from '@wordpress/components';
 import ProposalWizard from './components/ProposalWizard';
 import GiavMappingAdmin from './components/GiavMappingAdmin';
@@ -36,6 +38,21 @@ const formatDate = (value) => {
   });
 };
 
+const buildAdminUrl = (params = {}) => {
+  const url = new URL(window.location.href);
+  url.searchParams.set('page', 'travel_proposals');
+  url.searchParams.delete('proposal_id');
+  url.searchParams.delete('action');
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === null || value === undefined || value === '') {
+      url.searchParams.delete(key);
+      return;
+    }
+    url.searchParams.set(key, value);
+  });
+  return url.toString();
+};
+
 export default function App() {
   const params = new URLSearchParams(window.location.search || '');
   const page = params.get('page') || '';
@@ -55,8 +72,11 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [authorFilter, setAuthorFilter] = useState('');
   const [sortBy, setSortBy] = useState('updated_at');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [selectedIds, setSelectedIds] = useState([]);
 
   const proposalId = proposalIdParam ? parseInt(proposalIdParam, 10) : null;
   const isEditing = action === 'edit' && proposalId;
@@ -107,18 +127,23 @@ export default function App() {
     };
   }, [editData]);
 
-  const loadProposals = async () => {
+  const loadProposals = async (overrides = {}) => {
     setLoading(true);
     setError('');
     try {
+      const nextSearch = overrides.search ?? search;
+      const nextAuthor = overrides.author ?? authorFilter;
       const res = await API.listProposals({
         orderBy: sortBy,
         order: sortOrder,
         limit: 50,
         offset: 0,
+        search: nextSearch,
+        author: nextAuthor,
       });
       const list = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
       setProposals(list);
+      setSelectedIds((prev) => prev.filter((id) => list.some((proposal) => proposal.id === id)));
     } catch (err) {
       setError(err?.message || 'No se pudo cargar el repositorio.');
       setProposals([]);
@@ -145,6 +170,54 @@ export default function App() {
       setError(err?.message || 'No se pudo cargar el detalle de la propuesta.');
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const toggleSelected = (proposalId) => {
+    setSelectedIds((prev) =>
+      prev.includes(proposalId) ? prev.filter((id) => id !== proposalId) : [...prev, proposalId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === proposals.length) {
+      setSelectedIds([]);
+      return;
+    }
+    setSelectedIds(proposals.map((proposal) => proposal.id));
+  };
+
+  const handleDelete = async (proposalId) => {
+    const confirmed = window.confirm('¿Seguro que quieres eliminar esta propuesta?');
+    if (!confirmed) return;
+    setLoading(true);
+    setError('');
+    try {
+      await API.deleteProposal(proposalId);
+      setSelectedIds((prev) => prev.filter((id) => id !== proposalId));
+      await loadProposals();
+    } catch (err) {
+      setError(err?.message || 'No se pudo eliminar la propuesta.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const confirmed = window.confirm(
+      `¿Seguro que quieres eliminar ${selectedIds.length} propuestas?`
+    );
+    if (!confirmed) return;
+    setLoading(true);
+    setError('');
+    try {
+      await API.bulkDeleteProposals(selectedIds);
+      setSelectedIds([]);
+      await loadProposals();
+    } catch (err) {
+      setError(err?.message || 'No se pudieron eliminar las propuestas.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -231,6 +304,10 @@ export default function App() {
             ) : null}
             <div className="proposal-detail__grid">
               <div>
+                <div className="proposal-detail__label">Título</div>
+                <div className="proposal-detail__value">{selectedProposal.proposal_title || '—'}</div>
+              </div>
+              <div>
                 <div className="proposal-detail__label">Cliente</div>
                 <div className="proposal-detail__value">{selectedProposal.customer_name || '—'}</div>
               </div>
@@ -298,6 +375,18 @@ export default function App() {
             </Notice>
           ) : null}
           <div className="proposal-list__filters">
+            <TextControl
+              label="Buscar cliente"
+              value={search}
+              onChange={setSearch}
+              placeholder="Nombre del cliente"
+            />
+            <TextControl
+              label="Autor"
+              value={authorFilter}
+              onChange={setAuthorFilter}
+              placeholder="Nombre del autor"
+            />
             <SelectControl
               label="Ordenar por"
               value={sortBy}
@@ -317,12 +406,38 @@ export default function App() {
               onChange={(value) => setSortOrder(value)}
             />
             <Button variant="secondary" onClick={loadProposals} disabled={loading}>
-              Actualizar
+              Buscar
+            </Button>
+            <Button
+              variant="tertiary"
+              onClick={() => {
+                setSearch('');
+                setAuthorFilter('');
+                loadProposals({ search: '', author: '' });
+              }}
+              disabled={loading}
+            >
+              Limpiar filtros
+            </Button>
+            <Button
+              variant="secondary"
+              isDestructive
+              onClick={handleBulkDelete}
+              disabled={loading || selectedIds.length === 0}
+            >
+              Eliminar seleccionadas ({selectedIds.length})
             </Button>
           </div>
           <div className="proposal-list__table">
             <div className="proposal-list__row proposal-list__row--header">
+              <div className="proposal-list__select">
+                <CheckboxControl
+                  checked={selectedIds.length === proposals.length && proposals.length > 0}
+                  onChange={toggleSelectAll}
+                />
+              </div>
               <div>ID</div>
+              <div>Título</div>
               <div>Cliente</div>
               <div>Estado</div>
               <div>Última actualización</div>
@@ -341,9 +456,17 @@ export default function App() {
             {!loading &&
               proposals.map((proposal) => {
                 const statusLabel = STATUS_LABELS[proposal.status] || proposal.status || '—';
+                const displayTitle = proposal.display_title || proposal.proposal_title || '—';
                 return (
                   <div key={proposal.id} className="proposal-list__row">
+                    <div className="proposal-list__select">
+                      <CheckboxControl
+                        checked={selectedIds.includes(proposal.id)}
+                        onChange={() => toggleSelected(proposal.id)}
+                      />
+                    </div>
                     <div className="proposal-list__id">#{proposal.id}</div>
+                    <div className="proposal-list__title">{displayTitle}</div>
                     <div className="proposal-list__customer">
                       <div className="proposal-list__customer-name">{proposal.customer_name || '—'}</div>
                       <div className="proposal-list__customer-meta">
@@ -360,6 +483,19 @@ export default function App() {
                     <div className="proposal-list__actions">
                       <Button variant="secondary" onClick={() => openProposalDetail(proposal)}>
                         Ver detalle
+                      </Button>
+                      <Button
+                        variant="tertiary"
+                        href={buildAdminUrl({ proposal_id: proposal.id, action: 'edit' })}
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        variant="tertiary"
+                        isDestructive
+                        onClick={() => handleDelete(proposal.id)}
+                      >
+                        Eliminar
                       </Button>
                       {proposal.public_url ? (
                         <Button variant="tertiary" href={proposal.public_url} target="_blank" rel="noreferrer">

@@ -28,12 +28,30 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
                 'callback'            => [ $this, 'get_proposal' ],
                 'permission_callback' => [ $this, 'permission_check' ],
             ],
+            [
+                'methods'             => WP_REST_Server::EDITABLE,
+                'callback'            => [ $this, 'update_proposal' ],
+                'permission_callback' => [ $this, 'permission_check' ],
+            ],
+            [
+                'methods'             => WP_REST_Server::DELETABLE,
+                'callback'            => [ $this, 'delete_proposal' ],
+                'permission_callback' => [ $this, 'permission_check' ],
+            ],
         ] );
 
         register_rest_route( $this->namespace, '/' . $this->rest_base . '/(?P<id>\d+)/detail', [
             [
                 'methods'             => WP_REST_Server::READABLE,
                 'callback'            => [ $this, 'get_proposal_detail' ],
+                'permission_callback' => [ $this, 'permission_check' ],
+            ],
+        ] );
+
+        register_rest_route( $this->namespace, '/' . $this->rest_base . '/bulk-delete', [
+            [
+                'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => [ $this, 'bulk_delete_proposals' ],
                 'permission_callback' => [ $this, 'permission_check' ],
             ],
         ] );
@@ -59,16 +77,24 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
         $repo = new WP_Travel_Proposal_Repository();
 
         $search = $request->get_param( 'search' );
+        $author = $request->get_param( 'author' );
         $page = $request->get_param( 'page' );
         $per_page = $request->get_param( 'per_page' );
 
-        if ( $search !== null || $page !== null || $per_page !== null ) {
+        if ( $search !== null || $author !== null || $page !== null || $per_page !== null ) {
             $search = sanitize_text_field( (string) $request->get_param( 'search' ) );
+            $author = sanitize_text_field( (string) $request->get_param( 'author' ) );
             $page = max( 1, (int) $request->get_param( 'page' ) );
             $per_page = (int) $request->get_param( 'per_page' );
             $per_page = $per_page > 0 ? min( 50, $per_page ) : 20;
+            $order_by = sanitize_text_field( (string) $request->get_param( 'order_by' ) ?: 'updated_at' );
+            $order = sanitize_text_field( (string) $request->get_param( 'order' ) ?: 'desc' );
 
-            $result = $repo->get_admin_list( $search, $page, $per_page );
+            $result = $repo->get_admin_list( $search, $page, $per_page, [
+                'author'   => $author,
+                'order_by' => $order_by,
+                'order'    => $order,
+            ] );
             $items = array_map( function ( $proposal ) {
                 $proposal['public_url'] = wp_travel_giav_get_public_proposal_url( $proposal['proposal_token'] );
                 return $proposal;
@@ -87,6 +113,8 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
         $order = sanitize_text_field( (string) $request->get_param( 'order' ) ?: 'desc' );
         $limit = (int) $request->get_param( 'limit' );
         $offset = (int) $request->get_param( 'offset' );
+        $search = sanitize_text_field( (string) $request->get_param( 'search' ) );
+        $author = sanitize_text_field( (string) $request->get_param( 'author' ) );
 
         $limit = $limit > 0 ? $limit : 50;
         $offset = max( 0, $offset );
@@ -96,6 +124,8 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
             'order'    => $order,
             'limit'    => $limit,
             'offset'   => $offset,
+            'search'   => $search,
+            'author'   => $author,
         ] );
 
         $proposals = array_map( function ( $proposal ) {
@@ -120,6 +150,7 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
             'end_date'          => $request->get_param( 'end_date' ),
             'pax_total'         => (int) $request->get_param( 'pax_total' ),
             'currency'          => $request->get_param( 'currency' ),
+            'proposal_title'    => sanitize_text_field( (string) $request->get_param( 'proposal_title' ) ),
         ];
 
         if ( empty( $data['customer_name'] ) || empty( $data['start_date'] ) ) {
@@ -131,6 +162,86 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
         return $this->response( [
             'proposal_id' => $proposal_id,
         ], 201 );
+    }
+
+    public function update_proposal( WP_REST_Request $request ) {
+        $repo = new WP_Travel_Proposal_Repository();
+        $proposal_id = (int) $request['id'];
+
+        $proposal = $repo->get_by_id( $proposal_id );
+        if ( ! $proposal ) {
+            return $this->error( 'Proposal not found', 404 );
+        }
+
+        $data = [];
+        $text_fields = [
+            'customer_name',
+            'customer_email',
+            'customer_country',
+            'customer_language',
+            'start_date',
+            'end_date',
+            'currency',
+            'proposal_title',
+        ];
+
+        foreach ( $text_fields as $field ) {
+            if ( $request->has_param( $field ) ) {
+                $data[ $field ] = sanitize_text_field( (string) $request->get_param( $field ) );
+            }
+        }
+
+        if ( $request->has_param( 'pax_total' ) ) {
+            $data['pax_total'] = (int) $request->get_param( 'pax_total' );
+        }
+
+        if ( empty( $data ) ) {
+            return $this->error( 'No fields to update', 400 );
+        }
+
+        $repo->update_basics( $proposal_id, $data );
+
+        return $this->response( [
+            'proposal_id' => $proposal_id,
+        ] );
+    }
+
+    public function delete_proposal( WP_REST_Request $request ) {
+        $repo = new WP_Travel_Proposal_Repository();
+        $proposal_id = (int) $request['id'];
+
+        $proposal = $repo->get_by_id( $proposal_id );
+        if ( ! $proposal ) {
+            return $this->error( 'Proposal not found', 404 );
+        }
+
+        $deleted = $repo->delete_by_id( $proposal_id );
+
+        if ( ! $deleted ) {
+            return $this->error( 'Proposal could not be deleted', 500 );
+        }
+
+        return $this->response( [
+            'deleted' => true,
+            'id'      => $proposal_id,
+        ] );
+    }
+
+    public function bulk_delete_proposals( WP_REST_Request $request ) {
+        $repo = new WP_Travel_Proposal_Repository();
+        $ids = $request->get_param( 'ids' );
+
+        if ( ! is_array( $ids ) || empty( $ids ) ) {
+            return $this->error( 'Missing ids', 400 );
+        }
+
+        $ids = array_map( 'intval', $ids );
+        $deleted = $repo->delete_by_ids( $ids );
+
+        return $this->response( [
+            'deleted' => $deleted,
+            'ids'     => $ids,
+        ] );
     }
 
     public function get_proposal( WP_REST_Request $request ) {
@@ -249,6 +360,10 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
         }
 
         $snapshot = $resolved['snapshot'];
+        $header = isset( $snapshot['header'] ) && is_array( $snapshot['header'] ) ? $snapshot['header'] : [];
+        if ( ! empty( $header ) ) {
+            $proposal_repo->update_from_snapshot_header( $proposal_id, $header );
+        }
         $totals = isset( $snapshot['totals'] ) && is_array( $snapshot['totals'] ) ? $snapshot['totals'] : [];
         $public_token = wp_generate_password( 32, false );
 

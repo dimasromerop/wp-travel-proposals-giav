@@ -89,6 +89,10 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
         }
 
         $snapshot = $resolved['snapshot'];
+        $header = isset( $snapshot['header'] ) && is_array( $snapshot['header'] ) ? $snapshot['header'] : [];
+        if ( ! empty( $header ) ) {
+            $proposal_repo->update_from_snapshot_header( $proposal_id, $header );
+        }
         $totals = isset( $snapshot['totals'] ) && is_array( $snapshot['totals'] ) ? $snapshot['totals'] : [];
         $public_token = wp_generate_password( 32, false );
 

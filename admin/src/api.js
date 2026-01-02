@@ -16,6 +16,7 @@ const API = {
     limit = 50,
     offset = 0,
     search,
+    author,
     page,
     per_page,
   } = {}) => {
@@ -26,6 +27,9 @@ const API = {
     params.set('offset', offset);
     if (search !== undefined) {
       params.set('search', search);
+    }
+    if (author !== undefined) {
+      params.set('author', author);
     }
     if (page !== undefined) {
       params.set('page', page);
@@ -49,6 +53,26 @@ const API = {
     apiFetch({
       path: `/travel/v1/proposals/${proposalId}/detail`,
       method: 'GET',
+    }),
+
+  updateProposal: (proposalId, data) =>
+    apiFetch({
+      path: `/travel/v1/proposals/${proposalId}`,
+      method: 'PUT',
+      data,
+    }),
+
+  deleteProposal: (proposalId) =>
+    apiFetch({
+      path: `/travel/v1/proposals/${proposalId}`,
+      method: 'DELETE',
+    }),
+
+  bulkDeleteProposals: (ids) =>
+    apiFetch({
+      path: `/travel/v1/proposals/bulk-delete`,
+      method: 'POST',
+      data: { ids },
     }),
 
   sendProposal: (proposalId, snapshot, version_number) =>

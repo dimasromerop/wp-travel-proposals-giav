@@ -140,6 +140,7 @@ export default function ProposalDetail({ proposalId }) {
         </CardHeader>
         <CardBody>
           <div style={{ display: 'grid', gap: 8 }}>
+            <div><strong>Título:</strong> {proposal.proposal_title || '-'}</div>
             <div><strong>Cliente:</strong> {proposal.customer_name}</div>
             <div><strong>Email:</strong> {proposal.customer_email || '-'}</div>
             <div><strong>Fechas:</strong> {proposal.start_date} - {proposal.end_date}</div>

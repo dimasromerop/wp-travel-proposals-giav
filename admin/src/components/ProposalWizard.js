@@ -22,6 +22,7 @@ export default function ProposalWizard({
     }
     const header = initialSnapshot?.header || {};
     return {
+      proposal_title: header.proposal_title || initialProposal?.proposal_title || '',
       customer_name: header.customer_name || initialProposal?.customer_name || '',
       customer_email: header.customer_email || initialProposal?.customer_email || '',
       customer_country: header.customer_country || initialProposal?.customer_country || '',

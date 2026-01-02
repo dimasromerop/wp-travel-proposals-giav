@@ -29,6 +29,7 @@ export default function StepPreview({
       customer_email: basics.customer_email,
       customer_country: basics.customer_country,
       customer_language: basics.customer_language,
+      proposal_title: basics.proposal_title,
       start_date: basics.start_date,
       end_date: basics.end_date,
       pax_total: basics.pax_total,
