@@ -96,6 +96,13 @@ const API = {
       data: { version_id: versionId },
     }),
 
+  acceptProposal: (proposalId, versionId) =>
+    apiFetch({
+      path: `/travel/v1/proposals/${proposalId}/accept`,
+      method: 'POST',
+      data: { version_id: versionId },
+    }),
+
   searchCatalog: ({ type, q }) =>
     apiFetch({
       path: `/travel/v1/catalog/search?type=${encodeURIComponent(type)}&q=${encodeURIComponent(q || '')}`,

@@ -20,7 +20,7 @@ global $wpdb;
  * Plugin constants
  */
 define( 'WP_TRAVEL_GIAV_VERSION', '0.1.0' );
-define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.4.0' );
+define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.5.0' );
 define( 'WP_TRAVEL_GIAV_PLUGIN_FILE', __FILE__ );
 define( 'WP_TRAVEL_GIAV_TABLE_PROPOSALS', $wpdb->prefix . 'travel_proposals' );
 define( 'WP_TRAVEL_GIAV_TABLE_VERSIONS', $wpdb->prefix . 'travel_proposal_versions' );
@@ -138,6 +138,9 @@ function wp_travel_giav_activate() {
         current_version_id BIGINT(20) UNSIGNED NULL,
         accepted_version_id BIGINT(20) UNSIGNED NULL,
         accepted_at DATETIME NULL,
+        accepted_by VARCHAR(20) NULL,
+        accepted_by_user_id BIGINT(20) UNSIGNED NULL,
+        accepted_ip VARCHAR(45) NULL,
         created_by BIGINT(20) UNSIGNED NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -282,6 +285,10 @@ function wp_travel_giav_maybe_upgrade_schema() {
         wp_travel_giav_upgrade_proposals_to_0_4_0();
     }
 
+    if ( version_compare( $current ?: '0.0.0', '0.5.0', '<' ) ) {
+        wp_travel_giav_upgrade_proposals_to_0_5_0();
+    }
+
     update_option( 'wp_travel_giav_db_version', WP_TRAVEL_GIAV_DB_VERSION );
 }
 
@@ -329,6 +336,36 @@ function wp_travel_giav_upgrade_proposals_to_0_4_0() {
     if ( ! wp_travel_giav_table_has_column( $table, 'proposal_title' ) ) {
         $wpdb->query(
             "ALTER TABLE {$table} ADD COLUMN proposal_title VARCHAR(255) NULL"
+        );
+    }
+}
+
+function wp_travel_giav_upgrade_proposals_to_0_5_0() {
+    global $wpdb;
+
+    $table = WP_TRAVEL_GIAV_TABLE_PROPOSALS;
+
+    if ( ! wp_travel_giav_table_has_column( $table, 'status' ) ) {
+        $wpdb->query(
+            "ALTER TABLE {$table} ADD COLUMN status ENUM('draft','sent','accepted','queued','synced','error','revoked','lost') DEFAULT 'draft'"
+        );
+    }
+
+    if ( ! wp_travel_giav_table_has_column( $table, 'accepted_by' ) ) {
+        $wpdb->query(
+            "ALTER TABLE {$table} ADD COLUMN accepted_by VARCHAR(20) NULL"
+        );
+    }
+
+    if ( ! wp_travel_giav_table_has_column( $table, 'accepted_by_user_id' ) ) {
+        $wpdb->query(
+            "ALTER TABLE {$table} ADD COLUMN accepted_by_user_id BIGINT(20) UNSIGNED NULL"
+        );
+    }
+
+    if ( ! wp_travel_giav_table_has_column( $table, 'accepted_ip' ) ) {
+        $wpdb->query(
+            "ALTER TABLE {$table} ADD COLUMN accepted_ip VARCHAR(45) NULL"
         );
     }
 }

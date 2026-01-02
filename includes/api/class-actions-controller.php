@@ -17,10 +17,18 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
             ],
         ] );
 
-        register_rest_route( $this->namespace, '/proposals/accept/(?P<token>[a-zA-Z0-9]+)', [
+        register_rest_route( $this->namespace, '/proposals/(?P<id>\d+)/accept', [
             [
                 'methods'             => WP_REST_Server::CREATABLE,
-                'callback'            => [ $this, 'accept_proposal' ],
+                'callback'            => [ $this, 'accept_proposal_admin' ],
+                'permission_callback' => [ $this, 'permission_check' ],
+            ],
+        ] );
+
+        register_rest_route( $this->namespace, '/proposals/public/(?P<token>[a-zA-Z0-9]+)/accept', [
+            [
+                'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => [ $this, 'accept_proposal_public' ],
                 'permission_callback' => '__return_true', // público (token)
             ],
         ] );
@@ -136,41 +144,130 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
             'status'       => 'sent',
         ] );
     }
-    public function accept_proposal( WP_REST_Request $request ) {
+    public function accept_proposal_admin( WP_REST_Request $request ) {
+        $proposal_id = (int) $request['id'];
+        $version_id = (int) $request->get_param( 'version_id' );
 
-        $token = sanitize_text_field( $request['token'] );
-
-        $version_repo = new WP_Travel_Proposal_Version_Repository();
         $proposal_repo = new WP_Travel_Proposal_Repository();
-        $audit_repo = new WP_Travel_Audit_Log_Repository();
+        $version_repo  = new WP_Travel_Proposal_Version_Repository();
+        $audit_repo    = new WP_Travel_Audit_Log_Repository();
 
-        $version = $version_repo->get_by_token( $token );
-
-        if ( ! $version ) {
-            return $this->error( 'Invalid or expired token', 404 );
+        $proposal = $proposal_repo->get_by_id( $proposal_id );
+        if ( ! $proposal ) {
+            return $this->error( 'Proposal not found', 404 );
         }
 
-        $proposal = $proposal_repo->get_by_id( (int) $version['proposal_id'] );
+        if ( $proposal['status'] === 'accepted' ) {
+            return $this->error( 'Proposal already accepted' );
+        }
+
+        if ( $version_id <= 0 ) {
+            $version_id = (int) $proposal['current_version_id'];
+        }
+
+        if ( $version_id <= 0 ) {
+            return $this->error( 'Missing version_id' );
+        }
+
+        $version = $version_repo->get_by_id( $version_id );
+        if ( ! $version || (int) $version['proposal_id'] !== $proposal_id ) {
+            return $this->error( 'Version not found', 404 );
+        }
+
+        $proposal_repo->accept_proposal(
+            $proposal_id,
+            $version_id,
+            'admin',
+            get_current_user_id(),
+            $this->get_request_ip()
+        );
+
+        $audit_repo->log(
+            get_current_user_id(),
+            'accept',
+            'proposal',
+            $proposal_id,
+            [ 'version_id' => $version_id ]
+        );
+
+        $proposal = $proposal_repo->get_by_id( $proposal_id );
+
+        return $this->response( [
+            'ok'                  => true,
+            'status'              => $proposal['status'],
+            'accepted_at'         => $proposal['accepted_at'],
+            'accepted_version_id' => $proposal['accepted_version_id'],
+        ] );
+    }
+
+    public function accept_proposal_public( WP_REST_Request $request ) {
+        $token = sanitize_text_field( $request['token'] );
+        $nonce = sanitize_text_field( (string) $request->get_param( 'nonce' ) );
+
+        if ( ! wp_verify_nonce( $nonce, 'wp_travel_giav_public_accept_' . $token ) ) {
+            return $this->error( 'Invalid nonce', 403 );
+        }
+
+        $proposal_repo = new WP_Travel_Proposal_Repository();
+        $version_repo  = new WP_Travel_Proposal_Version_Repository();
+        $audit_repo    = new WP_Travel_Audit_Log_Repository();
+
+        $proposal = $proposal_repo->get_by_token( $token );
+        if ( ! $proposal ) {
+            return $this->error( 'Proposal not found', 404 );
+        }
 
         if ( $proposal['status'] !== 'sent' ) {
             return $this->error( 'Proposal cannot be accepted' );
         }
 
-        $proposal_repo->update_status( $proposal['id'], 'accepted' );
-        $proposal_repo->set_current_version( $proposal['id'], $version['id'] );
-        $proposal_repo->set_accepted_version( $proposal['id'], $version['id'] );
+        $current_version_id = (int) $proposal['current_version_id'];
+        if ( $current_version_id <= 0 ) {
+            return $this->error( 'Proposal cannot be accepted' );
+        }
+
+        $version = $version_repo->get_by_id( $current_version_id );
+        if ( ! $version || (int) $version['proposal_id'] !== (int) $proposal['id'] ) {
+            return $this->error( 'Proposal cannot be accepted' );
+        }
+
+        $proposal_repo->accept_proposal(
+            (int) $proposal['id'],
+            $current_version_id,
+            'client',
+            null,
+            $this->get_request_ip()
+        );
 
         $audit_repo->log(
             0,
             'accept',
             'proposal',
             $proposal['id'],
-            [ 'version_id' => $version['id'] ]
+            [ 'version_id' => $current_version_id ]
         );
 
+        $proposal = $proposal_repo->get_by_id( (int) $proposal['id'] );
+
         return $this->response( [
-            'status' => 'accepted',
+            'ok'                  => true,
+            'status'              => $proposal['status'],
+            'accepted_at'         => $proposal['accepted_at'],
+            'accepted_version_id' => $proposal['accepted_version_id'],
         ] );
+    }
+
+    private function get_request_ip(): ?string {
+        $ip = '';
+        if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
+            $parts = explode( ',', (string) $_SERVER['HTTP_X_FORWARDED_FOR'] );
+            $ip = trim( $parts[0] );
+        } elseif ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
+            $ip = (string) $_SERVER['REMOTE_ADDR'];
+        }
+
+        $ip = sanitize_text_field( $ip );
+        return $ip !== '' ? $ip : null;
     }
     public function confirm_version( WP_REST_Request $request ) {
 

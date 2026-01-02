@@ -20,14 +20,38 @@ class WP_Travel_Proposal_Repository extends WP_Travel_GIAV_DB {
         return $this->get_row( 'proposal_token = %s', [ $token ] );
     }
 
-    public function set_accepted_version( int $proposal_id, int $version_id ) {
+    public function accept_proposal( int $proposal_id, int $version_id, string $accepted_by, ?int $accepted_by_user_id = null, ?string $accepted_ip = null ) {
+        $data = [
+            'status'              => 'accepted',
+            'accepted_version_id' => $version_id,
+            'accepted_at'         => current_time( 'mysql' ),
+            'accepted_by'         => $accepted_by,
+            'accepted_by_user_id' => $accepted_by_user_id,
+            'accepted_ip'         => $accepted_ip,
+        ];
+
+        $formats = [ '%s', '%d', '%s', '%s', '%d', '%s' ];
+
+        return $this->update(
+            $data,
+            [ 'id' => $proposal_id ],
+            $formats,
+            [ '%d' ]
+        );
+    }
+
+    public function clear_acceptance( int $proposal_id, string $status = 'sent' ) {
         return $this->update(
             [
-                'accepted_version_id' => $version_id,
-                'accepted_at'         => current_time( 'mysql' ),
+                'status'              => $status,
+                'accepted_version_id' => null,
+                'accepted_at'         => null,
+                'accepted_by'         => null,
+                'accepted_by_user_id' => null,
+                'accepted_ip'         => null,
             ],
             [ 'id' => $proposal_id ],
-            [ '%d', '%s' ],
+            [ '%s', '%d', '%s', '%s', '%d', '%s' ],
             [ '%d' ]
         );
     }
@@ -171,12 +195,19 @@ class WP_Travel_Proposal_Repository extends WP_Travel_GIAV_DB {
     }
 
     public function set_current_version( int $proposal_id, int $version_id ) {
-        return $this->update(
+        $updated = $this->update(
             [ 'current_version_id' => $version_id ],
             [ 'id' => $proposal_id ],
             [ '%d' ],
             [ '%d' ]
         );
+
+        $proposal = $this->get_by_id( $proposal_id );
+        if ( $proposal && $proposal['status'] === 'accepted' && (int) $proposal['accepted_version_id'] !== $version_id ) {
+            $this->clear_acceptance( $proposal_id );
+        }
+
+        return $updated;
     }
 
     public function is_editable( array $proposal ): bool {

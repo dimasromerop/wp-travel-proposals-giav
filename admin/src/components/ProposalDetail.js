@@ -9,6 +9,7 @@ import {
   Notice,
   Spinner,
   TextControl,
+  SelectControl,
 } from '@wordpress/components';
 import API from '../api';
 
@@ -21,6 +22,22 @@ function formatDate(value) {
     timeStyle: 'short',
   }).format(parsed);
 }
+
+const STATUS_LABELS = {
+  draft: 'Borrador',
+  sent: 'Enviada',
+  accepted: 'Aceptada',
+  queued: 'En cola',
+  synced: 'Sincronizada',
+  error: 'Error',
+  revoked: 'Revocada',
+  lost: 'Perdida',
+};
+
+const ACCEPTED_BY_LABELS = {
+  client: 'Cliente',
+  admin: 'Admin',
+};
 
 async function copyToClipboard(text) {
   if (!text) return false;
@@ -66,6 +83,8 @@ export default function ProposalDetail({ proposalId }) {
   const [data, setData] = useState(null);
   const [copied, setCopied] = useState(false);
   const [updatingVersionId, setUpdatingVersionId] = useState(null);
+  const [selectedVersionId, setSelectedVersionId] = useState('');
+  const [accepting, setAccepting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -88,6 +107,13 @@ export default function ProposalDetail({ proposalId }) {
     }
     load();
   }, [proposalId]);
+
+  useEffect(() => {
+    if (data?.proposal) {
+      const current = data.proposal.current_version_id;
+      setSelectedVersionId(current ? String(current) : '');
+    }
+  }, [data?.proposal?.current_version_id]);
 
   if (loading && !data) {
     return <Spinner />;
@@ -120,6 +146,17 @@ export default function ProposalDetail({ proposalId }) {
   }
 
   const { proposal, versions = [] } = data;
+  const acceptedVersion = versions.find(
+    (version) => Number(version.id) === Number(proposal.accepted_version_id)
+  );
+  const selectedVersion = versions.find(
+    (version) => String(version.id) === String(selectedVersionId)
+  );
+  const versionOptions = versions.map((version) => ({
+    label: `#${version.version_number ?? version.id} · ${formatDate(version.created_at)}`,
+    value: String(version.id),
+  }));
+  const statusLabel = STATUS_LABELS[proposal.status] || proposal.status || '-';
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
@@ -173,7 +210,12 @@ export default function ProposalDetail({ proposalId }) {
             <div><strong>Cliente:</strong> {proposal.customer_name}</div>
             <div><strong>Email:</strong> {proposal.customer_email || '-'}</div>
             <div><strong>Fechas:</strong> {proposal.start_date} - {proposal.end_date}</div>
-            <div><strong>Status:</strong> {proposal.status}</div>
+            <div>
+              <strong>Status:</strong>{' '}
+              <span className={`proposal-status proposal-status--${proposal.status || 'draft'}`}>
+                {statusLabel}
+              </span>
+            </div>
             <div><strong>Última actualización:</strong> {formatDate(proposal.updated_at)}</div>
           </div>
         </CardBody>
@@ -207,6 +249,58 @@ export default function ProposalDetail({ proposalId }) {
               </Button>
             </div>
           </div>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <strong>Estado de aceptación</strong>
+        </CardHeader>
+        <CardBody>
+          {proposal.status === 'accepted' ? (
+            <div style={{ display: 'grid', gap: 8 }}>
+              <div><strong>Aceptada el:</strong> {formatDate(proposal.accepted_at)}</div>
+              <div>
+                <strong>Aceptada por:</strong> {ACCEPTED_BY_LABELS[proposal.accepted_by] || '-'}
+              </div>
+              <div>
+                <strong>Versión aceptada:</strong>{' '}
+                {acceptedVersion
+                  ? `#${acceptedVersion.version_number ?? acceptedVersion.id}`
+                  : proposal.accepted_version_id || '-'}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              <SelectControl
+                label="Versión a aceptar"
+                value={selectedVersionId}
+                options={versionOptions}
+                onChange={(value) => setSelectedVersionId(value)}
+                disabled={accepting || versionOptions.length === 0}
+              />
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Button
+                  variant="primary"
+                  disabled={accepting || !selectedVersion}
+                  onClick={async () => {
+                    setAccepting(true);
+                    setError('');
+                    try {
+                      await API.acceptProposal(proposal.id, selectedVersion.id);
+                      await load();
+                    } catch (e) {
+                      setError(e?.message || 'No se pudo marcar como aceptada.');
+                    } finally {
+                      setAccepting(false);
+                    }
+                  }}
+                >
+                  Marcar como aceptada
+                </Button>
+              </div>
+            </div>
+          )}
         </CardBody>
       </Card>
 

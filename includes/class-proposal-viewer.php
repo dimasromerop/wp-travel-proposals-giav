@@ -116,10 +116,18 @@ class WP_Travel_Proposal_Viewer {
             $selected_version = $current_version;
         }
 
-        self::render_snapshot( $proposal, $current_version, $selected_version );
+        $accepted_version = null;
+        if ( ! empty( $proposal['accepted_version_id'] ) ) {
+            $accepted_version = $version_repo->get_by_id( (int) $proposal['accepted_version_id'] );
+            if ( ! $accepted_version || (int) $accepted_version['proposal_id'] !== (int) $proposal['id'] ) {
+                $accepted_version = null;
+            }
+        }
+
+        self::render_snapshot( $proposal, $current_version, $selected_version, $accepted_version );
     }
 
-    private static function render_snapshot( array $proposal, array $current_version, array $version ) {
+    private static function render_snapshot( array $proposal, array $current_version, array $version, ?array $accepted_version ) {
         nocache_headers();
 
         $snapshot = json_decode( $version['json_snapshot'], true );
@@ -191,6 +199,7 @@ class WP_Travel_Proposal_Viewer {
             $proposal,
             $current_version,
             $version,
+            $accepted_version,
             $header,
             $items,
             array_values( $warnings ),
@@ -209,6 +218,7 @@ class WP_Travel_Proposal_Viewer {
         array $proposal,
         array $current_version,
         array $version,
+        ?array $accepted_version,
         array $header,
         array $items,
         array $warnings,
@@ -243,6 +253,28 @@ class WP_Travel_Proposal_Viewer {
         $current_version_message = $current_label
             ? sprintf( 'La propuesta se actualizó el %s.', $current_label )
             : 'La propuesta se actualizó recientemente.';
+
+        $proposal_status = $proposal['status'] ?? 'draft';
+        $accepted_at = ! empty( $proposal['accepted_at'] ) ? strtotime( $proposal['accepted_at'] ) : 0;
+        $accepted_message = '';
+        if ( $proposal_status === 'accepted' && $accepted_at ) {
+            $accepted_message = sprintf(
+                'Propuesta aceptada el %s.',
+                esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $accepted_at ) )
+            );
+        }
+
+        $accepted_version_message = '';
+        if ( $accepted_version && ! empty( $accepted_version['created_at'] ) ) {
+            $accepted_version_message = sprintf(
+                'Has aceptado la versión de fecha %s.',
+                esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $accepted_version['created_at'] ) ) )
+            );
+        }
+
+        $can_accept = $proposal_status === 'sent' && ! empty( $proposal['current_version_id'] );
+        $accept_nonce = wp_create_nonce( 'wp_travel_giav_public_accept_' . $proposal['proposal_token'] );
+        $accept_endpoint = rest_url( 'travel/v1/proposals/public/' . $proposal['proposal_token'] . '/accept' );
         ?>
         <!doctype html>
         <html lang="<?php echo esc_attr( get_bloginfo( 'language' ) ); ?>">
@@ -332,6 +364,39 @@ class WP_Travel_Proposal_Viewer {
                     border-radius: 16px;
                     padding: 24px;
                     box-shadow: 0 18px 45px rgba(15, 23, 42, 0.05);
+                }
+                .proposal-accept {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
+                    align-items: center;
+                    text-align: center;
+                }
+                .proposal-accept__button {
+                    background: #0ea5e9;
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 999px;
+                    padding: 12px 24px;
+                    font-size: 15px;
+                    font-weight: 600;
+                    cursor: pointer;
+                }
+                .proposal-accept__button[disabled] {
+                    opacity: 0.6;
+                    cursor: default;
+                }
+                .proposal-accept__message {
+                    color: #15803d;
+                    background: #ecfdf3;
+                    border: 1px solid #bbf7d0;
+                    border-radius: 12px;
+                    padding: 12px 18px;
+                    font-size: 14px;
+                }
+                .proposal-accept__note {
+                    color: #475569;
+                    font-size: 13px;
                 }
                 .proposal-section h2 {
                     margin: 0 0 16px;
@@ -431,6 +496,25 @@ class WP_Travel_Proposal_Viewer {
                 <?php endif; ?>
             </div>
 
+            <?php if ( $accepted_message || $can_accept ) : ?>
+                <div class="proposal-section proposal-accept" id="proposal-accept">
+                    <?php if ( $accepted_message ) : ?>
+                        <div class="proposal-accept__message" id="proposal-accept-message">
+                            <?php echo esc_html( $accepted_message ); ?>
+                            <?php if ( $accepted_version_message ) : ?>
+                                <div><?php echo esc_html( $accepted_version_message ); ?></div>
+                            <?php endif; ?>
+                        </div>
+                    <?php elseif ( $can_accept ) : ?>
+                        <div class="proposal-accept__note">¿Todo correcto? Puedes confirmar la propuesta desde aquí.</div>
+                        <button type="button" class="proposal-accept__button" id="proposal-accept-button">
+                            Aceptar propuesta
+                        </button>
+                        <div class="proposal-accept__note" id="proposal-accept-feedback" style="display:none;"></div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+
             <div class="proposal-section">
                 <h2>Servicios incluidos</h2>
                 <ul class="service-list">
@@ -492,6 +576,50 @@ class WP_Travel_Proposal_Viewer {
                 </div>
             </div>
         </div>
+        <?php if ( $can_accept && ! $accepted_message ) : ?>
+        <script>
+            (function () {
+                const button = document.getElementById('proposal-accept-button');
+                if (!button) return;
+                const feedback = document.getElementById('proposal-accept-feedback');
+                button.addEventListener('click', async () => {
+                    if (button.disabled) return;
+                    button.disabled = true;
+                    if (feedback) {
+                        feedback.textContent = 'Procesando aceptación...';
+                        feedback.style.display = 'block';
+                    }
+                    try {
+                        const res = await fetch('<?php echo esc_url_raw( $accept_endpoint ); ?>', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ nonce: '<?php echo esc_js( $accept_nonce ); ?>' })
+                        });
+                        const payload = await res.json();
+                        if (!res.ok || !payload?.ok) {
+                            throw new Error(payload?.message || 'No se pudo registrar la aceptación.');
+                        }
+                        if (feedback) {
+                            feedback.textContent = '';
+                            feedback.style.display = 'none';
+                        }
+                        const container = document.getElementById('proposal-accept');
+                        if (container) {
+                            container.innerHTML = '<div class="proposal-accept__message">Propuesta aceptada.</div>';
+                        }
+                    } catch (err) {
+                        if (feedback) {
+                            feedback.textContent = err?.message || 'No se pudo registrar la aceptación.';
+                            feedback.style.display = 'block';
+                        }
+                        button.disabled = false;
+                    }
+                });
+            })();
+        </script>
+        <?php endif; ?>
         </body>
         </html>
         <?php
