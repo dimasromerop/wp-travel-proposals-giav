@@ -127,6 +127,23 @@ function wp_travel_giav_format_date( ?string $value ): ?string {
     return gmdate( 'Y-m-d', $timestamp );
 }
 
+function wp_travel_giav_get_destination_country_code( array $proposal, array $snapshot ): ?string {
+    $header = $snapshot['header'] ?? [];
+    $candidates = [
+        $header['customer_country'] ?? '',
+        $proposal['customer_country'] ?? '',
+    ];
+
+    foreach ( $candidates as $candidate ) {
+        $candidate = strtoupper( trim( (string) $candidate ) );
+        if ( $candidate !== '' ) {
+            return $candidate;
+        }
+    }
+
+    return null;
+}
+
 function wp_travel_giav_cliente_search_por_dni( string $dni, array &$trace = null ): ?int {
     $dni = wp_travel_giav_normalize_dni( $dni );
     if ( $dni === '' ) {
@@ -569,6 +586,7 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
     $total_cost = isset( $totals['totals_cost_net'] ) ? (float) $totals['totals_cost_net'] : 0.0;
 
     $pq_reserva_id = (int) ( $proposal['giav_pq_reserva_id'] ?? 0 );
+    $destination_country_code = wp_travel_giav_get_destination_country_code( $proposal, $snapshot );
     if ( $pq_reserva_id <= 0 ) {
         $pq_response = wp_travel_giav_reserva_normal_create(
             [
@@ -587,6 +605,7 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
                 'gastosGestion'=> 0,
                 'recuperacion' => 0,
                 'numPax'       => isset( $proposal['pax_total'] ) ? (int) $proposal['pax_total'] : null,
+                'destinationCountryISO3166Code' => $destination_country_code,
             ],
             $trace
         );
@@ -687,6 +706,7 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
                     'gastosGestion'=> 0,
                     'recuperacion' => 0,
                     'numPax'       => isset( $item['pax_quantity'] ) ? (int) $item['pax_quantity'] : (int) ( $proposal['pax_total'] ?? 0 ),
+                    'destinationCountryISO3166Code' => $destination_country_code,
                 ],
                 $trace
             );
