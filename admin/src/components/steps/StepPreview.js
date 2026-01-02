@@ -226,7 +226,7 @@ export default function StepPreview({
 
                     {it.service_type === 'package' && it.package_components_text ? (
                       <div className="preview-item__meta">
-                        Incluye: {it.package_components_text.split('\n').filter(Boolean).join(', ')}
+                        Incluye: {it.package_components_text.split('\\n').filter(Boolean).join(', ')}
                       </div>
                     ) : null}
 
