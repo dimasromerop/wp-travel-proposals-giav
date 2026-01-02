@@ -13,18 +13,20 @@ class WP_Travel_Proposal_Viewer {
         }
 
         add_action( 'init', [ __CLASS__, 'register_route' ] );
-        add_filter( 'query_vars', [ __CLASS__, 'add_query_var' ] );
+        add_filter( 'query_vars', [ __CLASS__, 'add_query_vars' ] );
         add_action( 'template_redirect', [ __CLASS__, 'maybe_render' ] );
 
         self::$booted = true;
     }
 
     public static function register_route() {
-        add_rewrite_rule( '^travel-proposal/([A-Za-z0-9]+)(?:/)?$', 'index.php?travel_proposal_view=$matches[1]', 'top' );
+        add_rewrite_rule( '^travel-proposal/([A-Za-z0-9]+)/?$', 'index.php?travel_proposal_token=$matches[1]', 'top' );
+        add_rewrite_rule( '^travel-proposal/([A-Za-z0-9]+)/v/([A-Za-z0-9]+)/?$', 'index.php?travel_proposal_token=$matches[1]&travel_proposal_version_token=$matches[2]', 'top' );
     }
 
-    public static function add_query_var( $vars ) {
-        $vars[] = 'travel_proposal_view';
+    public static function add_query_vars( $vars ) {
+        $vars[] = 'travel_proposal_token';
+        $vars[] = 'travel_proposal_version_token';
         return $vars;
     }
 
@@ -34,23 +36,91 @@ class WP_Travel_Proposal_Viewer {
     }
 
     public static function maybe_render() {
-        $token = get_query_var( 'travel_proposal_view' );
-        if ( ! $token ) {
+        $proposal_token = get_query_var( 'travel_proposal_token' );
+        if ( ! $proposal_token ) {
             return;
         }
 
-        self::render_snapshot( $token );
+        $version_token = get_query_var( 'travel_proposal_version_token' );
+        $version_id_override = 0;
+        if ( isset( $_GET['v'] ) ) {
+            $version_id_override = absint( wp_unslash( $_GET['v'] ) );
+        }
+
+        $proposal_repo = new WP_Travel_Proposal_Repository();
+        $version_repo  = new WP_Travel_Proposal_Version_Repository();
+
+        $proposal = $proposal_repo->get_by_token( $proposal_token );
+        if ( ! $proposal ) {
+            self::render_error( 'Propuesta no encontrada', [ 'token' => $proposal_token ], 404 );
+        }
+
+        $current_version = null;
+        $current_version_id = isset( $proposal['current_version_id'] ) ? (int) $proposal['current_version_id'] : 0;
+        if ( $current_version_id > 0 ) {
+            $maybe_current = $version_repo->get_by_id( $current_version_id );
+            if ( $maybe_current && (int) $maybe_current['proposal_id'] === (int) $proposal['id'] ) {
+                $current_version = $maybe_current;
+            }
+        }
+
+        if ( ! $current_version ) {
+            $current_version = $version_repo->get_latest_for_proposal( $proposal['id'] );
+            if ( $current_version ) {
+                $proposal_repo->set_current_version( $proposal['id'], $current_version['id'] );
+                error_log( sprintf(
+                    '[WP Travel GIAV] Proposal viewer auto-set current_version_id=%d for proposal_id=%d',
+                    $current_version['id'],
+                    $proposal['id']
+                ) );
+            }
+        }
+
+        if ( ! $current_version ) {
+            self::render_error( 'No hay versiones disponibles para esta propuesta', [ 'proposal_id' => $proposal['id'] ], 404 );
+        }
+
+        $selected_version = null;
+        if ( $version_token ) {
+            $selected_version = $version_repo->get_by_proposal_and_token( $proposal['id'], $version_token );
+            if ( ! $selected_version ) {
+                error_log( sprintf(
+                    '[WP Travel GIAV] Proposal viewer rejected version token="%s" for proposal_id=%d',
+                    $version_token,
+                    $proposal['id']
+                ) );
+                self::render_error( 'Versión no encontrada', [ 'version_token' => $version_token ], 404 );
+            }
+        } elseif ( $version_id_override ) {
+            $selected_version = $version_repo->get_by_id( $version_id_override );
+            if ( ! $selected_version || (int) $selected_version['proposal_id'] !== (int) $proposal['id'] ) {
+                error_log( sprintf(
+                    '[WP Travel GIAV] Proposal viewer rejected version id=%d for proposal_id=%d',
+                    $version_id_override,
+                    $proposal['id']
+                ) );
+                self::render_error( 'Versión no disponible', [ 'version_id' => $version_id_override ], 404 );
+            }
+
+            $expired = ! empty( $selected_version['revoked_at'] )
+                || ( ! empty( $selected_version['expires_at'] ) && strtotime( $selected_version['expires_at'] ) <= current_time( 'timestamp' ) );
+            if ( $expired ) {
+                error_log( sprintf(
+                    '[WP Travel GIAV] Proposal viewer refused expired version id=%d for proposal_id=%d',
+                    $version_id_override,
+                    $proposal['id']
+                ) );
+                self::render_error( 'Versión no disponible', [ 'version_id' => $version_id_override ], 404 );
+            }
+        } else {
+            $selected_version = $current_version;
+        }
+
+        self::render_snapshot( $proposal, $current_version, $selected_version );
     }
 
-    private static function render_snapshot( $token ) {
+    private static function render_snapshot( array $proposal, array $current_version, array $version ) {
         nocache_headers();
-
-        $repo = new WP_Travel_Proposal_Version_Repository();
-        $version = $repo->get_by_token( $token );
-
-        if ( ! $version ) {
-            self::render_error( 'Versión no encontrada', [ 'token' => $token ], 404 );
-        }
 
         $snapshot = json_decode( $version['json_snapshot'], true );
         if ( ! is_array( $snapshot ) ) {
@@ -78,7 +148,7 @@ class WP_Travel_Proposal_Viewer {
             if ( in_array( $service_type, (array) $requires_mapping, true ) ) {
                 $supplier_name = trim( (string) ( $item['giav_supplier_name'] ?? '' ) );
                 if ( $supplier_name === '' ) {
-                    $errors[] = sprintf( 'Servicio "%s" requiere proveedor', $service_name ?: "#{$index}" );
+                    $errors[] = sprintf( 'Servicio "%s" requiere proveedor', $service_name ?: '#'.$index );
                 }
             }
         }
@@ -117,26 +187,62 @@ class WP_Travel_Proposal_Viewer {
             'totals_margin_pct' => 0,
         ] );
 
-        self::output_html( $header, $items, array_values( $warnings ), $totals, $version );
+        self::output_html(
+            $proposal,
+            $current_version,
+            $version,
+            $header,
+            $items,
+            array_values( $warnings ),
+            $totals
+        );
     }
 
     /**
      * Render the customer-facing HTML.
      *
      * Only reads snapshot header + totals + warnings; it never recalculates costs, margins
-     * or consults external services. Internals (coste neto, margen, IDs) stay stored in the
-     * snapshot/database but are deliberately excluded from the commercial view.
+     * or consults external services. Internals (coste neto, margen, IDs) stay stored but are
+     * intentionally excluded from the commercial render.
      */
-    private static function output_html( array $header, array $items, array $warnings, array $totals, array $version ) {
+    private static function output_html(
+        array $proposal,
+        array $current_version,
+        array $version,
+        array $header,
+        array $items,
+        array $warnings,
+        array $totals
+    ) {
         status_header( 200 );
         header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
 
-        $version_label = sprintf(
+        $view_timestamp = strtotime( $version['created_at'] ) ?: current_time( 'timestamp' );
+        $current_timestamp = $current_version ? strtotime( $current_version['created_at'] ) : 0;
+        $is_current = $current_version && (int) $current_version['id'] === (int) $version['id'];
+
+        $view_label = sprintf(
             'Versión %s · Generada el %s',
             esc_html( $version['version_number'] ?? '' ),
-            esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $version['created_at'] ) )
+            esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $view_timestamp ) )
         );
 
+        $current_label = $current_timestamp
+            ? wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $current_timestamp )
+            : '';
+
+        $dates = trim( sprintf( '%s - %s', $header['start_date'], $header['end_date'] ) );
+        $pax_total = absint( $header['pax_total'] );
+        $currency = esc_html( $header['currency'] );
+
+        $price_per_person = 0;
+        if ( $pax_total ) {
+            $price_per_person = $totals['totals_sell_price'] / $pax_total;
+        }
+
+        $current_version_message = $current_label
+            ? sprintf( 'La propuesta se actualizó el %s.', $current_label )
+            : 'La propuesta se actualizó recientemente.';
         ?>
         <!doctype html>
         <html lang="<?php echo esc_attr( get_bloginfo( 'language' ) ); ?>">
@@ -159,15 +265,66 @@ class WP_Travel_Proposal_Viewer {
                 .proposal-header {
                     text-align: center;
                     margin-bottom: 32px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
                 }
                 .proposal-header h1 {
                     margin: 0;
-                    font-size: 28px;
+                    font-size: 32px;
                     letter-spacing: 0.02em;
                 }
-                .proposal-header .meta {
+                .proposal-status__meta {
                     color: #475569;
                     font-size: 14px;
+                }
+                .proposal-version {
+                    display: flex;
+                    justify-content: center;
+                    gap: 12px;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    font-size: 14px;
+                    color: #475569;
+                }
+                .version-pill {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 4px 12px;
+                    border-radius: 999px;
+                    font-size: 12px;
+                    border: 1px solid #d1d5db;
+                }
+                .version-pill--active {
+                    background: #dcfce7;
+                    color: #166534;
+                    border-color: #86efac;
+                }
+                .version-pill--archive {
+                    background: #eef2ff;
+                    color: #3730a3;
+                    border-color: #c7d2fe;
+                }
+                .version-banner {
+                    margin-top: 8px;
+                    padding: 16px;
+                    background: #fef3c7;
+                    border: 1px solid #fde68a;
+                    border-radius: 12px;
+                    color: #92400e;
+                    font-size: 14px;
+                }
+                .version-banner strong {
+                    display: block;
+                    margin-bottom: 6px;
+                }
+                .version-banner__link {
+                    color: #92400e;
+                    font-weight: 600;
+                    text-decoration: none;
+                    display: inline-block;
+                    margin-top: 6px;
                 }
                 .proposal-section {
                     margin-bottom: 32px;
@@ -195,6 +352,10 @@ class WP_Travel_Proposal_Viewer {
                 .service-item .service-title {
                     font-weight: 600;
                     margin-bottom: 6px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
                 }
                 .service-item .service-subtitle {
                     color: #475569;
@@ -246,22 +407,28 @@ class WP_Travel_Proposal_Viewer {
                 .observations li {
                     margin-bottom: 6px;
                 }
-                .version-label {
-                    font-size: 12px;
-                    color: #94a3b8;
-                    text-align: right;
-                    margin-top: -12px;
-                }
             </style>
         </head>
         <body>
         <div class="proposal-page">
             <div class="proposal-header">
                 <h1><?php echo esc_html( $header['customer_name'] ?: 'Propuesta de viaje' ); ?></h1>
-                <div class="meta">
-                    <?php echo esc_html( sprintf( '%s → %s | %s pax | %s', $header['start_date'], $header['end_date'], $header['pax_total'], $header['currency'] ) ); ?>
+                <div class="proposal-status__meta">
+                    <?php echo esc_html( trim( sprintf( '%s | %s pax | %s', $dates, $pax_total, $currency ) ) ); ?>
                 </div>
-                <div class="version-label"><?php echo esc_html( $version_label ); ?></div>
+                <div class="proposal-version">
+                    <span><?php echo esc_html( $view_label ); ?></span>
+                    <span class="version-pill <?php echo $is_current ? 'version-pill--active' : 'version-pill--archive'; ?>">
+                        <?php echo $is_current ? 'Versión vigente' : 'Versión anterior'; ?>
+                    </span>
+                </div>
+                <?php if ( ! $is_current && $current_version ) : ?>
+                    <div class="version-banner">
+                        <strong>Estás viendo una versión anterior.</strong>
+                        <span><?php echo esc_html( $current_version_message ); ?></span>
+                        <a href="<?php echo esc_url( self::get_proposal_url( $proposal['proposal_token'] ) ); ?>" class="version-banner__link">Ver versión actual</a>
+                    </div>
+                <?php endif; ?>
             </div>
 
             <div class="proposal-section">
@@ -282,7 +449,7 @@ class WP_Travel_Proposal_Viewer {
                         ?>
                         <li class="service-item">
                             <div class="service-title">
-                                <?php echo $display_name; ?>
+                                <span><?php echo $display_name; ?></span>
                                 <?php if ( $item_warnings ) : ?>
                                     <span class="warning-badge">Aviso</span>
                                 <?php endif; ?>
@@ -316,17 +483,11 @@ class WP_Travel_Proposal_Viewer {
                 <div class="totals-grid">
                     <div class="totals-card">
                         <div class="label">Precio total</div>
-                        <div class="value"><?php echo esc_html( $header['currency'] ); ?> <?php echo number_format( $totals['totals_sell_price'], 2 ); ?></div>
+                        <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $totals['totals_sell_price'], 2 ); ?></div>
                     </div>
-                    <?php
-                    $price_per_person = 0;
-                    if ( ! empty( $header['pax_total'] ) ) {
-                        $price_per_person = $totals['totals_sell_price'] / (int) $header['pax_total'];
-                    }
-                    ?>
                     <div class="totals-card">
                         <div class="label">Precio por persona</div>
-                        <div class="value"><?php echo esc_html( $header['currency'] ); ?> <?php echo number_format( $price_per_person, 2 ); ?></div>
+                        <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $price_per_person, 2 ); ?></div>
                     </div>
                 </div>
             </div>
@@ -335,6 +496,10 @@ class WP_Travel_Proposal_Viewer {
         </html>
         <?php
         exit;
+    }
+
+    private static function get_proposal_url( string $token ) {
+        return home_url( '/travel-proposal/' . $token . '/' );
     }
 
     private static function render_error( $message, array $details = [], $status = 500 ) {

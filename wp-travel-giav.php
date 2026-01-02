@@ -20,7 +20,7 @@ global $wpdb;
  * Plugin constants
  */
 define( 'WP_TRAVEL_GIAV_VERSION', '0.1.0' );
-define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.2.0' );
+define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.3.0' );
 define( 'WP_TRAVEL_GIAV_PLUGIN_FILE', __FILE__ );
 define( 'WP_TRAVEL_GIAV_TABLE_PROPOSALS', $wpdb->prefix . 'travel_proposals' );
 define( 'WP_TRAVEL_GIAV_TABLE_VERSIONS', $wpdb->prefix . 'travel_proposal_versions' );
@@ -117,11 +117,15 @@ function wp_travel_giav_activate() {
         pax_total INT(11) DEFAULT 1,
         currency CHAR(3) DEFAULT 'EUR',
         status ENUM('draft','sent','accepted','queued','synced','error','revoked','lost') DEFAULT 'draft',
+        proposal_token VARCHAR(64) NOT NULL,
         current_version_id BIGINT(20) UNSIGNED NULL,
+        accepted_version_id BIGINT(20) UNSIGNED NULL,
+        accepted_at DATETIME NULL,
         created_by BIGINT(20) UNSIGNED NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
+        UNIQUE KEY idx_proposal_token (proposal_token),
         KEY idx_status (status),
         KEY idx_customer (customer_email)
     ) $charset_collate;
@@ -238,7 +242,7 @@ function wp_travel_giav_activate() {
 
 function wp_travel_giav_maybe_upgrade_schema() {
     $current = get_option( 'wp_travel_giav_db_version' );
-    if ( $current === WP_TRAVEL_GIAV_DB_VERSION ) {
+    if ( version_compare( $current, WP_TRAVEL_GIAV_DB_VERSION, '>=' ) ) {
         return;
     }
 
@@ -253,7 +257,113 @@ function wp_travel_giav_maybe_upgrade_schema() {
     $sql_items = wp_travel_giav_get_items_schema( $charset_collate );
     dbDelta( $sql_items );
 
+    if ( version_compare( $current ?: '0.0.0', '0.3.0', '<' ) ) {
+        wp_travel_giav_upgrade_proposals_to_0_3_0();
+    }
+
     update_option( 'wp_travel_giav_db_version', WP_TRAVEL_GIAV_DB_VERSION );
+}
+
+function wp_travel_giav_upgrade_proposals_to_0_3_0() {
+    global $wpdb;
+
+    $table = WP_TRAVEL_GIAV_TABLE_PROPOSALS;
+
+    if ( ! wp_travel_giav_table_has_column( $table, 'proposal_token' ) ) {
+        $wpdb->query(
+            "ALTER TABLE {$table} ADD COLUMN proposal_token VARCHAR(64) NULL"
+        );
+    }
+
+    if ( ! wp_travel_giav_table_has_column( $table, 'accepted_version_id' ) ) {
+        $wpdb->query(
+            "ALTER TABLE {$table} ADD COLUMN accepted_version_id BIGINT(20) UNSIGNED NULL"
+        );
+    }
+
+    if ( ! wp_travel_giav_table_has_column( $table, 'accepted_at' ) ) {
+        $wpdb->query(
+            "ALTER TABLE {$table} ADD COLUMN accepted_at DATETIME NULL"
+        );
+    }
+
+    wp_travel_giav_backfill_proposal_tokens( $table );
+
+    $wpdb->query(
+        "ALTER TABLE {$table} MODIFY COLUMN proposal_token VARCHAR(64) NOT NULL"
+    );
+
+    if ( ! wp_travel_giav_table_has_index( $table, 'idx_proposal_token' ) ) {
+        $wpdb->query(
+            "ALTER TABLE {$table} ADD UNIQUE KEY idx_proposal_token (proposal_token)"
+        );
+    }
+}
+
+function wp_travel_giav_table_has_column( $table, $column ) {
+    global $wpdb;
+
+    $row = $wpdb->get_row(
+        $wpdb->prepare(
+            "SHOW COLUMNS FROM {$table} LIKE %s",
+            $column
+        )
+    );
+
+    return (bool) $row;
+}
+
+function wp_travel_giav_table_has_index( $table, $index ) {
+    global $wpdb;
+
+    $row = $wpdb->get_row(
+        $wpdb->prepare(
+            "SHOW INDEX FROM {$table} WHERE Key_name = %s",
+            $index
+        )
+    );
+
+    return (bool) $row;
+}
+
+function wp_travel_giav_backfill_proposal_tokens( $table ) {
+    global $wpdb;
+
+    $rows = $wpdb->get_results(
+        "SELECT id FROM {$table} WHERE proposal_token IS NULL OR proposal_token = ''",
+        ARRAY_A
+    );
+
+    if ( empty( $rows ) ) {
+        return;
+    }
+
+    foreach ( $rows as $row ) {
+        $token = wp_travel_giav_generate_unique_token( $table, 'proposal_token' );
+        $wpdb->update(
+            $table,
+            [ 'proposal_token' => $token ],
+            [ 'id' => $row['id'] ],
+            [ '%s' ],
+            [ '%d' ]
+        );
+    }
+}
+
+function wp_travel_giav_generate_unique_token( $table, $column ) {
+    global $wpdb;
+
+    do {
+        $token = wp_generate_password( 32, false );
+        $count = (int) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$table} WHERE {$column} = %s",
+                $token
+            )
+        );
+    } while ( $count > 0 );
+
+    return $token;
 }
 
 add_action( 'rest_api_init', 'wp_travel_giav_register_api' );

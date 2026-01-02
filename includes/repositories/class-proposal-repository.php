@@ -12,7 +12,24 @@ class WP_Travel_Proposal_Repository extends WP_Travel_GIAV_DB {
 
     public function create( array $data ) {
         $data['created_by'] = get_current_user_id();
+        $data['proposal_token'] = wp_generate_password( 32, false );
         return $this->insert( $data );
+    }
+
+    public function get_by_token( string $token ) {
+        return $this->get_row( 'proposal_token = %s', [ $token ] );
+    }
+
+    public function set_accepted_version( int $proposal_id, int $version_id ) {
+        return $this->update(
+            [
+                'accepted_version_id' => $version_id,
+                'accepted_at'         => current_time( 'mysql' ),
+            ],
+            [ 'id' => $proposal_id ],
+            [ '%d', '%s' ],
+            [ '%d' ]
+        );
     }
 
     public function get_by_id( int $proposal_id ) {

@@ -25,6 +25,21 @@ class WP_Travel_Proposal_Version_Repository extends WP_Travel_GIAV_DB {
         );
     }
 
+    public function get_by_proposal_and_token( int $proposal_id, string $token ) {
+        return $this->get_row(
+            'proposal_id = %d AND public_token = %s AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())',
+            [ $proposal_id, $token ]
+        );
+    }
+
+    public function get_latest_for_proposal( int $proposal_id ) {
+        $sql = $this->wpdb->prepare(
+            "SELECT * FROM {$this->table} WHERE proposal_id = %d ORDER BY created_at DESC LIMIT 1",
+            [ $proposal_id ]
+        );
+        return $this->wpdb->get_row( $sql, ARRAY_A );
+    }
+
     public function mark_sync_status( int $version_id, string $status, ?string $giav_booking_id = null ) {
         $data = [
             'giav_last_sync_status' => $status,

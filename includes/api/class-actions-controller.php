@@ -152,6 +152,7 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
 
         $proposal_repo->update_status( $proposal['id'], 'accepted' );
         $proposal_repo->set_current_version( $proposal['id'], $version['id'] );
+        $proposal_repo->set_accepted_version( $proposal['id'], $version['id'] );
 
         $audit_repo->log(
             0,
