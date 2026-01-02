@@ -69,10 +69,16 @@ export default function StepPreview({
       hotel_nights: it.hotel_nights ?? null,
       hotel_rooms: it.hotel_rooms ?? null,
       hotel_room_type: it.hotel_room_type ?? '',
+      hotel_regimen: it.hotel_regimen ?? '',
 
       // Package (descriptivo)
       package_components: Array.isArray(it.package_components) ? it.package_components : [],
       package_components_text: it.package_components_text ?? '',
+
+      // Golf-specific
+      green_fees_per_person: it.green_fees_per_person ?? null,
+      number_of_players: it.number_of_players ?? null,
+      total_green_fees: it.total_green_fees ?? null,
 
       unit_cost_net: round2(it.unit_cost_net),
       unit_sell_price: round2(it.unit_sell_price),

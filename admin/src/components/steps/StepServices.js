@@ -75,11 +75,17 @@ function defaultItem(basics, defaultMarkupPct = 0) {
 
     // Hotel-specific
     hotel_room_type: '',
+    hotel_regimen: '',
     hotel_rooms: 1,
     hotel_rate_basis: 'per_room_per_night',
 
     // Generic quantity for non-hotel
     quantity: 1,
+
+    // Golf-specific
+    green_fees_per_person: 1,
+    number_of_players: basics?.pax_total ?? 1,
+    total_green_fees: 0,
 
     // Pricing
     unit_cost_net: '',
@@ -149,6 +155,28 @@ function computeLine(item, basics, globalMarkupPct) {
 
     it.line_cost_net = round2(mult * it.unit_cost_net);
     it.line_sell_price = round2(mult * it.unit_sell_price);
+  } else if (it.service_type === 'golf') {
+    const players = Math.max(1, toInt(it.number_of_players ?? basics?.pax_total ?? 1, 1));
+    const legacyQuantity = Math.max(1, toInt(it.quantity, 1));
+    let greenFeesPerPerson = Math.max(0, toInt(it.green_fees_per_person ?? 0, 0));
+    let totalGreenFees = Math.max(0, toInt(it.total_green_fees ?? 0, 0));
+
+    if (greenFeesPerPerson > 0) {
+      totalGreenFees = greenFeesPerPerson * players;
+    } else if (totalGreenFees > 0) {
+      greenFeesPerPerson = Math.max(1, Math.round(totalGreenFees / players));
+    } else {
+      totalGreenFees = legacyQuantity;
+      greenFeesPerPerson = Math.max(1, Math.round(totalGreenFees / players));
+    }
+
+    it.number_of_players = players;
+    it.green_fees_per_person = greenFeesPerPerson;
+    it.total_green_fees = totalGreenFees;
+    it.quantity = totalGreenFees;
+
+    it.line_cost_net = round2(totalGreenFees * it.unit_cost_net);
+    it.line_sell_price = round2(totalGreenFees * it.unit_sell_price);
   } else {
     it.line_cost_net = round2(it.quantity * it.unit_cost_net);
     it.line_sell_price = round2(it.quantity * it.unit_sell_price);
@@ -263,6 +291,11 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
         const basis = it.hotel_rate_basis || 'per_room_per_night';
         if (basis === 'per_room_per_night') {
           if (toInt(it.hotel_rooms, 1) < 1) return `Línea ${i + 1} (Hotel): habitaciones debe ser >= 1.`;
+        }
+      } else if (it.service_type === 'golf') {
+        if (toInt(it.number_of_players, 1) < 1) return `Línea ${i + 1} (Golf): jugadores debe ser >= 1.`;
+        if (toInt(it.green_fees_per_person, 1) < 1) {
+          return `Línea ${i + 1} (Golf): green-fees por jugador debe ser >= 1.`;
         }
       } else {
         if (toInt(it.quantity, 1) < 1) return `Línea ${i + 1}: cantidad debe ser >= 1.`;
@@ -583,13 +616,43 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                         placeholder="Deluxe / Sea View / BB, HB..."
                         style={{ minWidth: 240 }}
                       />
+                      <TextControl
+                        label="Régimen"
+                        value={it.hotel_regimen || ''}
+                        onChange={(v) => updateItem(idx, { hotel_regimen: v })}
+                        placeholder="Solo alojamiento / Desayuno / Media pensión"
+                        style={{ minWidth: 240 }}
+                      />
+                    </>
+                  ) : it.service_type === 'golf' ? (
+                    <>
+                      <TextControl
+                        label="Jugadores"
+                        type="number"
+                        min={1}
+                        value={String(it.number_of_players ?? basics?.pax_total ?? 1)}
+                        onChange={(v) => updateItem(idx, { number_of_players: v })}
+                        style={{ width: 150 }}
+                      />
+                      <TextControl
+                        label="Green-fees por jugador"
+                        type="number"
+                        min={1}
+                        value={String(it.green_fees_per_person ?? 1)}
+                        onChange={(v) => updateItem(idx, { green_fees_per_person: v })}
+                        style={{ width: 180 }}
+                      />
+                      <TextControl
+                        label="Total green-fees"
+                        value={String(it.total_green_fees ?? (it.green_fees_per_person ?? 1) * (it.number_of_players ?? basics?.pax_total ?? 1))}
+                        disabled
+                        style={{ width: 160 }}
+                      />
                     </>
                   ) : (
                     <TextControl
                       label={
-                        it.service_type === 'golf'
-                          ? 'Cantidad (green fees)'
-                          : it.service_type === 'transfer'
+                        it.service_type === 'transfer'
                           ? 'Cantidad (servicios)'
                           : it.service_type === 'package'
                           ? 'Cantidad (paquetes)'
@@ -723,5 +786,3 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
     </Card>
   );
 }
-
-

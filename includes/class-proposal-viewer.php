@@ -241,9 +241,12 @@ class WP_Travel_Proposal_Viewer {
             ? wp_travel_giav_format_datetime( $current_timestamp )
             : '';
 
-        $start_date_formatted = wp_travel_giav_format_datetime( $header['start_date'] ?? '', false );
-        $end_date_formatted = wp_travel_giav_format_datetime( $header['end_date'] ?? '', false );
-        $dates = trim( implode( ' - ', array_filter( [ $start_date_formatted, $end_date_formatted ] ) ) );
+
+        $formatted_start = self::format_spanish_date( (string) ( $header['start_date'] ?? '' ) );
+        $formatted_end = self::format_spanish_date( (string) ( $header['end_date'] ?? '' ) );
+        $date_separator = ' ' . "\u{2192}" . ' ';
+        $dates = trim( implode( $date_separator, array_filter( [ $formatted_start, $formatted_end ] ) ) );
+
         $pax_total = absint( $header['pax_total'] );
         $currency = esc_html( $header['currency'] );
 
@@ -278,6 +281,77 @@ class WP_Travel_Proposal_Viewer {
             );
         }
 
+        $hotel_items = array_values( array_filter( $items, function ( $item ) {
+            return ( $item['service_type'] ?? '' ) === 'hotel';
+        } ) );
+        $golf_items = array_values( array_filter( $items, function ( $item ) {
+            return ( $item['service_type'] ?? '' ) === 'golf';
+        } ) );
+        $other_items = array_values( array_filter( $items, function ( $item ) {
+            $type = $item['service_type'] ?? '';
+            return $type !== 'hotel' && $type !== 'golf';
+        } ) );
+
+        $includes_hotel = [];
+        $includes_regimens = [];
+        $hotel_count = count( $hotel_items );
+        foreach ( $hotel_items as $hotel_item ) {
+            $hotel_name = trim( (string) ( $hotel_item['display_name'] ?? '' ) );
+            $room_type = trim( (string) ( $hotel_item['hotel_room_type'] ?? '' ) );
+            $nights = absint( $hotel_item['hotel_nights'] ?? 0 );
+            $night_label = $nights > 0
+                ? sprintf( '%d noche%s', $nights, $nights === 1 ? '' : 's' )
+                : 'Estancia';
+            $line = sprintf( '%s de alojamiento', $night_label );
+            if ( $room_type !== '' ) {
+                $line .= sprintf( ' en %s', $room_type );
+            }
+            if ( $hotel_name !== '' ) {
+                $line .= sprintf( ' en %s', $hotel_name );
+            }
+            $includes_hotel[] = $line;
+
+            $regimen = trim( (string) ( $hotel_item['hotel_regimen'] ?? '' ) );
+            if ( $regimen !== '' ) {
+                $regimen_line = sprintf( 'Régimen: %s', $regimen );
+                if ( $hotel_count > 1 && $hotel_name !== '' ) {
+                    $regimen_line .= sprintf( ' (%s)', $hotel_name );
+                }
+                $includes_regimens[] = $regimen_line;
+            }
+        }
+
+        $golf_courses = [];
+        $green_fees_per_person = 0;
+        foreach ( $golf_items as $golf_item ) {
+            $course_name = trim( (string) ( $golf_item['display_name'] ?? '' ) );
+            if ( $course_name !== '' ) {
+                $golf_courses[] = $course_name;
+            }
+            $green_value = absint( $golf_item['green_fees_per_person'] ?? 0 );
+            if ( $green_value > 0 && $green_fees_per_person === 0 ) {
+                $green_fees_per_person = $green_value;
+            }
+        }
+        if ( $golf_courses && $green_fees_per_person <= 0 ) {
+            $green_fees_per_person = 1;
+        }
+
+        $other_includes = [];
+        foreach ( $other_items as $other_item ) {
+            $label = trim( (string) ( $other_item['display_name'] ?? '' ) );
+            if ( $label !== '' ) {
+                $other_includes[] = $label;
+            }
+            $components_text = trim( (string) ( $other_item['package_components_text'] ?? '' ) );
+            if ( $components_text !== '' ) {
+                $lines = array_filter( array_map( 'trim', explode( "\n", $components_text ) ) );
+                foreach ( $lines as $line ) {
+                    $other_includes[] = $line;
+                }
+            }
+        }
+
         $current_version_message = $current_label
             ? sprintf(
                 esc_html__( 'La propuesta se actualizó el %s.', 'wp-travel-giav' ),
@@ -303,6 +377,14 @@ class WP_Travel_Proposal_Viewer {
         }
 
         $can_accept = $proposal_status === 'sent' && ! empty( $proposal['current_version_id'] );
+        $meta_parts = [];
+        if ( $pax_total ) {
+            $meta_parts[] = sprintf( '%d pax', $pax_total );
+        }
+        if ( $currency ) {
+            $meta_parts[] = $currency;
+        }
+        $meta_line = implode( ' | ', $meta_parts );
         $rest_nonce = wp_create_nonce( 'wp_rest' );
         $accept_endpoint = rest_url( 'travel/v1/proposals/public/' . $proposal['proposal_token'] . '/accept' );
         $public_payload = [
@@ -436,46 +518,74 @@ class WP_Travel_Proposal_Viewer {
                     margin: 0 0 16px;
                     font-size: 18px;
                 }
-                .service-list {
-                    list-style: none;
-                    margin: 0;
-                    padding: 0;
-                    display: grid;
-                    gap: 16px;
+                .travel-dates {
+                    font-size: 15px;
+                    color: #0f172a;
+                    font-weight: 600;
                 }
-                .service-item {
+                .proposal-meta {
+                    font-size: 13px;
+                    color: #475569;
+                }
+                .includes-block {
+                    background: #f8fafc;
+                    border-radius: 14px;
+                    padding: 16px 18px;
+                    border: 1px solid #e2e8f0;
+                    margin-top: 16px;
+                }
+                .includes-block h3 {
+                    margin: 0 0 10px;
+                    font-size: 16px;
+                }
+                .includes-list {
+                    margin: 0;
+                    padding-left: 18px;
+                    display: grid;
+                    gap: 6px;
+                }
+                .includes-list ul {
+                    margin-top: 8px;
+                }
+                .service-group {
+                    margin-top: 24px;
+                }
+                .service-group h3 {
+                    margin: 0 0 12px;
+                    font-size: 16px;
+                }
+                .service-group__grid {
+                    display: grid;
+                    gap: 14px;
+                }
+                .service-card {
                     padding: 16px;
                     border: 1px solid #e5e7eb;
                     border-radius: 12px;
+                    background: #ffffff;
                 }
-                .service-item .service-title {
+                .service-card__title {
                     font-weight: 600;
                     margin-bottom: 6px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 8px;
                 }
-                .service-item .service-subtitle {
-                    color: #475569;
+                .service-card__meta {
                     font-size: 13px;
+                    color: #475569;
                     margin-bottom: 8px;
                 }
-                .warning-badge {
-                    display: inline-flex;
-                    align-items: center;
+                .service-card__details {
+                    font-size: 14px;
+                    color: #1f2937;
+                    display: grid;
                     gap: 6px;
-                    padding: 2px 10px;
-                    border-radius: 999px;
-                    font-size: 12px;
-                    background: #fff7ed;
-                    color: #b45309;
-                    border: 1px solid #fde7c1;
                 }
-                .service-warnings {
-                    margin-top: 6px;
+                .service-card__note {
+                    margin-top: 10px;
+                    padding: 10px 12px;
+                    border-radius: 10px;
+                    background: #f1f5f9;
                     font-size: 13px;
-                    color: #b45309;
+                    color: #0f172a;
                 }
                 .totals-grid {
                     display: grid;
@@ -513,7 +623,12 @@ class WP_Travel_Proposal_Viewer {
             <div class="proposal-header">
                 <h1><?php echo esc_html( $header['customer_name'] ?: 'Propuesta de viaje' ); ?></h1>
                 <div class="proposal-status__meta">
-                    <?php echo esc_html( trim( sprintf( '%s | %s pax | %s', $dates, $pax_total, $currency ) ) ); ?>
+                    <?php if ( $dates ) : ?>
+                        <div class="travel-dates">Fechas: <?php echo esc_html( $dates ); ?></div>
+                    <?php endif; ?>
+                    <?php if ( $meta_line ) : ?>
+                        <div class="proposal-meta"><?php echo esc_html( $meta_line ); ?></div>
+                    <?php endif; ?>
                 </div>
                 <div class="proposal-version">
                     <span><?php echo esc_html( $view_label ); ?></span>
@@ -550,51 +665,152 @@ class WP_Travel_Proposal_Viewer {
             <?php endif; ?>
 
             <div class="proposal-section">
-                <h2>Servicios incluidos</h2>
-                <ul class="service-list">
-                    <?php foreach ( $items as $item ) : ?>
-                        <?php
-                        $display_name = esc_html( $item['display_name'] ?? 'Servicio' );
-                        $supplier = esc_html( $item['giav_supplier_name'] ?? '' );
-                        $item_warnings = [];
-                        if ( ! empty( $item['warnings'] ) && is_array( $item['warnings'] ) ) {
-                            foreach ( $item['warnings'] as $warning ) {
-                                if ( self::is_public_warning( $warning ) && ! empty( $warning['message'] ) ) {
-                                    $item_warnings[] = esc_html( $warning['message'] );
-                                }
-                            }
-                        }
-                        ?>
-                        <li class="service-item">
-                            <div class="service-title">
-                                <span><?php echo $display_name; ?></span>
-                                <?php if ( $item_warnings ) : ?>
-                                    <span class="warning-badge">Aviso</span>
-                                <?php endif; ?>
-                            </div>
-                            <div class="service-subtitle">Proveedor: <?php echo $supplier ?: 'Proveedor no disponible'; ?></div>
-                            <?php if ( $item_warnings ) : ?>
-                                <div class="service-warnings">
-                                    <?php foreach ( $item_warnings as $message ) : ?>
-                                        <div><?php echo $message; ?></div>
-                                    <?php endforeach; ?>
-                                </div>
+                <h2>Programa de viaje</h2>
+                <?php if ( $includes_hotel || $golf_courses || $other_includes ) : ?>
+                    <div class="includes-block">
+                        <h3>Incluye:</h3>
+                        <ul class="includes-list">
+                            <?php foreach ( $includes_hotel as $line ) : ?>
+                                <li><?php echo esc_html( $line ); ?></li>
+                            <?php endforeach; ?>
+                            <?php foreach ( $includes_regimens as $line ) : ?>
+                                <li><?php echo esc_html( $line ); ?></li>
+                            <?php endforeach; ?>
+                            <?php if ( $golf_courses ) : ?>
+                                <li>
+                                    <?php echo esc_html( sprintf( '%d green-fees por jugador en:', $green_fees_per_person ) ); ?>
+                                    <ul>
+                                        <?php foreach ( $golf_courses as $course ) : ?>
+                                            <li><?php echo esc_html( $course ); ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </li>
                             <?php endif; ?>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            </div>
+                            <?php foreach ( $other_includes as $line ) : ?>
+                                <li><?php echo esc_html( $line ); ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                <?php endif; ?>
 
-            <?php if ( $warnings ) : ?>
-                <div class="proposal-section observations">
-                    <h2>Observaciones</h2>
-                    <ul>
-                        <?php foreach ( $warnings as $message ) : ?>
-                            <li><?php echo esc_html( $message ); ?></li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
-            <?php endif; ?>
+                <?php if ( $hotel_items ) : ?>
+                    <div class="service-group">
+                        <h3>Alojamiento</h3>
+                        <div class="service-group__grid">
+                            <?php foreach ( $hotel_items as $item ) : ?>
+                                <?php
+                                $display_name = esc_html( $item['display_name'] ?? 'Alojamiento' );
+                                $room_type = trim( (string) ( $item['hotel_room_type'] ?? '' ) );
+                                $regimen = trim( (string) ( $item['hotel_regimen'] ?? '' ) );
+                                $start_date = self::format_spanish_date( (string) ( $item['start_date'] ?? '' ) );
+                                $end_date = self::format_spanish_date( (string) ( $item['end_date'] ?? '' ) );
+                                $notes = trim( (string) ( $item['notes_public'] ?? '' ) );
+                                $nights = absint( $item['hotel_nights'] ?? 0 );
+                                $meta_parts = [];
+                                if ( $start_date || $end_date ) {
+                                    $meta_parts[] = trim( implode( ' → ', array_filter( [ $start_date, $end_date ] ) ) );
+                                }
+                                if ( $nights > 0 ) {
+                                    $meta_parts[] = sprintf( '%d noche%s', $nights, $nights === 1 ? '' : 's' );
+                                }
+                                $meta_line = implode( ' · ', $meta_parts );
+                                ?>
+                                <div class="service-card">
+                                    <div class="service-card__title"><?php echo $display_name; ?></div>
+                                    <?php if ( $meta_line ) : ?>
+                                        <div class="service-card__meta"><?php echo esc_html( $meta_line ); ?></div>
+                                    <?php endif; ?>
+                                    <?php if ( $room_type || $regimen ) : ?>
+                                        <div class="service-card__details">
+                                            <?php if ( $room_type ) : ?>
+                                                <div>Tipo de habitación: <?php echo esc_html( $room_type ); ?></div>
+                                            <?php endif; ?>
+                                            <?php if ( $regimen ) : ?>
+                                                <div>Régimen: <?php echo esc_html( $regimen ); ?></div>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if ( $notes ) : ?>
+                                        <div class="service-card__note"><?php echo esc_html( $notes ); ?></div>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ( $golf_items ) : ?>
+                    <div class="service-group">
+                        <h3>Golf</h3>
+                        <div class="service-group__grid">
+                            <?php foreach ( $golf_items as $item ) : ?>
+                                <?php
+                                $display_name = esc_html( $item['display_name'] ?? 'Campo de golf' );
+                                $start_date = self::format_spanish_date( (string) ( $item['start_date'] ?? '' ) );
+                                $end_date = self::format_spanish_date( (string) ( $item['end_date'] ?? '' ) );
+                                $notes = trim( (string) ( $item['notes_public'] ?? '' ) );
+                                $green_value = absint( $item['green_fees_per_person'] ?? 0 );
+                                $golf_meta = [];
+                                if ( $start_date || $end_date ) {
+                                    $golf_meta[] = trim( implode( ' → ', array_filter( [ $start_date, $end_date ] ) ) );
+                                }
+                                if ( $green_value > 0 ) {
+                                    $golf_meta[] = sprintf( '%d green-fees por jugador', $green_value );
+                                }
+                                $golf_meta_line = implode( ' · ', $golf_meta );
+                                ?>
+                                <div class="service-card">
+                                    <div class="service-card__title"><?php echo $display_name; ?></div>
+                                    <?php if ( $golf_meta_line ) : ?>
+                                        <div class="service-card__meta"><?php echo esc_html( $golf_meta_line ); ?></div>
+                                    <?php endif; ?>
+                                    <?php if ( $notes ) : ?>
+                                        <div class="service-card__note"><?php echo esc_html( $notes ); ?></div>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ( $other_items ) : ?>
+                    <div class="service-group">
+                        <h3>Extras y transfers</h3>
+                        <div class="service-group__grid">
+                            <?php foreach ( $other_items as $item ) : ?>
+                                <?php
+                                $display_name = esc_html( $item['display_name'] ?? 'Servicio' );
+                                $start_date = self::format_spanish_date( (string) ( $item['start_date'] ?? '' ) );
+                                $end_date = self::format_spanish_date( (string) ( $item['end_date'] ?? '' ) );
+                                $notes = trim( (string) ( $item['notes_public'] ?? '' ) );
+                                $components_text = trim( (string) ( $item['package_components_text'] ?? '' ) );
+                                $meta_parts = [];
+                                if ( $start_date || $end_date ) {
+                                    $meta_parts[] = trim( implode( ' → ', array_filter( [ $start_date, $end_date ] ) ) );
+                                }
+                                $meta_line = implode( ' · ', $meta_parts );
+                                ?>
+                                <div class="service-card">
+                                    <div class="service-card__title"><?php echo $display_name; ?></div>
+                                    <?php if ( $meta_line ) : ?>
+                                        <div class="service-card__meta"><?php echo esc_html( $meta_line ); ?></div>
+                                    <?php endif; ?>
+                                    <?php if ( $components_text ) : ?>
+                                        <div class="service-card__details">
+                                            <?php foreach ( array_filter( array_map( 'trim', explode( "\n", $components_text ) ) ) as $line ) : ?>
+                                                <div><?php echo esc_html( $line ); ?></div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if ( $notes ) : ?>
+                                        <div class="service-card__note"><?php echo esc_html( $notes ); ?></div>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
 
             <div class="proposal-section">
                 <h2>Totales</h2>
@@ -869,6 +1085,18 @@ class WP_Travel_Proposal_Viewer {
         }
 
         return true;
+    }
+
+    private static function format_spanish_date( string $date ) : string {
+        $date = trim( $date );
+        if ( $date === '' ) {
+            return '';
+        }
+        $timestamp = strtotime( $date );
+        if ( ! $timestamp ) {
+            return $date;
+        }
+        return wp_date( 'j \\d\\e F \\d\\e Y', $timestamp );
     }
 
     private static function render_error( $message, array $details = [], $status = 500 ) {
