@@ -99,12 +99,17 @@ function wp_travel_giav_cliente_search_por_dni( string $dni, array &$trace = nul
     }
 
     $params = [
-        'filtroDocumento'       => 'DNI',
         'documento'             => $dni,
+        'documentoModo'         => 'Solo_NIF',
         'documentoExacto'       => true,
         'incluirDeshabilitados' => false,
+        'modoFecha'             => 'Creacion',
+        'fechaHoraDesde'        => null,
+        'fechaHoraHasta'        => null,
+        'edadDesde'             => null,
+        'edadHasta'             => null,
         'pageSize'              => 50,
-        'pageNumber'            => 0,
+        'pageIndex'             => 0,
     ];
 
     $response = wp_travel_giav_call( 'Cliente_SEARCH', $params, $trace );
@@ -116,9 +121,10 @@ function wp_travel_giav_cliente_search_por_dni( string $dni, array &$trace = nul
             'documentoExacto'       => true,
             'incluirDeshabilitados' => false,
             'modoFecha'             => 'Creacion',
+            'fechaHoraDesde'        => null,
+            'fechaHoraHasta'        => null,
             'edadDesde'             => null,
             'edadHasta'             => null,
-            'rgpdSigned'            => 'NoAplicar',
             'pageSize'              => 50,
             'pageIndex'             => 0,
         ];

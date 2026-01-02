@@ -94,11 +94,11 @@ class WP_Travel_GIAV_Soap_Client {
     }
 
     public function get_last_request(): string {
-        return $this->last_request;
+        return (string) $this->last_request;
     }
 
     public function get_last_response(): string {
-        return $this->last_response;
+        return (string) $this->last_response;
     }
 
     public function get_last_method(): string {
