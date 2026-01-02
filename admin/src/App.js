@@ -68,9 +68,7 @@ export default function App() {
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
   const [proposals, setProposals] = useState([]);
-  const [selectedProposal, setSelectedProposal] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('updated_at');
@@ -78,7 +76,8 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState([]);
 
   const proposalId = proposalIdParam ? parseInt(proposalIdParam, 10) : null;
-  const isEditing = action === 'edit' && proposalId;
+  const normalizedProposalId = Number.isNaN(proposalId) ? null : proposalId;
+  const isEditing = action === 'edit' && normalizedProposalId;
 
   useEffect(() => {
     if (!isEditing) {
@@ -93,7 +92,7 @@ export default function App() {
       setEditLoading(true);
       setEditError('');
       try {
-        const res = await API.getProposalDetail(proposalId);
+        const res = await API.getProposalDetail(normalizedProposalId);
         if (active) {
           setEditData(res);
         }
@@ -113,7 +112,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [isEditing, proposalId]);
+  }, [isEditing, normalizedProposalId]);
 
   const wizardProps = useMemo(() => {
     if (!editData?.proposal) {
@@ -150,25 +149,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!selectedProposal) {
-      loadProposals();
-    }
-  }, [sortBy, sortOrder, selectedProposal]);
-
-  const openProposalDetail = async (proposal) => {
-    if (!proposal?.id) return;
-    setDetailLoading(true);
-    setError('');
-    try {
-      const detail = await API.getProposal(proposal.id);
-      setSelectedProposal(detail);
-    } catch (err) {
-      setSelectedProposal(proposal);
-      setError(err?.message || 'No se pudo cargar el detalle de la propuesta.');
-    } finally {
-      setDetailLoading(false);
-    }
-  };
+    loadProposals();
+  }, [sortBy, sortOrder]);
 
   const toggleSelected = (proposalId) => {
     setSelectedIds((prev) =>
@@ -237,7 +219,7 @@ export default function App() {
         onExit={() => {
           const url = new URL(window.location.href);
           url.searchParams.set('page', 'travel_proposals');
-          url.searchParams.set('proposal_id', proposalId);
+          url.searchParams.set('proposal_id', normalizedProposalId);
           url.searchParams.delete('action');
           window.location.href = url.toString();
         }}
@@ -247,106 +229,8 @@ export default function App() {
     );
   }
 
-  if (proposalId) {
-    return <ProposalDetail proposalId={proposalId} />;
-  }
-
-  if (detailLoading) {
-    return (
-      <div className="wp-travel-giav-app">
-        <Card>
-          <CardBody className="proposal-detail__loading">
-            <Spinner />
-            <span>Cargando detalle…</span>
-          </CardBody>
-        </Card>
-      </div>
-    );
-  }
-
-  if (selectedProposal) {
-    const statusLabel = STATUS_LABELS[selectedProposal.status] || selectedProposal.status || '—';
-    return (
-      <div className="wp-travel-giav-app">
-        <Card className="proposal-detail">
-          <CardHeader>
-            <div className="proposal-detail__header">
-              <div>
-                <div className="proposal-detail__eyebrow">Detalle de propuesta</div>
-                <strong>Propuesta #{selectedProposal.id}</strong>
-              </div>
-              <div className="proposal-detail__actions">
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setSelectedProposal(null);
-                    setError('');
-                  }}
-                >
-                  Volver al listado
-                </Button>
-                {selectedProposal.public_url ? (
-                  <Button variant="primary" href={selectedProposal.public_url} target="_blank" rel="noreferrer">
-                    Abrir vista pública
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          </CardHeader>
-          <CardBody>
-            {error ? (
-              <Notice status="error" isDismissible onRemove={() => setError('')}>
-                {error}
-              </Notice>
-            ) : null}
-            <div className="proposal-detail__grid">
-              <div>
-                <div className="proposal-detail__label">Título</div>
-                <div className="proposal-detail__value">{selectedProposal.proposal_title || '—'}</div>
-              </div>
-              <div>
-                <div className="proposal-detail__label">Cliente</div>
-                <div className="proposal-detail__value">{selectedProposal.customer_name || '—'}</div>
-              </div>
-              <div>
-                <div className="proposal-detail__label">Email</div>
-                <div className="proposal-detail__value">{selectedProposal.customer_email || '—'}</div>
-              </div>
-              <div>
-                <div className="proposal-detail__label">Estado</div>
-                <div className="proposal-detail__value">
-                  <span className={`proposal-status proposal-status--${selectedProposal.status || 'draft'}`}>
-                    {statusLabel}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <div className="proposal-detail__label">Autor</div>
-                <div className="proposal-detail__value">{selectedProposal.author_name || '—'}</div>
-              </div>
-              <div>
-                <div className="proposal-detail__label">Fechas</div>
-                <div className="proposal-detail__value">
-                  {selectedProposal.start_date || '—'} - {selectedProposal.end_date || '—'}
-                </div>
-              </div>
-              <div>
-                <div className="proposal-detail__label">Pax</div>
-                <div className="proposal-detail__value">{selectedProposal.pax_total || '—'}</div>
-              </div>
-              <div>
-                <div className="proposal-detail__label">Moneda</div>
-                <div className="proposal-detail__value">{selectedProposal.currency || '—'}</div>
-              </div>
-              <div>
-                <div className="proposal-detail__label">Última actualización</div>
-                <div className="proposal-detail__value">{formatDate(selectedProposal.updated_at)}</div>
-              </div>
-            </div>
-          </CardBody>
-        </Card>
-      </div>
-    );
+  if (normalizedProposalId) {
+    return <ProposalDetail proposalId={normalizedProposalId} />;
   }
 
   return (
@@ -482,7 +366,7 @@ export default function App() {
                     <div>{formatDate(proposal.updated_at)}</div>
                     <div>{proposal.author_name || '—'}</div>
                     <div className="proposal-list__actions">
-                      <Button variant="primary" onClick={() => openProposalDetail(proposal)}>
+                      <Button variant="secondary" href={buildAdminUrl({ proposal_id: proposal.id })}>
                         Ver detalle
                       </Button>
                       <DropdownMenu

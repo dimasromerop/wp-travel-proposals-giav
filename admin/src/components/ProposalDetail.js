@@ -81,6 +81,11 @@ export default function ProposalDetail({ proposalId }) {
   };
 
   useEffect(() => {
+    if (!proposalId) {
+      setData(null);
+      setError('Propuesta no encontrada.');
+      return;
+    }
     load();
   }, [proposalId]);
 
@@ -90,14 +95,28 @@ export default function ProposalDetail({ proposalId }) {
 
   if (!data?.proposal && error) {
     return (
-      <Notice status="error" isDismissible onRemove={() => setError('')}>
-        {error}
-      </Notice>
+      <div style={{ display: 'grid', gap: 12 }}>
+        <Notice status="error" isDismissible onRemove={() => setError('')}>
+          {error}
+        </Notice>
+        <Button variant="secondary" onClick={() => (window.location.href = buildAdminUrl())}>
+          Volver al listado
+        </Button>
+      </div>
     );
   }
 
   if (!data?.proposal) {
-    return null;
+    return (
+      <div style={{ display: 'grid', gap: 12 }}>
+        <Notice status="warning" isDismissible={false}>
+          Propuesta no encontrada.
+        </Notice>
+        <Button variant="secondary" onClick={() => (window.location.href = buildAdminUrl())}>
+          Volver al listado
+        </Button>
+      </div>
+    );
   }
 
   const { proposal, versions = [] } = data;
@@ -126,6 +145,16 @@ export default function ProposalDetail({ proposalId }) {
                 Editar propuesta
               </Button>
             </FlexItem>
+            {proposal.public_url ? (
+              <FlexItem>
+                <Button
+                  variant="primary"
+                  onClick={() => window.open(proposal.public_url, '_blank', 'noopener')}
+                >
+                  Abrir vista pública
+                </Button>
+              </FlexItem>
+            ) : null}
             <FlexItem>
               <Button
                 variant="tertiary"
