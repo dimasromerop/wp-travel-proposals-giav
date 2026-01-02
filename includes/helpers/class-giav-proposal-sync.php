@@ -216,6 +216,17 @@ function wp_travel_giav_cliente_create( array $data, array &$trace = null ) {
         'mailingConsent'                => 'Pending',
         'rgpdSigned'                    => false,
         'customerPortal_Enabled'        => false,
+        'customerPortal_Email'          => '',
+        'customerPortal_Password'       => '',
+        'customerPortal_DefaultVendorId'=> null,
+        'customerPortal_Zone_TravelFiles'=> false,
+        'customerPortal_Zone_Invoicing' => false,
+        'customerPortal_Zone_Payments'  => false,
+        'customerPortal_Zone_Contact'   => false,
+        'facturaECodPais'               => 'ESP',
+        'facturaEAcepta'                => false,
+        'printOptions'                  => null,
+        'customDataValues'              => null,
     ];
 
     return wp_travel_giav_call( 'Cliente_POST', $params, $trace );
