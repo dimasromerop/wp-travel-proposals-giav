@@ -109,6 +109,24 @@ function wp_travel_giav_split_full_name( string $full_name ): array {
     ];
 }
 
+function wp_travel_giav_format_date( ?string $value ): ?string {
+    if ( $value === null ) {
+        return null;
+    }
+
+    $value = trim( (string) $value );
+    if ( $value === '' ) {
+        return null;
+    }
+
+    $timestamp = strtotime( $value );
+    if ( $timestamp === false ) {
+        return null;
+    }
+
+    return gmdate( 'Y-m-d', $timestamp );
+}
+
 function wp_travel_giav_cliente_search_por_dni( string $dni, array &$trace = null ): ?int {
     $dni = wp_travel_giav_normalize_dni( $dni );
     if ( $dni === '' ) {
@@ -486,8 +504,8 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
     }
 
     $dates = $snapshot['header'] ?? [];
-    $fecha_desde = $dates['start_date'] ?? ( $proposal['start_date'] ?? null );
-    $fecha_hasta = $dates['end_date'] ?? ( $proposal['end_date'] ?? null );
+    $fecha_desde = wp_travel_giav_format_date( $dates['start_date'] ?? ( $proposal['start_date'] ?? '' ) );
+    $fecha_hasta = wp_travel_giav_format_date( $dates['end_date'] ?? ( $proposal['end_date'] ?? '' ) );
 
     $titulo = sprintf(
         'Propuesta #%d - %s',
@@ -504,12 +522,12 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
 
     $expediente_response = wp_travel_giav_expediente_create(
         [
-            'id_cliente'   => $giav_client_id,
-            'titulo'       => $titulo,
-            'observaciones'=> $observaciones,
-            'fecha_apertura' => current_time( 'mysql' ),
-            'fecha_desde'  => $fecha_desde,
-            'fecha_hasta'  => $fecha_hasta,
+            'id_cliente'    => $giav_client_id,
+            'titulo'        => $titulo,
+            'observaciones' => $observaciones,
+            'fecha_apertura'=> wp_travel_giav_format_date( current_time( 'mysql' ) ) ?? gmdate( 'Y-m-d' ),
+            'fecha_desde'   => $fecha_desde,
+            'fecha_hasta'   => $fecha_hasta,
         ],
         $trace
     );
