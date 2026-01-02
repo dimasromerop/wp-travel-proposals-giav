@@ -7,6 +7,23 @@ function wp_travel_giav_debug_enabled(): bool {
     return defined( 'CASANOVA_GIAV_DEBUG' ) && CASANOVA_GIAV_DEBUG;
 }
 
+function wp_travel_giav_pending_timeout_seconds(): int {
+    return (int) apply_filters( 'wp_travel_giav_pending_timeout_seconds', 300 );
+}
+
+function wp_travel_giav_pending_is_stale( array $proposal ): bool {
+    $timestamp = null;
+    if ( ! empty( $proposal['giav_sync_updated_at'] ) ) {
+        $timestamp = mysql2date( 'U', $proposal['giav_sync_updated_at'], false );
+    }
+
+    if ( $timestamp === null || $timestamp === 0 ) {
+        return true;
+    }
+
+    return ( time() - $timestamp ) > wp_travel_giav_pending_timeout_seconds();
+}
+
 function wp_travel_giav_call( string $method, array $params = [], array &$trace = null ) {
     $client = new WP_Travel_GIAV_Soap_Client();
     $response = $client->call( $method, $params );
@@ -349,10 +366,20 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
         ];
     }
 
-    if ( isset( $proposal['giav_sync_status'] ) && $proposal['giav_sync_status'] === 'pending' ) {
-        return [
-            'status' => 'pending',
-        ];
+    $pending_status = isset( $proposal['giav_sync_status'] ) ? $proposal['giav_sync_status'] : 'none';
+    if ( $pending_status === 'pending' ) {
+        if ( ! wp_travel_giav_pending_is_stale( $proposal ) ) {
+            return [
+                'status' => 'pending',
+            ];
+        }
+        if ( wp_travel_giav_debug_enabled() ) {
+            error_log( sprintf(
+                '[WP Travel GIAV] Pending sync for proposal #%d appears stale (updated_at=%s); retrying',
+                $proposal_id,
+                $proposal['giav_sync_updated_at'] ?? 'n/a'
+            ) );
+        }
     }
 
     $proposal_repo->update_giav_sync_status(

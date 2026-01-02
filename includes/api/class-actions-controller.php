@@ -419,7 +419,8 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
             ] );
         }
 
-        if ( isset( $proposal['giav_sync_status'] ) && $proposal['giav_sync_status'] === 'pending' ) {
+        $pending_status = isset( $proposal['giav_sync_status'] ) ? $proposal['giav_sync_status'] : 'none';
+        if ( $pending_status === 'pending' && ! wp_travel_giav_pending_is_stale( $proposal ) ) {
             return $this->response( [
                 'status' => 'pending',
             ], 202 );
