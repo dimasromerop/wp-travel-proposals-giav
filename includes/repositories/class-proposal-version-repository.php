@@ -40,6 +40,23 @@ class WP_Travel_Proposal_Version_Repository extends WP_Travel_GIAV_DB {
         return $this->wpdb->get_row( $sql, ARRAY_A );
     }
 
+    public function get_versions_for_proposal( int $proposal_id ): array {
+        $sql = $this->wpdb->prepare(
+            "SELECT * FROM {$this->table} WHERE proposal_id = %d ORDER BY created_at DESC",
+            [ $proposal_id ]
+        );
+        return $this->wpdb->get_results( $sql, ARRAY_A );
+    }
+
+    public function get_next_version_number( int $proposal_id ): int {
+        $sql = $this->wpdb->prepare(
+            "SELECT MAX(version_number) FROM {$this->table} WHERE proposal_id = %d",
+            [ $proposal_id ]
+        );
+        $max = (int) $this->wpdb->get_var( $sql );
+        return max( 1, $max + 1 );
+    }
+
     public function mark_sync_status( int $version_id, string $status, ?string $giav_booking_id = null ) {
         $data = [
             'giav_last_sync_status' => $status,

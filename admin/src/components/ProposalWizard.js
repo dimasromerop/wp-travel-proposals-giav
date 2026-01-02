@@ -1,18 +1,42 @@
-import { useState } from '@wordpress/element';
+import { useMemo, useState } from '@wordpress/element';
 import { Notice, Button, Spinner } from '@wordpress/components';
 import StepBasics from './steps/StepBasics';
 import StepServices from './steps/StepServices';
 import StepPreview from './steps/StepPreview';
 import API from '../api';
 
-export default function ProposalWizard({ onExit }) {
+export default function ProposalWizard({
+  onExit,
+  mode = 'create',
+  initialProposal = null,
+  initialSnapshot = null,
+  nextVersionNumber = 1,
+}) {
   const [step, setStep] = useState(1);
 
-  const [proposalId, setProposalId] = useState(null);
-  const [basics, setBasics] = useState(null);
+  const [proposalId, setProposalId] = useState(initialProposal?.id || null);
 
-  const [items, setItems] = useState([]);
-  const [totals, setTotals] = useState(null);
+  const initialBasics = useMemo(() => {
+    if (!initialProposal && !initialSnapshot) {
+      return null;
+    }
+    const header = initialSnapshot?.header || {};
+    return {
+      customer_name: header.customer_name || initialProposal?.customer_name || '',
+      customer_email: header.customer_email || initialProposal?.customer_email || '',
+      customer_country: header.customer_country || initialProposal?.customer_country || '',
+      customer_language: header.customer_language || initialProposal?.customer_language || 'en',
+      start_date: header.start_date || initialProposal?.start_date || '',
+      end_date: header.end_date || initialProposal?.end_date || '',
+      pax_total: header.pax_total || initialProposal?.pax_total || 1,
+      currency: header.currency || initialProposal?.currency || 'EUR',
+    };
+  }, [initialProposal, initialSnapshot]);
+
+  const [basics, setBasics] = useState(initialBasics);
+
+  const [items, setItems] = useState(initialSnapshot?.items || []);
+  const [totals, setTotals] = useState(initialSnapshot?.totals || null);
 
   const [snapshot, setSnapshot] = useState(null);
   const [versionId, setVersionId] = useState(null);
@@ -86,6 +110,8 @@ export default function ProposalWizard({ onExit }) {
         basics={basics}
         items={items}
         totals={totals}
+        mode={mode}
+        versionNumber={nextVersionNumber}
         onBack={() => setStep(2)}
         onSent={({ versionId: vId, snapshot: sentSnapshot }) => {
           setVersionId(vId);
@@ -120,7 +146,8 @@ export default function ProposalWizard({ onExit }) {
     return (
       <div>
         <Notice status="success" isDismissible={false}>
-          Propuesta enviada. Version creada: <strong>{versionId}</strong>
+          {mode === 'edit' ? 'Nueva versión creada:' : 'Propuesta enviada. Versión creada:'}{' '}
+          <strong>{versionId}</strong>
         </Notice>
 
         {confirmOk && (

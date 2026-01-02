@@ -10,11 +10,39 @@ const API = {
       data,
     }),
 
+  listProposals: ({ search = '', page = 1, per_page = 20 }) =>
+    apiFetch({
+      path: `/travel/v1/proposals?search=${encodeURIComponent(search)}&page=${encodeURIComponent(
+        page
+      )}&per_page=${encodeURIComponent(per_page)}`,
+      method: 'GET',
+    }),
+
+  getProposalDetail: (proposalId) =>
+    apiFetch({
+      path: `/travel/v1/proposals/${proposalId}/detail`,
+      method: 'GET',
+    }),
+
   sendProposal: (proposalId, snapshot, version_number) =>
     apiFetch({
       path: `/travel/v1/proposals/${proposalId}/send`,
       method: 'POST',
       data: { snapshot, version_number },
+    }),
+
+  createProposalVersion: (proposalId, snapshot, version_number) =>
+    apiFetch({
+      path: `/travel/v1/proposals/${proposalId}/versions`,
+      method: 'POST',
+      data: { snapshot, version_number },
+    }),
+
+  setCurrentVersion: (proposalId, versionId) =>
+    apiFetch({
+      path: `/travel/v1/proposals/${proposalId}/current-version`,
+      method: 'POST',
+      data: { version_id: versionId },
     }),
 
   searchCatalog: ({ type, q }) =>

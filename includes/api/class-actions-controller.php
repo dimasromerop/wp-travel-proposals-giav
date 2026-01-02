@@ -126,8 +126,10 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
         );
 
         return $this->response( [
-            'version_id' => $version_id,
-            'status'     => 'sent',
+            'version_id'   => $version_id,
+            'public_token' => $public_token,
+            'public_url'   => wp_travel_giav_get_public_proposal_url( $proposal['proposal_token'] ),
+            'status'       => 'sent',
         ] );
     }
     public function accept_proposal( WP_REST_Request $request ) {

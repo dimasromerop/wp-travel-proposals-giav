@@ -34,6 +34,22 @@ define( 'WP_TRAVEL_GIAV_TABLE_SYNC_LOG', $wpdb->prefix . 'travel_giav_sync_log' 
 define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_ID', '1734698' );
 define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_NAME', 'Proveedores varios' );
 
+/**
+ * Build the public proposal URL for admin listings and detail views.
+ */
+function wp_travel_giav_get_public_proposal_url( string $proposal_token, string $version_token = '' ): string {
+    $proposal_token = trim( $proposal_token );
+    if ( $proposal_token === '' ) {
+        return '';
+    }
+
+    if ( $version_token !== '' ) {
+        return home_url( '/travel-proposal/' . $proposal_token . '/v/' . $version_token . '/' );
+    }
+
+    return home_url( '/travel-proposal/' . $proposal_token . '/' );
+}
+
 function wp_travel_giav_get_items_schema( $charset_collate ) {
     return "
     CREATE TABLE " . WP_TRAVEL_GIAV_TABLE_ITEMS . " (
@@ -415,10 +431,10 @@ add_action( 'admin_enqueue_scripts', 'wp_travel_giav_admin_assets' );
 
 function wp_travel_giav_admin_menu() {
     add_menu_page(
-        'Travel Proposals',
-        'Travel Proposals',
+        'Propuestas',
+        'Propuestas',
         'manage_options',
-        'wp-travel-proposals',
+        'travel_proposals',
         'wp_travel_giav_render_app',
         'dashicons-portfolio',
         26
@@ -426,7 +442,7 @@ function wp_travel_giav_admin_menu() {
 
     // WP ⇄ GIAV mapping admin (uses same React app container)
     add_submenu_page(
-        'wp-travel-proposals',
+        'travel_proposals',
         'GIAV Mapping',
         'GIAV Mapping',
         'manage_options',
@@ -442,7 +458,7 @@ function wp_travel_giav_render_app() {
 function wp_travel_giav_admin_assets( $hook ) {
 
     // Allow assets for main page + mapping submenu page.
-    if ( ! in_array( $hook, [ 'toplevel_page_wp-travel-proposals', 'travel-proposals_page_wp-travel-giav-mapping' ], true ) ) {
+    if ( ! in_array( $hook, [ 'toplevel_page_travel_proposals', 'travel_proposals_page_wp-travel-giav-mapping' ], true ) ) {
         return;
     }
 

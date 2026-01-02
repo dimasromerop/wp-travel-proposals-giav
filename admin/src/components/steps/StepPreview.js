@@ -15,6 +15,8 @@ export default function StepPreview({
   totals,
   onBack,
   onSent,
+  mode = 'create',
+  versionNumber = 1,
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -152,7 +154,10 @@ export default function StepPreview({
     setError('');
 
     try {
-      const res = await API.sendProposal(proposalId, snapshot, 1);
+      const res =
+        mode === 'edit'
+          ? await API.createProposalVersion(proposalId, snapshot, versionNumber)
+          : await API.sendProposal(proposalId, snapshot, versionNumber);
 
       onSent({
         versionId: res.version_id,
@@ -293,7 +298,7 @@ export default function StepPreview({
           </Button>
 
           <Button variant="primary" onClick={send} disabled={loading}>
-            Enviar propuesta
+            {mode === 'edit' ? 'Guardar nueva versión' : 'Enviar propuesta'}
           </Button>
 
           {loading && <Spinner />}
