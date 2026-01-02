@@ -202,10 +202,31 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
 
     public function accept_proposal_public( WP_REST_Request $request ) {
         $token = sanitize_text_field( $request['token'] );
-        $nonce = sanitize_text_field( (string) $request->get_param( 'nonce' ) );
+        $nonce = (string) $request->get_header( 'x_wp_nonce' );
+        if ( '' === $nonce ) {
+            $nonce = (string) $request->get_param( '_wpnonce' );
+        }
+        if ( '' === $nonce ) {
+            $nonce = (string) $request->get_param( 'nonce' );
+        }
+        $nonce = sanitize_text_field( $nonce );
 
-        if ( ! wp_verify_nonce( $nonce, 'wp_travel_giav_public_accept_' . $token ) ) {
-            return $this->error( 'Invalid nonce', 403 );
+        $should_log = defined( 'WP_DEBUG' ) && WP_DEBUG;
+        if ( '' === $nonce ) {
+            if ( $should_log ) {
+                error_log( '[WP Travel GIAV] Public accept missing nonce.' );
+            }
+            return new WP_Error( 'wp_travel_nonce_missing', 'Missing nonce', [ 'status' => 403 ] );
+        }
+
+        if ( ! wp_verify_nonce( $nonce, 'wp_rest' ) ) {
+            if ( $should_log ) {
+                error_log( sprintf(
+                    '[WP Travel GIAV] Public accept invalid nonce for action wp_rest: %s...',
+                    substr( $nonce, 0, 8 )
+                ) );
+            }
+            return new WP_Error( 'wp_travel_nonce_invalid', 'Invalid nonce', [ 'status' => 403 ] );
         }
 
         $proposal_repo = new WP_Travel_Proposal_Repository();

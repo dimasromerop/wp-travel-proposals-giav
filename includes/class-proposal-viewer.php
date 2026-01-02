@@ -273,8 +273,12 @@ class WP_Travel_Proposal_Viewer {
         }
 
         $can_accept = $proposal_status === 'sent' && ! empty( $proposal['current_version_id'] );
-        $accept_nonce = wp_create_nonce( 'wp_travel_giav_public_accept_' . $proposal['proposal_token'] );
+        $rest_nonce = wp_create_nonce( 'wp_rest' );
         $accept_endpoint = rest_url( 'travel/v1/proposals/public/' . $proposal['proposal_token'] . '/accept' );
+        $public_payload = [
+            'restNonce' => $rest_nonce,
+            'token'     => $proposal['proposal_token'],
+        ];
         ?>
         <!doctype html>
         <html lang="<?php echo esc_attr( get_bloginfo( 'language' ) ); ?>">
@@ -576,6 +580,9 @@ class WP_Travel_Proposal_Viewer {
                 </div>
             </div>
         </div>
+        <script>
+            window.TRAVEL_PUBLIC = <?php echo wp_json_encode( $public_payload ); ?>;
+        </script>
         <?php if ( $can_accept && ! $accepted_message ) : ?>
         <script>
             (function () {
@@ -584,6 +591,14 @@ class WP_Travel_Proposal_Viewer {
                 const feedback = document.getElementById('proposal-accept-feedback');
                 button.addEventListener('click', async () => {
                     if (button.disabled) return;
+                    const restNonce = window.TRAVEL_PUBLIC && window.TRAVEL_PUBLIC.restNonce;
+                    if (!restNonce) {
+                        if (feedback) {
+                            feedback.textContent = 'No se pudo validar la solicitud.';
+                            feedback.style.display = 'block';
+                        }
+                        return;
+                    }
                     button.disabled = true;
                     if (feedback) {
                         feedback.textContent = 'Procesando aceptación...';
@@ -593,9 +608,11 @@ class WP_Travel_Proposal_Viewer {
                         const res = await fetch('<?php echo esc_url_raw( $accept_endpoint ); ?>', {
                             method: 'POST',
                             headers: {
-                                'Content-Type': 'application/json'
+                                'Content-Type': 'application/json',
+                                'X-WP-Nonce': restNonce
                             },
-                            body: JSON.stringify({ nonce: '<?php echo esc_js( $accept_nonce ); ?>' })
+                            credentials: 'same-origin',
+                            body: JSON.stringify({})
                         });
                         const payload = await res.json();
                         if (!res.ok || !payload?.ok) {
