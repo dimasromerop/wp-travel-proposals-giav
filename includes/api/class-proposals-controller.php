@@ -9,7 +9,6 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
     protected $rest_base = 'proposals';
 
     public function register_routes() {
-
         register_rest_route( $this->namespace, '/' . $this->rest_base, [
             [
                 'methods'             => WP_REST_Server::READABLE,
@@ -59,24 +58,53 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
     public function list_proposals( WP_REST_Request $request ) {
         $repo = new WP_Travel_Proposal_Repository();
 
-        // Admin listing: search + pagination for repository view.
-        $search = sanitize_text_field( (string) $request->get_param( 'search' ) );
-        $page = max( 1, (int) $request->get_param( 'page' ) );
-        $per_page = (int) $request->get_param( 'per_page' );
-        $per_page = $per_page > 0 ? min( 50, $per_page ) : 20;
+        $search = $request->get_param( 'search' );
+        $page = $request->get_param( 'page' );
+        $per_page = $request->get_param( 'per_page' );
 
-        $result = $repo->get_admin_list( $search, $page, $per_page );
-        $items = array_map( function ( $proposal ) {
+        if ( $search !== null || $page !== null || $per_page !== null ) {
+            $search = sanitize_text_field( (string) $request->get_param( 'search' ) );
+            $page = max( 1, (int) $request->get_param( 'page' ) );
+            $per_page = (int) $request->get_param( 'per_page' );
+            $per_page = $per_page > 0 ? min( 50, $per_page ) : 20;
+
+            $result = $repo->get_admin_list( $search, $page, $per_page );
+            $items = array_map( function ( $proposal ) {
+                $proposal['public_url'] = wp_travel_giav_get_public_proposal_url( $proposal['proposal_token'] );
+                return $proposal;
+            }, $result['items'] );
+
+            return $this->response( [
+                'items'       => $items,
+                'total'       => $result['total'],
+                'page'        => $result['page'],
+                'per_page'    => $result['per_page'],
+                'total_pages' => $result['total_page'],
+            ] );
+        }
+
+        $order_by = sanitize_text_field( (string) $request->get_param( 'order_by' ) ?: 'updated_at' );
+        $order = sanitize_text_field( (string) $request->get_param( 'order' ) ?: 'desc' );
+        $limit = (int) $request->get_param( 'limit' );
+        $offset = (int) $request->get_param( 'offset' );
+
+        $limit = $limit > 0 ? $limit : 50;
+        $offset = max( 0, $offset );
+
+        $proposals = $repo->list_proposals( [
+            'order_by' => $order_by,
+            'order'    => $order,
+            'limit'    => $limit,
+            'offset'   => $offset,
+        ] );
+
+        $proposals = array_map( function ( $proposal ) {
             $proposal['public_url'] = wp_travel_giav_get_public_proposal_url( $proposal['proposal_token'] );
             return $proposal;
-        }, $result['items'] );
+        }, $proposals );
 
         return $this->response( [
-            'items'       => $items,
-            'total'       => $result['total'],
-            'page'        => $result['page'],
-            'per_page'    => $result['per_page'],
-            'total_pages' => $result['total_page'],
+            'items' => $proposals,
         ] );
     }
 
@@ -113,6 +141,18 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
             return $this->error( 'Proposal not found', 404 );
         }
 
+        $proposal['author_name'] = '';
+        if ( ! empty( $proposal['created_by'] ) ) {
+            $author = get_user_by( 'id', (int) $proposal['created_by'] );
+            if ( $author ) {
+                $proposal['author_name'] = $author->display_name;
+            }
+        }
+
+        $proposal['public_url'] = ! empty( $proposal['proposal_token'] )
+            ? home_url( '/travel-proposal/' . $proposal['proposal_token'] . '/' )
+            : '';
+
         return $this->response( $proposal );
     }
 
@@ -127,7 +167,6 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
             return $this->error( 'Proposal not found', 404 );
         }
 
-        // Admin detail: load proposal + versions (sorted latest first).
         $versions = $version_repo->get_versions_for_proposal( $proposal_id );
         $current_version = null;
 
@@ -189,7 +228,6 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
             $version_number = $version_repo->get_next_version_number( $proposal_id );
         }
 
-        // Resolve + validate snapshot before persisting a new version.
         $resolved = WP_Travel_GIAV_Snapshot_Resolver::resolve_snapshot(
             $snapshot,
             [
@@ -269,6 +307,7 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
 
         return $this->response( [
             'current_version_id' => $version_id,
+            'public_url'         => wp_travel_giav_get_public_proposal_url( $proposal['proposal_token'] ),
         ] );
     }
 }

@@ -48,6 +48,8 @@ async function copyToClipboard(text) {
 function buildAdminUrl(params = {}) {
   const url = new URL(window.location.href);
   url.searchParams.set('page', 'travel_proposals');
+  url.searchParams.delete('proposal_id');
+  url.searchParams.delete('action');
   Object.entries(params).forEach(([key, value]) => {
     if (value === null || value === undefined || value === '') {
       url.searchParams.delete(key);

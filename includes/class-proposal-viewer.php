@@ -161,7 +161,7 @@ class WP_Travel_Proposal_Viewer {
         foreach ( $items as $item ) {
             if ( ! empty( $item['warnings'] ) && is_array( $item['warnings'] ) ) {
                 foreach ( $item['warnings'] as $warning ) {
-                    if ( ! empty( $warning['message'] ) ) {
+                    if ( self::is_public_warning( $warning ) && ! empty( $warning['message'] ) ) {
                         $warnings[ (string) $warning['message'] ] = (string) $warning['message'];
                     }
                 }
@@ -441,7 +441,7 @@ class WP_Travel_Proposal_Viewer {
                         $item_warnings = [];
                         if ( ! empty( $item['warnings'] ) && is_array( $item['warnings'] ) ) {
                             foreach ( $item['warnings'] as $warning ) {
-                                if ( ! empty( $warning['message'] ) ) {
+                                if ( self::is_public_warning( $warning ) && ! empty( $warning['message'] ) ) {
                                     $item_warnings[] = esc_html( $warning['message'] );
                                 }
                             }
@@ -500,6 +500,27 @@ class WP_Travel_Proposal_Viewer {
 
     private static function get_proposal_url( string $token ) {
         return home_url( '/travel-proposal/' . $token . '/' );
+    }
+
+    private static function is_public_warning( array $warning ) : bool {
+        $code = strtoupper( (string) ( $warning['code'] ?? '' ) );
+        $message = strtolower( (string) ( $warning['message'] ?? '' ) );
+
+        $hidden_codes = [
+            'GENERIC_SUPPLIER',
+            'SUPPLIER_NAME_MISSING',
+            'MANUAL_SERVICE',
+        ];
+
+        if ( in_array( $code, $hidden_codes, true ) ) {
+            return false;
+        }
+
+        if ( $message !== '' && ( str_contains( $message, 'missing mapping' ) || str_contains( $message, 'generic supplier' ) ) ) {
+            return false;
+        }
+
+        return true;
     }
 
     private static function render_error( $message, array $details = [], $status = 500 ) {

@@ -7,6 +7,178 @@
   max-width: 1200px;
 }
 
+.proposal-list__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.proposal-list__subtitle {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.proposal-list__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.proposal-list__filters .components-base-control {
+  min-width: 200px;
+}
+
+.proposal-list__table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.proposal-list__row {
+  display: grid;
+  grid-template-columns: 80px minmax(180px, 1.4fr) minmax(140px, 0.8fr) minmax(180px, 1fr) minmax(160px, 0.8fr) minmax(180px, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 10px 16px rgba(15, 23, 42, 0.04);
+}
+
+.proposal-list__row--header {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.proposal-list__row--loading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.proposal-list__empty {
+  text-align: center;
+  color: #64748b;
+  padding: 16px;
+  border: 1px dashed #cbd5f5;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.proposal-list__customer-name {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.proposal-list__customer-meta {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.proposal-list__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.proposal-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  text-transform: capitalize;
+}
+
+.proposal-status--draft {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+
+.proposal-status--sent,
+.proposal-status--queued {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.proposal-status--accepted,
+.proposal-status--synced {
+  background: #ecfdf3;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.proposal-status--error,
+.proposal-status--revoked,
+.proposal-status--lost {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.proposal-detail__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.proposal-detail__eyebrow {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+}
+
+.proposal-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.proposal-detail__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.proposal-detail__label {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.proposal-detail__value {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.proposal-detail__loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+}
+
 .services-step {
   background: #f7f8fb;
   border: 1px solid #e4e7ec;

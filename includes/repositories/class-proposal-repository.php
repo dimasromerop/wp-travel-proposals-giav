@@ -101,4 +101,39 @@ class WP_Travel_Proposal_Repository extends WP_Travel_GIAV_DB {
     public function is_editable( array $proposal ): bool {
         return in_array( $proposal['status'], [ 'draft', 'sent' ], true );
     }
+
+    public function list_proposals( array $args = [] ) : array {
+        $defaults = [
+            'order_by' => 'updated_at',
+            'order'    => 'DESC',
+            'limit'    => 50,
+            'offset'   => 0,
+        ];
+
+        $args = wp_parse_args( $args, $defaults );
+
+        $order_by = in_array( $args['order_by'], [ 'id', 'updated_at' ], true )
+            ? $args['order_by']
+            : 'updated_at';
+        $order = strtoupper( (string) $args['order'] );
+        $order = in_array( $order, [ 'ASC', 'DESC' ], true ) ? $order : 'DESC';
+
+        $limit = max( 1, (int) $args['limit'] );
+        $offset = max( 0, (int) $args['offset'] );
+
+        $users_table = $this->wpdb->users;
+
+        $sql = "
+            SELECT p.*, u.display_name AS author_name
+            FROM {$this->table} p
+            LEFT JOIN {$users_table} u ON u.ID = p.created_by
+            ORDER BY {$order_by} {$order}
+            LIMIT %d OFFSET %d
+        ";
+
+        return $this->wpdb->get_results(
+            $this->wpdb->prepare( $sql, $limit, $offset ),
+            ARRAY_A
+        );
+    }
 }

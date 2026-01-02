@@ -10,11 +10,38 @@ const API = {
       data,
     }),
 
-  listProposals: ({ search = '', page = 1, per_page = 20 }) =>
+  listProposals: ({
+    orderBy = 'updated_at',
+    order = 'desc',
+    limit = 50,
+    offset = 0,
+    search,
+    page,
+    per_page,
+  } = {}) => {
+    const params = new URLSearchParams();
+    params.set('order_by', orderBy);
+    params.set('order', order);
+    params.set('limit', limit);
+    params.set('offset', offset);
+    if (search !== undefined) {
+      params.set('search', search);
+    }
+    if (page !== undefined) {
+      params.set('page', page);
+    }
+    if (per_page !== undefined) {
+      params.set('per_page', per_page);
+    }
+    return apiFetch({
+      path: `/travel/v1/proposals?${params.toString()}`,
+      method: 'GET',
+    });
+  },
+
+  getProposal: (proposalId) =>
     apiFetch({
-      path: `/travel/v1/proposals?search=${encodeURIComponent(search)}&page=${encodeURIComponent(
-        page
-      )}&per_page=${encodeURIComponent(per_page)}`,
+      path: `/travel/v1/proposals/${proposalId}`,
       method: 'GET',
     }),
 
@@ -82,28 +109,24 @@ const API = {
     }),
 
   searchGiavProviders: async ({ q, pageSize = 20, pageIndex = 0, includeDisabled = false }) => {
-  const res = await apiFetch({
-    path: `/travel/v1/giav/providers/search?q=${encodeURIComponent(q)}&pageSize=${encodeURIComponent(
-      pageSize
-    )}&pageIndex=${encodeURIComponent(pageIndex)}&includeDisabled=${encodeURIComponent(
-      includeDisabled
-    )}`,
-    method: 'GET',
-  });
+    const res = await apiFetch({
+      path: `/travel/v1/giav/providers/search?q=${encodeURIComponent(q)}&pageSize=${encodeURIComponent(
+        pageSize
+      )}&pageIndex=${encodeURIComponent(pageIndex)}&includeDisabled=${encodeURIComponent(includeDisabled)}`,
+      method: 'GET',
+    });
 
-  // Normaliza siempre a { items: [{id,label}] }
-  const list = Array.isArray(res) ? res : (Array.isArray(res?.items) ? res.items : []);
-  const items = list
-    .map((x) => ({
-      id: String(x.id ?? x.ID ?? x.Id ?? x.proveedorId ?? ''),
-      label: String(x.label ?? x.NombreAlias ?? x.Nombre ?? x.title ?? ''),
-      raw: x,
-    }))
-    .filter((x) => x.id && x.label);
+    const list = Array.isArray(res) ? res : Array.isArray(res?.items) ? res.items : [];
+    const items = list
+      .map((x) => ({
+        id: String(x.id ?? x.ID ?? x.Id ?? x.proveedorId ?? ''),
+        label: String(x.label ?? x.NombreAlias ?? x.Nombre ?? x.title ?? ''),
+        raw: x,
+      }))
+      .filter((x) => x.id && x.label);
 
-  return { items };
-},
-
+    return { items };
+  },
 
   giavPreflight: (versionId) =>
     apiFetch({
