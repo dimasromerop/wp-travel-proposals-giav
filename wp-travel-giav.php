@@ -482,6 +482,7 @@ function wp_travel_giav_register_api() {
 require_once __DIR__ . '/includes/workers/class-giav-sync-worker.php';
 require_once __DIR__ . '/includes/workers/class-giav-payload-builder.php';
 require_once __DIR__ . '/includes/helpers/class-giav-sync-logger.php';
+require_once __DIR__ . '/includes/helpers/class-proposal-dates.php';
 require_once __DIR__ . '/includes/api/class-catalog-controller.php';
 require_once __DIR__ . '/includes/api/class-giav-providers-controller.php';
 
