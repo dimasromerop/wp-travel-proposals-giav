@@ -144,6 +144,33 @@ function wp_travel_giav_get_destination_country_code( array $proposal, array $sn
     return null;
 }
 
+function wp_travel_giav_resolve_destination( array $proposal, array $snapshot ): array {
+    $country = wp_travel_giav_get_destination_country_code( $proposal, $snapshot );
+    $country = $country !== null ? strtoupper( $country ) : '';
+
+    $eu_countries = [
+        'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU',
+        'IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
+    ];
+
+    $destino = 'RestoMundo';
+    $zone = 'XX_No_requerido';
+
+    if ( $country === 'ES' ) {
+        $destino = 'Nacional';
+        $zone = 'ES_Nacional';
+    } elseif ( in_array( $country, $eu_countries, true ) ) {
+        $destino = 'UniónEuropea';
+        $zone = 'ES_UnionEuropea';
+    }
+
+    return [
+        'code'  => $country !== '' ? $country : null,
+        'destino' => $destino,
+        'zone' => $zone,
+    ];
+}
+
 function wp_travel_giav_cliente_search_por_dni( string $dni, array &$trace = null ): ?int {
     $dni = wp_travel_giav_normalize_dni( $dni );
     if ( $dni === '' ) {
@@ -459,6 +486,7 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
     }
 
     $items = $item_repo->get_by_version( $version_id );
+    $destination_meta = wp_travel_giav_resolve_destination( $proposal, $snapshot );
 
     $dni = wp_travel_giav_normalize_dni( (string) ( $proposal['traveler_dni'] ?? '' ) );
     $full_name = trim( (string) ( $proposal['traveler_full_name'] ?? '' ) );
@@ -545,6 +573,8 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
             'fecha_apertura'=> wp_travel_giav_format_date( current_time( 'mysql' ) ) ?? gmdate( 'Y-m-d' ),
             'fecha_desde'   => $fecha_desde,
             'fecha_hasta'   => $fecha_hasta,
+            'destinationCountryISO3166Code' => $destination_meta['code'] ?? null,
+            'destinationIdCountryZone'      => $destination_meta['zone'] ?? 'XX_No_requerido',
         ],
         $trace
     );
@@ -586,7 +616,7 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
     $total_cost = isset( $totals['totals_cost_net'] ) ? (float) $totals['totals_cost_net'] : 0.0;
 
     $pq_reserva_id = (int) ( $proposal['giav_pq_reserva_id'] ?? 0 );
-    $destination_country_code = wp_travel_giav_get_destination_country_code( $proposal, $snapshot );
+    $destination_meta = wp_travel_giav_resolve_destination( $proposal, $snapshot );
     if ( $pq_reserva_id <= 0 ) {
         $pq_response = wp_travel_giav_reserva_normal_create(
             [
@@ -605,7 +635,9 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
                 'gastosGestion'=> 0,
                 'recuperacion' => 0,
                 'numPax'       => isset( $proposal['pax_total'] ) ? (int) $proposal['pax_total'] : null,
-                'destinationCountryISO3166Code' => $destination_country_code,
+                'Destino'                          => $destination_meta['destino'],
+                'destinationCountryISO3166Code'    => $destination_meta['code'] ?? null,
+                'destinationIdCountryZone'         => $destination_meta['zone'],
             ],
             $trace
         );
@@ -702,11 +734,13 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
                     'ventacomis'   => $line_sell,
                     'costeComis'   => $line_cost,
                     'ventaNoComis' => 0,
-                    'costeNoComis' => 0,
-                    'gastosGestion'=> 0,
-                    'recuperacion' => 0,
-                    'numPax'       => isset( $item['pax_quantity'] ) ? (int) $item['pax_quantity'] : (int) ( $proposal['pax_total'] ?? 0 ),
-                    'destinationCountryISO3166Code' => $destination_country_code,
+            'costeNoComis' => 0,
+            'gastosGestion'=> 0,
+            'recuperacion' => 0,
+            'Destino'      => $destination_meta['destino'],
+            'destinationCountryISO3166Code' => $destination_meta['code'] ?? null,
+            'destinationIdCountryZone'      => $destination_meta['zone'],
+            'numPax'       => isset( $item['pax_quantity'] ) ? (int) $item['pax_quantity'] : (int) ( $proposal['pax_total'] ?? 0 ),
                 ],
                 $trace
             );
