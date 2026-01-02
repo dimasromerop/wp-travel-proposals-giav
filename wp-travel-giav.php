@@ -85,6 +85,7 @@ require_once __DIR__ . '/includes/repositories/class-proposal-version-repository
 require_once __DIR__ . '/includes/repositories/class-proposal-item-repository.php';
 require_once __DIR__ . '/includes/repositories/class-giav-mapping-repository.php';
 require_once __DIR__ . '/includes/repositories/class-audit-log-repository.php';
+require_once __DIR__ . '/includes/class-proposal-viewer.php';
 
 
 /**
@@ -228,6 +229,10 @@ function wp_travel_giav_activate() {
     dbDelta( $sql_audit );
     dbDelta( $sql_sync_log );
 
+    if ( class_exists( 'WP_Travel_Proposal_Viewer' ) ) {
+        WP_Travel_Proposal_Viewer::flush_rewrite_rules();
+    }
+
     update_option( 'wp_travel_giav_db_version', WP_TRAVEL_GIAV_DB_VERSION );
 }
 
@@ -288,6 +293,8 @@ add_action('rest_api_init', function () {
     }
 }, 20);
 
+
+WP_Travel_Proposal_Viewer::boot();
 
 
 
