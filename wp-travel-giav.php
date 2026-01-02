@@ -20,7 +20,7 @@ global $wpdb;
  * Plugin constants
  */
 define( 'WP_TRAVEL_GIAV_VERSION', '0.1.0' );
-define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.5.0' );
+define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.6.0' );
 define( 'WP_TRAVEL_GIAV_PLUGIN_FILE', __FILE__ );
 define( 'WP_TRAVEL_GIAV_TABLE_PROPOSALS', $wpdb->prefix . 'travel_proposals' );
 define( 'WP_TRAVEL_GIAV_TABLE_VERSIONS', $wpdb->prefix . 'travel_proposal_versions' );
@@ -94,6 +94,7 @@ function wp_travel_giav_get_items_schema( $charset_collate ) {
 require_once __DIR__ . '/includes/helpers/class-db.php';
 require_once __DIR__ . '/includes/helpers/class-giav-snapshot-resolver.php';
 require_once __DIR__ . '/includes/helpers/class-giav-preflight.php';
+require_once __DIR__ . '/includes/helpers/class-proposal-notifications.php';
 require_once __DIR__ . '/includes/integrations/class-giav-soap-client.php';
 
 require_once __DIR__ . '/includes/repositories/class-proposal-repository.php';
@@ -141,6 +142,8 @@ function wp_travel_giav_activate() {
         accepted_by VARCHAR(20) NULL,
         accepted_by_user_id BIGINT(20) UNSIGNED NULL,
         accepted_ip VARCHAR(45) NULL,
+        confirmation_status ENUM('pending','confirmed') NULL,
+        portal_invite_status ENUM('pending','sent','active') NULL,
         created_by BIGINT(20) UNSIGNED NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -289,6 +292,10 @@ function wp_travel_giav_maybe_upgrade_schema() {
         wp_travel_giav_upgrade_proposals_to_0_5_0();
     }
 
+    if ( version_compare( $current ?: '0.0.0', '0.6.0', '<' ) ) {
+        wp_travel_giav_upgrade_proposals_to_0_6_0();
+    }
+
     update_option( 'wp_travel_giav_db_version', WP_TRAVEL_GIAV_DB_VERSION );
 }
 
@@ -366,6 +373,24 @@ function wp_travel_giav_upgrade_proposals_to_0_5_0() {
     if ( ! wp_travel_giav_table_has_column( $table, 'accepted_ip' ) ) {
         $wpdb->query(
             "ALTER TABLE {$table} ADD COLUMN accepted_ip VARCHAR(45) NULL"
+        );
+    }
+}
+
+function wp_travel_giav_upgrade_proposals_to_0_6_0() {
+    global $wpdb;
+
+    $table = WP_TRAVEL_GIAV_TABLE_PROPOSALS;
+
+    if ( ! wp_travel_giav_table_has_column( $table, 'confirmation_status' ) ) {
+        $wpdb->query(
+            "ALTER TABLE {$table} ADD COLUMN confirmation_status ENUM('pending','confirmed') NULL"
+        );
+    }
+
+    if ( ! wp_travel_giav_table_has_column( $table, 'portal_invite_status' ) ) {
+        $wpdb->query(
+            "ALTER TABLE {$table} ADD COLUMN portal_invite_status ENUM('pending','sent','active') NULL"
         );
     }
 }
@@ -503,10 +528,75 @@ function wp_travel_giav_admin_menu() {
         'wp-travel-giav-mapping',
         'wp_travel_giav_render_app'
     );
+
+    add_submenu_page(
+        'travel_proposals',
+        'Configuración',
+        'Configuración',
+        'manage_options',
+        'travel_proposals_settings',
+        'wp_travel_giav_render_settings'
+    );
 }
 
 function wp_travel_giav_render_app() {
     echo '<div id="wp-travel-giav-admin"></div>';
+}
+
+function wp_travel_giav_render_settings() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_die( 'No tienes permisos suficientes para ver esta página.' );
+    }
+
+    $saved = false;
+    if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['wp_travel_giav_internal_notification_email'] ) ) {
+        check_admin_referer( 'wp_travel_giav_update_settings', 'wp_travel_giav_update_settings_nonce' );
+        $email = sanitize_email( wp_unslash( $_POST['wp_travel_giav_internal_notification_email'] ) );
+        if ( $email === '' ) {
+            delete_option( 'wp_travel_giav_internal_notification_email' );
+        } else {
+            update_option( 'wp_travel_giav_internal_notification_email', $email );
+        }
+        $saved = true;
+    }
+
+    $internal_email = get_option( 'wp_travel_giav_internal_notification_email', '' );
+    ?>
+    <div class="wrap">
+        <h1>Configuración de viajes GIAV</h1>
+        <?php if ( $saved ) : ?>
+            <div class="notice notice-success is-dismissible">
+                <p>Configuración guardada.</p>
+            </div>
+        <?php endif; ?>
+        <form method="post">
+            <?php wp_nonce_field( 'wp_travel_giav_update_settings', 'wp_travel_giav_update_settings_nonce' ); ?>
+            <table class="form-table">
+                <tr>
+                    <th scope="row">
+                        <label for="wp_travel_giav_internal_notification_email">
+                            Email para notificaciones internas
+                        </label>
+                    </th>
+                    <td>
+                        <input
+                            type="email"
+                            id="wp_travel_giav_internal_notification_email"
+                            name="wp_travel_giav_internal_notification_email"
+                            class="regular-text"
+                            value="<?php echo esc_attr( $internal_email ); ?>"
+                        />
+                        <p class="description">
+                            Notificaciones que avisan al equipo interno cuando una propuesta se acepta.
+                            Si se deja vacío, se usará el email de administración del sitio.
+                        </p>
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button( 'Guardar cambios' ); ?>
+        </form>
+    </div>
+    <?php
 }
 
 function wp_travel_giav_admin_assets( $hook ) {

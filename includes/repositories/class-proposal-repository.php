@@ -28,9 +28,11 @@ class WP_Travel_Proposal_Repository extends WP_Travel_GIAV_DB {
             'accepted_by'         => $accepted_by,
             'accepted_by_user_id' => $accepted_by_user_id,
             'accepted_ip'         => $accepted_ip,
+            'confirmation_status' => 'pending',
+            'portal_invite_status'=> null,
         ];
 
-        $formats = [ '%s', '%d', '%s', '%s', '%d', '%s' ];
+        $formats = [ '%s', '%d', '%s', '%s', '%d', '%s', '%s', '%s' ];
 
         return $this->update(
             $data,
@@ -49,9 +51,11 @@ class WP_Travel_Proposal_Repository extends WP_Travel_GIAV_DB {
                 'accepted_by'         => null,
                 'accepted_by_user_id' => null,
                 'accepted_ip'         => null,
+                'confirmation_status' => null,
+                'portal_invite_status'=> null,
             ],
             [ 'id' => $proposal_id ],
-            [ '%s', '%d', '%s', '%s', '%d', '%s' ],
+            [ '%s', '%d', '%s', '%s', '%d', '%s', '%s', '%s' ],
             [ '%d' ]
         );
     }

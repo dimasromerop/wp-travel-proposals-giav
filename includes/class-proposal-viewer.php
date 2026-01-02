@@ -241,7 +241,7 @@ class WP_Travel_Proposal_Viewer {
             ? wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $current_timestamp )
             : '';
 
-        $dates = trim( sprintf( '%s - %s', $header['start_date'], $header['end_date'] ) );
+        $dates = trim( implode( ' - ', array_filter( [ $header['start_date'], $header['end_date'] ] ) ) );
         $pax_total = absint( $header['pax_total'] );
         $currency = esc_html( $header['currency'] );
 
@@ -250,11 +250,36 @@ class WP_Travel_Proposal_Viewer {
             $price_per_person = $totals['totals_sell_price'] / $pax_total;
         }
 
+        $destination = '';
+        $destination_candidates = [
+            $proposal['proposal_title'] ?? '',
+            $header['proposal_title'] ?? '',
+            $items[0]['display_name'] ?? '',
+        ];
+        foreach ( $destination_candidates as $candidate ) {
+            $candidate = trim( (string) $candidate );
+            if ( $candidate !== '' ) {
+                $destination = $candidate;
+                break;
+            }
+        }
+
+        $proposal_status = $proposal['status'] ?? 'draft';
+        if ( $proposal_status === 'accepted' ) {
+            self::render_pending_confirmation_view(
+                $totals,
+                $dates,
+                $currency,
+                $price_per_person,
+                $pax_total,
+                $destination
+            );
+        }
+
         $current_version_message = $current_label
             ? sprintf( 'La propuesta se actualizó el %s.', $current_label )
             : 'La propuesta se actualizó recientemente.';
 
-        $proposal_status = $proposal['status'] ?? 'draft';
         $accepted_at = ! empty( $proposal['accepted_at'] ) ? strtotime( $proposal['accepted_at'] ) : 0;
         $accepted_message = '';
         if ( $proposal_status === 'accepted' && $accepted_at ) {
@@ -645,6 +670,174 @@ class WP_Travel_Proposal_Viewer {
 
     private static function get_proposal_url( string $token ) {
         return home_url( '/travel-proposal/' . $token . '/' );
+    }
+
+    private static function render_pending_confirmation_view(
+        array $totals,
+        string $dates,
+        string $currency,
+        float $price_per_person,
+        int $pax_total,
+        string $destination
+    ) {
+        status_header( 200 );
+        header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
+
+        $total_value = isset( $totals['totals_sell_price'] ) ? (float) $totals['totals_sell_price'] : 0;
+        $show_per_person = $pax_total > 0 && $price_per_person > 0;
+        $currency_label = $currency ?: 'EUR';
+        ?>
+        <!doctype html>
+        <html lang="<?php echo esc_attr( get_bloginfo( 'language' ) ); ?>">
+        <head>
+            <meta charset="<?php echo esc_attr( get_option( 'blog_charset' ) ); ?>">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Propuesta aceptada</title>
+            <style>
+                :root {
+                    color-scheme: light;
+                }
+                body {
+                    margin: 0;
+                    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+                    background: #f1f5f9;
+                    color: #0f172a;
+                }
+                .proposal-page {
+                    max-width: 860px;
+                    margin: 0 auto;
+                    padding: 48px 24px 64px;
+                    min-height: 100vh;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 24px;
+                }
+                .proposal-accepted__hero {
+                    text-align: center;
+                    padding: 36px 24px;
+                    border-radius: 20px;
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    box-shadow: 0 25px 60px rgba(15, 23, 42, 0.08);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
+                }
+                .proposal-accepted__status {
+                    font-size: 12px;
+                    letter-spacing: 0.4em;
+                    text-transform: uppercase;
+                    color: #0f172a;
+                    font-weight: 600;
+                }
+                .proposal-accepted__message {
+                    margin: 0;
+                    font-size: 24px;
+                    font-weight: 600;
+                }
+                .proposal-accepted__secondary {
+                    margin: 0;
+                    color: #475569;
+                    line-height: 1.6;
+                    font-size: 16px;
+                }
+                .proposal-accepted__summary {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                    gap: 16px;
+                }
+                .proposal-accepted__tile {
+                    background: #ffffff;
+                    border-radius: 16px;
+                    padding: 20px;
+                    border: 1px solid #e2e8f0;
+                    text-align: center;
+                }
+                .proposal-accepted__label {
+                    font-size: 14px;
+                    color: #475569;
+                    text-transform: uppercase;
+                    letter-spacing: 0.08em;
+                }
+                .proposal-accepted__value {
+                    margin-top: 4px;
+                    font-size: 26px;
+                    font-weight: 700;
+                    color: #0f172a;
+                }
+                .proposal-accepted__details {
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 16px;
+                    padding: 20px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
+                }
+                .proposal-accepted__detail-row {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-size: 15px;
+                    color: #0f172a;
+                }
+                .proposal-accepted__detail-row span {
+                    color: #94a3b8;
+                    font-size: 13px;
+                    letter-spacing: 0.1em;
+                    text-transform: uppercase;
+                }
+                .proposal-accepted__detail-row strong {
+                    font-weight: 600;
+                }
+            </style>
+        </head>
+        <body>
+        <main class="proposal-page proposal-accepted">
+            <section class="proposal-accepted__hero">
+                <div class="proposal-accepted__status">Propuesta aceptada</div>
+                <p class="proposal-accepted__message">Gracias. Estamos confirmando disponibilidad con proveedores.</p>
+                <p class="proposal-accepted__secondary">
+                    Te avisaremos por email cuando tu reserva esté confirmada y puedas acceder al portal para pagos y gestión.
+                </p>
+            </section>
+            <section class="proposal-accepted__summary">
+                <div class="proposal-accepted__tile">
+                    <div class="proposal-accepted__label">Precio total</div>
+                    <div class="proposal-accepted__value">
+                        <?php echo esc_html( $currency_label ); ?> <?php echo number_format( $total_value, 2 ); ?>
+                    </div>
+                </div>
+                <?php if ( $show_per_person ) : ?>
+                    <div class="proposal-accepted__tile">
+                        <div class="proposal-accepted__label">Precio por persona</div>
+                        <div class="proposal-accepted__value">
+                            <?php echo esc_html( $currency_label ); ?> <?php echo number_format( $price_per_person, 2 ); ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </section>
+            <?php if ( $dates || $destination ) : ?>
+                <section class="proposal-accepted__details">
+                    <?php if ( $dates ) : ?>
+                        <div class="proposal-accepted__detail-row">
+                            <span>Fechas</span>
+                            <strong><?php echo esc_html( $dates ); ?></strong>
+                        </div>
+                    <?php endif; ?>
+                    <?php if ( $destination ) : ?>
+                        <div class="proposal-accepted__detail-row">
+                            <span>Destino</span>
+                            <strong><?php echo esc_html( $destination ); ?></strong>
+                        </div>
+                    <?php endif; ?>
+                </section>
+            <?php endif; ?>
+        </main>
+        </body>
+        </html>
+        <?php
+        exit;
     }
 
     private static function is_public_warning( array $warning ) : bool {

@@ -191,12 +191,15 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
         );
 
         $proposal = $proposal_repo->get_by_id( $proposal_id );
+        wp_travel_giav_notify_proposal_acceptance( $proposal, $version, 'admin' );
 
         return $this->response( [
             'ok'                  => true,
             'status'              => $proposal['status'],
             'accepted_at'         => $proposal['accepted_at'],
             'accepted_version_id' => $proposal['accepted_version_id'],
+            'confirmation_status' => $proposal['confirmation_status'],
+            'portal_invite_status'=> $proposal['portal_invite_status'],
         ] );
     }
 
@@ -268,13 +271,16 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
             [ 'version_id' => $current_version_id ]
         );
 
-        $proposal = $proposal_repo->get_by_id( (int) $proposal['id'] );
+        $accepted_proposal = $proposal_repo->get_by_id( (int) $proposal['id'] );
+        wp_travel_giav_notify_proposal_acceptance( $accepted_proposal, $version, 'client' );
 
         return $this->response( [
             'ok'                  => true,
-            'status'              => $proposal['status'],
-            'accepted_at'         => $proposal['accepted_at'],
-            'accepted_version_id' => $proposal['accepted_version_id'],
+            'status'              => $accepted_proposal['status'],
+            'accepted_at'         => $accepted_proposal['accepted_at'],
+            'accepted_version_id' => $accepted_proposal['accepted_version_id'],
+            'confirmation_status' => $accepted_proposal['confirmation_status'],
+            'portal_invite_status'=> $accepted_proposal['portal_invite_status'],
         ] );
     }
 

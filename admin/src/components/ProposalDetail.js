@@ -39,6 +39,11 @@ const ACCEPTED_BY_LABELS = {
   admin: 'Admin',
 };
 
+const CONFIRMATION_STATUS_LABELS = {
+  pending: 'Pendiente',
+  confirmed: 'Confirmada',
+};
+
 async function copyToClipboard(text) {
   if (!text) return false;
   try {
@@ -146,6 +151,9 @@ export default function ProposalDetail({ proposalId }) {
   }
 
   const { proposal, versions = [] } = data;
+  const confirmationLabel =
+    CONFIRMATION_STATUS_LABELS[proposal.confirmation_status] ||
+    (proposal.status === 'accepted' ? 'Pendiente' : '-');
   const acceptedVersion = versions.find(
     (version) => Number(version.id) === Number(proposal.accepted_version_id)
   );
@@ -269,6 +277,9 @@ export default function ProposalDetail({ proposalId }) {
                   ? `#${acceptedVersion.version_number ?? acceptedVersion.id}`
                   : proposal.accepted_version_id || '-'}
               </div>
+              <div>
+                <strong>Status de confirmación:</strong> {confirmationLabel}
+              </div>
             </div>
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
@@ -303,6 +314,19 @@ export default function ProposalDetail({ proposalId }) {
           )}
         </CardBody>
       </Card>
+
+      {proposal.status === 'accepted' && (
+        <Card>
+          <CardHeader>
+            <strong>Siguiente paso</strong>
+          </CardHeader>
+          <CardBody>
+            <p style={{ margin: 0 }}>
+              Confirmar disponibilidad y servicios. Cuando esté confirmada, se invitará al portal (futuro).
+            </p>
+          </CardBody>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
