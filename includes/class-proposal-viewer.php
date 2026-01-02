@@ -232,16 +232,18 @@ class WP_Travel_Proposal_Viewer {
         $is_current = $current_version && (int) $current_version['id'] === (int) $version['id'];
 
         $view_label = sprintf(
-            'Versión %s · Generada el %s',
+            esc_html__( 'Versión %s generada el %s', 'wp-travel-giav' ),
             esc_html( $version['version_number'] ?? '' ),
-            esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $view_timestamp ) )
+            esc_html( wp_travel_giav_format_datetime( $view_timestamp ) )
         );
 
         $current_label = $current_timestamp
-            ? wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $current_timestamp )
+            ? wp_travel_giav_format_datetime( $current_timestamp )
             : '';
 
-        $dates = trim( implode( ' - ', array_filter( [ $header['start_date'], $header['end_date'] ] ) ) );
+        $start_date_formatted = wp_travel_giav_format_datetime( $header['start_date'] ?? '', false );
+        $end_date_formatted = wp_travel_giav_format_datetime( $header['end_date'] ?? '', false );
+        $dates = trim( implode( ' - ', array_filter( [ $start_date_formatted, $end_date_formatted ] ) ) );
         $pax_total = absint( $header['pax_total'] );
         $currency = esc_html( $header['currency'] );
 
@@ -277,23 +279,26 @@ class WP_Travel_Proposal_Viewer {
         }
 
         $current_version_message = $current_label
-            ? sprintf( 'La propuesta se actualizó el %s.', $current_label )
-            : 'La propuesta se actualizó recientemente.';
+            ? sprintf(
+                esc_html__( 'La propuesta se actualizó el %s.', 'wp-travel-giav' ),
+                esc_html( $current_label )
+            )
+            : esc_html__( 'La propuesta se actualizó recientemente.', 'wp-travel-giav' );
 
         $accepted_at = ! empty( $proposal['accepted_at'] ) ? strtotime( $proposal['accepted_at'] ) : 0;
         $accepted_message = '';
         if ( $proposal_status === 'accepted' && $accepted_at ) {
             $accepted_message = sprintf(
-                'Propuesta aceptada el %s.',
-                esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $accepted_at ) )
+                esc_html__( 'Propuesta aceptada el %s.', 'wp-travel-giav' ),
+                esc_html( wp_travel_giav_format_datetime( $accepted_at ) )
             );
         }
 
         $accepted_version_message = '';
         if ( $accepted_version && ! empty( $accepted_version['created_at'] ) ) {
             $accepted_version_message = sprintf(
-                'Has aceptado la versión de fecha %s.',
-                esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $accepted_version['created_at'] ) ) )
+                esc_html__( 'Has aceptado la versión de fecha %s.', 'wp-travel-giav' ),
+                esc_html( wp_travel_giav_format_datetime( strtotime( $accepted_version['created_at'] ) ) )
             );
         }
 
@@ -692,7 +697,7 @@ class WP_Travel_Proposal_Viewer {
         <head>
             <meta charset="<?php echo esc_attr( get_option( 'blog_charset' ) ); ?>">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>Propuesta aceptada</title>
+            <title><?php echo esc_html__( 'Propuesta aceptada', 'wp-travel-giav' ); ?></title>
             <style>
                 :root {
                     color-scheme: light;
@@ -795,22 +800,30 @@ class WP_Travel_Proposal_Viewer {
         <body>
         <main class="proposal-page proposal-accepted">
             <section class="proposal-accepted__hero">
-                <div class="proposal-accepted__status">Propuesta aceptada</div>
-                <p class="proposal-accepted__message">Gracias. Estamos confirmando disponibilidad con proveedores.</p>
+                <div class="proposal-accepted__status">
+                    <?php echo esc_html__( 'Propuesta aceptada', 'wp-travel-giav' ); ?>
+                </div>
+                <p class="proposal-accepted__message">
+                    <?php echo esc_html__( 'Propuesta aceptada y confirmando con proveedores que hemos generado.', 'wp-travel-giav' ); ?>
+                </p>
                 <p class="proposal-accepted__secondary">
-                    Te avisaremos por email cuando tu reserva esté confirmada y puedas acceder al portal para pagos y gestión.
+                    <?php echo esc_html__( 'Te avisaremos por email cuando tu reserva esté confirmada y puedas acceder al portal para pagos y gestión.', 'wp-travel-giav' ); ?>
                 </p>
             </section>
             <section class="proposal-accepted__summary">
                 <div class="proposal-accepted__tile">
-                    <div class="proposal-accepted__label">Precio total</div>
+                    <div class="proposal-accepted__label">
+                        <?php echo esc_html__( 'Precio total', 'wp-travel-giav' ); ?>
+                    </div>
                     <div class="proposal-accepted__value">
                         <?php echo esc_html( $currency_label ); ?> <?php echo number_format( $total_value, 2 ); ?>
                     </div>
                 </div>
                 <?php if ( $show_per_person ) : ?>
                     <div class="proposal-accepted__tile">
-                        <div class="proposal-accepted__label">Precio por persona</div>
+                        <div class="proposal-accepted__label">
+                            <?php echo esc_html__( 'Precio por persona', 'wp-travel-giav' ); ?>
+                        </div>
                         <div class="proposal-accepted__value">
                             <?php echo esc_html( $currency_label ); ?> <?php echo number_format( $price_per_person, 2 ); ?>
                         </div>
@@ -821,13 +834,13 @@ class WP_Travel_Proposal_Viewer {
                 <section class="proposal-accepted__details">
                     <?php if ( $dates ) : ?>
                         <div class="proposal-accepted__detail-row">
-                            <span>Fechas</span>
+                            <span><?php echo esc_html__( 'Fechas', 'wp-travel-giav' ); ?></span>
                             <strong><?php echo esc_html( $dates ); ?></strong>
                         </div>
                     <?php endif; ?>
                     <?php if ( $destination ) : ?>
                         <div class="proposal-accepted__detail-row">
-                            <span>Destino</span>
+                            <span><?php echo esc_html__( 'Destino', 'wp-travel-giav' ); ?></span>
                             <strong><?php echo esc_html( $destination ); ?></strong>
                         </div>
                     <?php endif; ?>
