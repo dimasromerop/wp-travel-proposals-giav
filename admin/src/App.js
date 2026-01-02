@@ -8,7 +8,6 @@ import {
   Notice,
   SelectControl,
   Spinner,
-  TextControl,
 } from '@wordpress/components';
 import ProposalWizard from './components/ProposalWizard';
 import GiavMappingAdmin from './components/GiavMappingAdmin';
@@ -73,7 +72,6 @@ export default function App() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [authorFilter, setAuthorFilter] = useState('');
   const [sortBy, setSortBy] = useState('updated_at');
   const [sortOrder, setSortOrder] = useState('desc');
   const [selectedIds, setSelectedIds] = useState([]);
@@ -127,19 +125,17 @@ export default function App() {
     };
   }, [editData]);
 
-  const loadProposals = async (overrides = {}) => {
+  const loadProposals = async ({ nextSearch } = {}) => {
     setLoading(true);
     setError('');
     try {
-      const nextSearch = overrides.search ?? search;
-      const nextAuthor = overrides.author ?? authorFilter;
+      const searchTerm = nextSearch !== undefined ? nextSearch : search;
       const res = await API.listProposals({
         orderBy: sortBy,
         order: sortOrder,
         limit: 50,
         offset: 0,
-        search: nextSearch,
-        author: nextAuthor,
+        search: searchTerm?.trim() ? searchTerm.trim() : undefined,
       });
       const list = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
       setProposals(list);
@@ -375,18 +371,19 @@ export default function App() {
             </Notice>
           ) : null}
           <div className="proposal-list__filters">
-            <TextControl
-              label="Buscar cliente"
-              value={search}
-              onChange={setSearch}
-              placeholder="Nombre del cliente"
-            />
-            <TextControl
-              label="Autor"
-              value={authorFilter}
-              onChange={setAuthorFilter}
-              placeholder="Nombre del autor"
-            />
+            <div className="proposal-list__search">
+              <label className="proposal-list__search-label" htmlFor="proposal-search">
+                Buscar cliente
+              </label>
+              <input
+                id="proposal-search"
+                className="proposal-list__search-input"
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Cliente, email o token"
+              />
+            </div>
             <SelectControl
               label="Ordenar por"
               value={sortBy}
@@ -405,15 +402,18 @@ export default function App() {
               ]}
               onChange={(value) => setSortOrder(value)}
             />
-            <Button variant="secondary" onClick={loadProposals} disabled={loading}>
+            <Button
+              variant="primary"
+              onClick={() => loadProposals({ nextSearch: search })}
+              disabled={loading}
+            >
               Buscar
             </Button>
             <Button
               variant="tertiary"
               onClick={() => {
                 setSearch('');
-                setAuthorFilter('');
-                loadProposals({ search: '', author: '' });
+                loadProposals({ nextSearch: '' });
               }}
               disabled={loading}
             >
