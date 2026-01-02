@@ -15,6 +15,10 @@ class WP_Travel_GIAV_Soap_Client {
 
     /** @var SoapClient|null */
     private static $client = null;
+    private $last_request = '';
+    private $last_response = '';
+    private $last_method = '';
+    private $last_duration_ms = 0.0;
 
     /**
      * Returns a cached SoapClient.
@@ -71,12 +75,38 @@ class WP_Travel_GIAV_Soap_Client {
             $params->apikey = CASANOVA_GIAV_APIKEY;
         }
 
+        $this->last_method = $method;
+        $start_time = microtime( true );
+
         try {
-            return $client->__soapCall( $method, [ $params ] );
+            $response = $client->__soapCall( $method, [ $params ] );
+            $this->last_duration_ms = ( microtime( true ) - $start_time ) * 1000;
+            $this->last_request = $client->__getLastRequest();
+            $this->last_response = $client->__getLastResponse();
+            return $response;
         } catch ( Throwable $e ) {
+            $this->last_duration_ms = ( microtime( true ) - $start_time ) * 1000;
+            $this->last_request = $client->__getLastRequest();
+            $this->last_response = $client->__getLastResponse();
             error_log( '[WP_TRAVEL_GIAV SOAP] ' . $method . ' :: ' . $e->getMessage() );
             return new WP_Error( 'soap_error', $e->getMessage() );
         }
+    }
+
+    public function get_last_request(): string {
+        return $this->last_request;
+    }
+
+    public function get_last_response(): string {
+        return $this->last_response;
+    }
+
+    public function get_last_method(): string {
+        return $this->last_method;
+    }
+
+    public function get_last_duration_ms(): float {
+        return $this->last_duration_ms;
     }
 
     /**

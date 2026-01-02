@@ -366,10 +366,14 @@ class WP_Travel_Proposal_Viewer {
         $accepted_at = ! empty( $proposal['accepted_at'] ) ? strtotime( $proposal['accepted_at'] ) : 0;
         $accepted_message = '';
         if ( $proposal_status === 'accepted' && $accepted_at ) {
+            $giav_status = $proposal['giav_sync_status'] ?? 'none';
+            $giav_message = $giav_status === 'ok' && ! empty( $proposal['giav_expediente_id'] )
+                ? esc_html__( 'Aceptada y expediente creado.', 'wp-travel-giav' )
+                : esc_html__( 'Aceptada. Estamos procesando tu expediente.', 'wp-travel-giav' );
             $accepted_message = sprintf(
                 esc_html__( 'Propuesta aceptada el %s.', 'wp-travel-giav' ),
                 esc_html( wp_travel_giav_format_datetime( $accepted_at ) )
-            );
+            ) . ' ' . $giav_message;
         }
 
         $accepted_version_message = '';
@@ -518,6 +522,37 @@ class WP_Travel_Proposal_Viewer {
                     color: #475569;
                     font-size: 13px;
                 }
+                .proposal-accept__form {
+                    margin-top: 16px;
+                    display: grid;
+                    gap: 12px;
+                    padding: 16px;
+                    background: #f8fafc;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 16px;
+                }
+                .proposal-accept__field {
+                    display: grid;
+                    gap: 6px;
+                    text-align: left;
+                }
+                .proposal-accept__field label {
+                    font-size: 13px;
+                    color: #475569;
+                }
+                .proposal-accept__field input {
+                    border-radius: 12px;
+                    border: 1px solid #cbd5f5;
+                    padding: 10px 12px;
+                    font-size: 14px;
+                }
+                .proposal-accept__actions {
+                    display: flex;
+                    gap: 12px;
+                    align-items: center;
+                    justify-content: center;
+                    flex-wrap: wrap;
+                }
                 .proposal-section h2 {
                     margin: 0 0 16px;
                     font-size: 18px;
@@ -663,6 +698,22 @@ class WP_Travel_Proposal_Viewer {
                         <button type="button" class="proposal-accept__button" id="proposal-accept-button">
                             Aceptar propuesta
                         </button>
+                        <form class="proposal-accept__form" id="proposal-accept-form" style="display:none;">
+                            <div class="proposal-accept__field">
+                                <label for="proposal-full-name">Nombre completo *</label>
+                                <input type="text" id="proposal-full-name" name="full_name" required minlength="3" />
+                            </div>
+                            <div class="proposal-accept__field">
+                                <label for="proposal-dni">DNI *</label>
+                                <input type="text" id="proposal-dni" name="dni" required minlength="6" />
+                            </div>
+                            <div class="proposal-accept__actions">
+                                <button type="submit" class="proposal-accept__button" id="proposal-accept-submit">
+                                    Confirmar aceptación
+                                </button>
+                                <span class="proposal-accept__note">No necesitas registro para confirmar.</span>
+                            </div>
+                        </form>
                         <div class="proposal-accept__note" id="proposal-accept-feedback" style="display:none;"></div>
                     <?php endif; ?>
                 </div>
@@ -847,10 +898,25 @@ class WP_Travel_Proposal_Viewer {
         <script>
             (function () {
                 const button = document.getElementById('proposal-accept-button');
+                const form = document.getElementById('proposal-accept-form');
+                const submitButton = document.getElementById('proposal-accept-submit');
+                const fullNameInput = document.getElementById('proposal-full-name');
+                const dniInput = document.getElementById('proposal-dni');
                 if (!button) return;
                 const feedback = document.getElementById('proposal-accept-feedback');
-                button.addEventListener('click', async () => {
-                    if (button.disabled) return;
+                button.addEventListener('click', () => {
+                    if (form) {
+                        form.style.display = 'grid';
+                    }
+                    button.style.display = 'none';
+                    if (fullNameInput) {
+                        fullNameInput.focus();
+                    }
+                });
+                if (!form) return;
+                form.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+                    if (submitButton?.disabled) return;
                     const restNonce = window.TRAVEL_PUBLIC && window.TRAVEL_PUBLIC.restNonce;
                     if (!restNonce) {
                         if (feedback) {
@@ -859,7 +925,26 @@ class WP_Travel_Proposal_Viewer {
                         }
                         return;
                     }
-                    button.disabled = true;
+                    const fullName = fullNameInput ? fullNameInput.value.trim() : '';
+                    let dni = dniInput ? dniInput.value.trim() : '';
+                    dni = dni.toUpperCase().replace(/\s+/g, '');
+                    if (fullName.length < 3) {
+                        if (feedback) {
+                            feedback.textContent = 'Introduce tu nombre completo.';
+                            feedback.style.display = 'block';
+                        }
+                        return;
+                    }
+                    if (dni.length < 6) {
+                        if (feedback) {
+                            feedback.textContent = 'Introduce un DNI válido.';
+                            feedback.style.display = 'block';
+                        }
+                        return;
+                    }
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                    }
                     if (feedback) {
                         feedback.textContent = 'Procesando aceptación...';
                         feedback.style.display = 'block';
@@ -872,15 +957,15 @@ class WP_Travel_Proposal_Viewer {
                                 'X-WP-Nonce': restNonce
                             },
                             credentials: 'same-origin',
-                            body: JSON.stringify({})
+                            body: JSON.stringify({ full_name: fullName, dni })
                         });
                         const payload = await res.json();
                         if (!res.ok || !payload?.ok) {
                             throw new Error(payload?.message || 'No se pudo registrar la aceptación.');
                         }
                         if (feedback) {
-                            feedback.textContent = '';
-                            feedback.style.display = 'none';
+                            feedback.textContent = payload?.message || '';
+                            feedback.style.display = payload?.message ? 'block' : 'none';
                         }
                         window.location.reload();
                     } catch (err) {
@@ -888,7 +973,9 @@ class WP_Travel_Proposal_Viewer {
                             feedback.textContent = err?.message || 'No se pudo registrar la aceptación.';
                             feedback.style.display = 'block';
                         }
-                        button.disabled = false;
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                        }
                     }
                 });
             })();

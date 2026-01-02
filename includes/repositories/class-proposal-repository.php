@@ -110,6 +110,50 @@ class WP_Travel_Proposal_Repository extends WP_Travel_GIAV_DB {
         return $this->update_basics( $proposal_id, $data );
     }
 
+    public function update_traveler_details( int $proposal_id, string $full_name, string $dni ) {
+        $data = [
+            'traveler_full_name' => sanitize_text_field( $full_name ),
+            'traveler_dni'       => sanitize_text_field( $dni ),
+        ];
+
+        return $this->update(
+            $data,
+            [ 'id' => $proposal_id ],
+            [ '%s', '%s' ],
+            [ '%d' ]
+        );
+    }
+
+    public function update_giav_ids( int $proposal_id, array $data ) {
+        if ( empty( $data ) ) {
+            return 0;
+        }
+
+        $data['giav_sync_updated_at'] = current_time( 'mysql' );
+
+        return $this->update(
+            $data,
+            [ 'id' => $proposal_id ],
+            null,
+            [ '%d' ]
+        );
+    }
+
+    public function update_giav_sync_status( int $proposal_id, string $status, ?string $error_message = null ) {
+        $data = [
+            'giav_sync_status'     => $status,
+            'giav_sync_error'      => $error_message,
+            'giav_sync_updated_at' => current_time( 'mysql' ),
+        ];
+
+        return $this->update(
+            $data,
+            [ 'id' => $proposal_id ],
+            [ '%s', '%s', '%s' ],
+            [ '%d' ]
+        );
+    }
+
     public function get_admin_list( string $search, int $page, int $per_page, array $args = [] ): array {
         $page = max( 1, $page );
         $per_page = max( 1, $per_page );

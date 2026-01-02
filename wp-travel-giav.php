@@ -20,7 +20,7 @@ global $wpdb;
  * Plugin constants
  */
 define( 'WP_TRAVEL_GIAV_VERSION', '0.1.0' );
-define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.6.0' );
+define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.7.0' );
 define( 'WP_TRAVEL_GIAV_PLUGIN_FILE', __FILE__ );
 define( 'WP_TRAVEL_GIAV_TABLE_PROPOSALS', $wpdb->prefix . 'travel_proposals' );
 define( 'WP_TRAVEL_GIAV_TABLE_VERSIONS', $wpdb->prefix . 'travel_proposal_versions' );
@@ -28,11 +28,13 @@ define( 'WP_TRAVEL_GIAV_TABLE_ITEMS', $wpdb->prefix . 'travel_proposal_items' );
 define( 'WP_TRAVEL_GIAV_TABLE_MAPPING', $wpdb->prefix . 'giav_mapping' );
 define( 'WP_TRAVEL_GIAV_TABLE_AUDIT', $wpdb->prefix . 'travel_audit_log' );
 define( 'WP_TRAVEL_GIAV_TABLE_SYNC_LOG', $wpdb->prefix . 'travel_giav_sync_log' );
+define( 'WP_TRAVEL_GIAV_TABLE_RESERVAS', $wpdb->prefix . 'travel_giav_reservas' );
 
 // Default supplier fallback in GIAV ("Proveedores varios").
 // Used when a service requires a supplier but no explicit mapping exists yet.
 define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_ID', '1734698' );
 define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_NAME', 'Proveedores varios' );
+define( 'WP_TRAVEL_GIAV_PQ_SUPPLIER_ID', '1734698' );
 
 /**
  * Build the public proposal URL for admin listings and detail views.
@@ -95,11 +97,13 @@ require_once __DIR__ . '/includes/helpers/class-db.php';
 require_once __DIR__ . '/includes/helpers/class-giav-snapshot-resolver.php';
 require_once __DIR__ . '/includes/helpers/class-giav-preflight.php';
 require_once __DIR__ . '/includes/helpers/class-proposal-notifications.php';
+require_once __DIR__ . '/includes/helpers/class-giav-proposal-sync.php';
 require_once __DIR__ . '/includes/integrations/class-giav-soap-client.php';
 
 require_once __DIR__ . '/includes/repositories/class-proposal-repository.php';
 require_once __DIR__ . '/includes/repositories/class-proposal-version-repository.php';
 require_once __DIR__ . '/includes/repositories/class-proposal-item-repository.php';
+require_once __DIR__ . '/includes/repositories/class-proposal-giav-reserva-repository.php';
 require_once __DIR__ . '/includes/repositories/class-giav-mapping-repository.php';
 require_once __DIR__ . '/includes/repositories/class-audit-log-repository.php';
 require_once __DIR__ . '/includes/class-proposal-viewer.php';
@@ -144,6 +148,14 @@ function wp_travel_giav_activate() {
         accepted_ip VARCHAR(45) NULL,
         confirmation_status ENUM('pending','confirmed') NULL,
         portal_invite_status ENUM('pending','sent','active') NULL,
+        traveler_full_name VARCHAR(255) NULL,
+        traveler_dni VARCHAR(20) NULL,
+        giav_client_id BIGINT(20) UNSIGNED NULL,
+        giav_expediente_id BIGINT(20) UNSIGNED NULL,
+        giav_pq_reserva_id BIGINT(20) UNSIGNED NULL,
+        giav_sync_status ENUM('none','pending','ok','error') DEFAULT 'none',
+        giav_sync_error LONGTEXT NULL,
+        giav_sync_updated_at DATETIME NULL,
         created_by BIGINT(20) UNSIGNED NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -249,12 +261,33 @@ function wp_travel_giav_activate() {
     ) $charset_collate;
     ";
 
+    /**
+     * 7. GIAV Reservas por propuesta
+     */
+    $sql_reservas = "
+    CREATE TABLE " . WP_TRAVEL_GIAV_TABLE_RESERVAS . " (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        proposal_id BIGINT(20) UNSIGNED NOT NULL,
+        version_id BIGINT(20) UNSIGNED NOT NULL,
+        item_id BIGINT(20) UNSIGNED NULL,
+        giav_reserva_id BIGINT(20) UNSIGNED NULL,
+        tipo_reserva VARCHAR(10) NULL,
+        proveedor_id VARCHAR(100) NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_proposal_version (proposal_id, version_id),
+        KEY idx_item (item_id),
+        KEY idx_giav_reserva (giav_reserva_id)
+    ) $charset_collate;
+    ";
+
     dbDelta( $sql_proposals );
     dbDelta( $sql_versions );
     dbDelta( $sql_items );
     dbDelta( $sql_mapping );
     dbDelta( $sql_audit );
     dbDelta( $sql_sync_log );
+    dbDelta( $sql_reservas );
 
     if ( class_exists( 'WP_Travel_Proposal_Viewer' ) ) {
         WP_Travel_Proposal_Viewer::flush_rewrite_rules();
@@ -294,6 +327,10 @@ function wp_travel_giav_maybe_upgrade_schema() {
 
     if ( version_compare( $current ?: '0.0.0', '0.6.0', '<' ) ) {
         wp_travel_giav_upgrade_proposals_to_0_6_0();
+    }
+
+    if ( version_compare( $current ?: '0.0.0', '0.7.0', '<' ) ) {
+        wp_travel_giav_upgrade_proposals_to_0_7_0();
     }
 
     update_option( 'wp_travel_giav_db_version', WP_TRAVEL_GIAV_DB_VERSION );
@@ -393,6 +430,50 @@ function wp_travel_giav_upgrade_proposals_to_0_6_0() {
             "ALTER TABLE {$table} ADD COLUMN portal_invite_status ENUM('pending','sent','active') NULL"
         );
     }
+}
+
+function wp_travel_giav_upgrade_proposals_to_0_7_0() {
+    global $wpdb;
+
+    $table = WP_TRAVEL_GIAV_TABLE_PROPOSALS;
+
+    $columns = [
+        'traveler_full_name'  => "ALTER TABLE {$table} ADD COLUMN traveler_full_name VARCHAR(255) NULL",
+        'traveler_dni'        => "ALTER TABLE {$table} ADD COLUMN traveler_dni VARCHAR(20) NULL",
+        'giav_client_id'      => "ALTER TABLE {$table} ADD COLUMN giav_client_id BIGINT(20) UNSIGNED NULL",
+        'giav_expediente_id'  => "ALTER TABLE {$table} ADD COLUMN giav_expediente_id BIGINT(20) UNSIGNED NULL",
+        'giav_pq_reserva_id'  => "ALTER TABLE {$table} ADD COLUMN giav_pq_reserva_id BIGINT(20) UNSIGNED NULL",
+        'giav_sync_status'    => "ALTER TABLE {$table} ADD COLUMN giav_sync_status ENUM('none','pending','ok','error') DEFAULT 'none'",
+        'giav_sync_error'     => "ALTER TABLE {$table} ADD COLUMN giav_sync_error LONGTEXT NULL",
+        'giav_sync_updated_at'=> "ALTER TABLE {$table} ADD COLUMN giav_sync_updated_at DATETIME NULL",
+    ];
+
+    foreach ( $columns as $column => $sql ) {
+        if ( ! wp_travel_giav_table_has_column( $table, $column ) ) {
+            $wpdb->query( $sql );
+        }
+    }
+
+    $charset_collate = $wpdb->get_charset_collate();
+    $sql_reservas = "
+    CREATE TABLE " . WP_TRAVEL_GIAV_TABLE_RESERVAS . " (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        proposal_id BIGINT(20) UNSIGNED NOT NULL,
+        version_id BIGINT(20) UNSIGNED NOT NULL,
+        item_id BIGINT(20) UNSIGNED NULL,
+        giav_reserva_id BIGINT(20) UNSIGNED NULL,
+        tipo_reserva VARCHAR(10) NULL,
+        proveedor_id VARCHAR(100) NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_proposal_version (proposal_id, version_id),
+        KEY idx_item (item_id),
+        KEY idx_giav_reserva (giav_reserva_id)
+    ) $charset_collate;
+    ";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql_reservas );
 }
 
 function wp_travel_giav_table_has_column( $table, $column ) {

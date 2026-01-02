@@ -44,6 +44,13 @@ const CONFIRMATION_STATUS_LABELS = {
   confirmed: 'Confirmada',
 };
 
+const GIAV_STATUS_LABELS = {
+  none: 'Sin iniciar',
+  pending: 'Pendiente',
+  ok: 'Ok',
+  error: 'Error',
+};
+
 async function copyToClipboard(text) {
   if (!text) return false;
   try {
@@ -90,6 +97,7 @@ export default function ProposalDetail({ proposalId }) {
   const [updatingVersionId, setUpdatingVersionId] = useState(null);
   const [selectedVersionId, setSelectedVersionId] = useState('');
   const [accepting, setAccepting] = useState(false);
+  const [retryingGiav, setRetryingGiav] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -165,6 +173,7 @@ export default function ProposalDetail({ proposalId }) {
     value: String(version.id),
   }));
   const statusLabel = STATUS_LABELS[proposal.status] || proposal.status || '-';
+  const giavStatusLabel = GIAV_STATUS_LABELS[proposal.giav_sync_status] || proposal.giav_sync_status || '-';
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
@@ -312,6 +321,62 @@ export default function ProposalDetail({ proposalId }) {
               </div>
             </div>
           )}
+        </CardBody>
+      </Card>
+
+      {(proposal.traveler_full_name || proposal.traveler_dni) && (
+        <Card>
+          <CardHeader>
+            <strong>Datos del viajero</strong>
+          </CardHeader>
+          <CardBody>
+            <div style={{ display: 'grid', gap: 8 }}>
+              <div><strong>Nombre completo:</strong> {proposal.traveler_full_name || '-'}</div>
+              <div><strong>DNI:</strong> {proposal.traveler_dni || '-'}</div>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <strong>Integración GIAV</strong>
+        </CardHeader>
+        <CardBody>
+          <div style={{ display: 'grid', gap: 8 }}>
+            <div><strong>Estado:</strong> {giavStatusLabel}</div>
+            <div><strong>ID cliente:</strong> {proposal.giav_client_id || '-'}</div>
+            <div><strong>ID expediente:</strong> {proposal.giav_expediente_id || '-'}</div>
+            <div><strong>ID reserva PQ:</strong> {proposal.giav_pq_reserva_id || '-'}</div>
+            <div><strong>Última actualización:</strong> {formatDate(proposal.giav_sync_updated_at)}</div>
+            {proposal.giav_sync_error ? (
+              <div style={{ color: '#b91c1c' }}>
+                <strong>Error:</strong> {proposal.giav_sync_error}
+              </div>
+            ) : null}
+            {proposal.giav_sync_status === 'error' && !proposal.giav_expediente_id ? (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Button
+                  variant="primary"
+                  disabled={retryingGiav}
+                  onClick={async () => {
+                    setRetryingGiav(true);
+                    setError('');
+                    try {
+                      await API.retryGiavSync(proposal.id);
+                      await load();
+                    } catch (e) {
+                      setError(e?.message || 'No se pudo reintentar GIAV.');
+                    } finally {
+                      setRetryingGiav(false);
+                    }
+                  }}
+                >
+                  Reintentar creación GIAV
+                </Button>
+              </div>
+            ) : null}
+          </div>
         </CardBody>
       </Card>
 

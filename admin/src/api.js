@@ -103,6 +103,12 @@ const API = {
       data: { version_id: versionId },
     }),
 
+  retryGiavSync: (proposalId) =>
+    apiFetch({
+      path: `/travel/v1/proposals/${proposalId}/giav-retry`,
+      method: 'POST',
+    }),
+
   searchCatalog: ({ type, q }) =>
     apiFetch({
       path: `/travel/v1/catalog/search?type=${encodeURIComponent(type)}&q=${encodeURIComponent(q || '')}`,

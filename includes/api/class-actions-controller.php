@@ -25,6 +25,14 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
             ],
         ] );
 
+        register_rest_route( $this->namespace, '/proposals/(?P<id>\d+)/giav-retry', [
+            [
+                'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => [ $this, 'retry_giav_sync' ],
+                'permission_callback' => [ $this, 'permission_check' ],
+            ],
+        ] );
+
         register_rest_route( $this->namespace, '/proposals/public/(?P<token>[a-zA-Z0-9]+)/accept', [
             [
                 'methods'             => WP_REST_Server::CREATABLE,
@@ -241,6 +249,19 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
             return $this->error( 'Proposal not found', 404 );
         }
 
+        if ( $proposal['status'] === 'accepted' ) {
+            return $this->response( [
+                'ok'                  => true,
+                'status'              => $proposal['status'],
+                'accepted_at'         => $proposal['accepted_at'],
+                'accepted_version_id' => $proposal['accepted_version_id'],
+                'confirmation_status' => $proposal['confirmation_status'],
+                'portal_invite_status'=> $proposal['portal_invite_status'],
+                'giav_status'         => $proposal['giav_sync_status'] ?? 'none',
+                'message'             => 'Propuesta ya aceptada.',
+            ] );
+        }
+
         if ( $proposal['status'] !== 'sent' ) {
             return $this->error( 'Proposal cannot be accepted' );
         }
@@ -255,12 +276,29 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
             return $this->error( 'Proposal cannot be accepted' );
         }
 
+        $full_name = trim( (string) $request->get_param( 'full_name' ) );
+        $dni = wp_travel_giav_normalize_dni( (string) $request->get_param( 'dni' ) );
+
+        if ( strlen( $full_name ) < 3 ) {
+            return $this->error( 'Nombre completo obligatorio' );
+        }
+
+        if ( strlen( $dni ) < 6 ) {
+            return $this->error( 'DNI obligatorio' );
+        }
+
         $proposal_repo->accept_proposal(
             (int) $proposal['id'],
             $current_version_id,
             'client',
             null,
             $this->get_request_ip()
+        );
+
+        $proposal_repo->update_traveler_details(
+            (int) $proposal['id'],
+            $full_name,
+            $dni
         );
 
         $audit_repo->log(
@@ -274,6 +312,16 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
         $accepted_proposal = $proposal_repo->get_by_id( (int) $proposal['id'] );
         wp_travel_giav_notify_proposal_acceptance( $accepted_proposal, $version, 'client' );
 
+        $giav_result = wp_travel_giav_create_expediente_from_proposal( (int) $proposal['id'] );
+        $giav_status = 'pending';
+        $giav_message = 'Aceptada. Estamos procesando tu expediente.';
+        if ( ! is_wp_error( $giav_result ) && is_array( $giav_result ) ) {
+            $giav_status = $giav_result['status'] ?? 'pending';
+            if ( $giav_status === 'ok' ) {
+                $giav_message = 'Aceptada y expediente creado.';
+            }
+        }
+
         return $this->response( [
             'ok'                  => true,
             'status'              => $accepted_proposal['status'],
@@ -281,6 +329,8 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
             'accepted_version_id' => $accepted_proposal['accepted_version_id'],
             'confirmation_status' => $accepted_proposal['confirmation_status'],
             'portal_invite_status'=> $accepted_proposal['portal_invite_status'],
+            'giav_status'         => $giav_status,
+            'message'             => $giav_message,
         ] );
     }
 
@@ -296,8 +346,8 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
         $ip = sanitize_text_field( $ip );
         return $ip !== '' ? $ip : null;
     }
-    public function confirm_version( WP_REST_Request $request ) {
 
+    public function confirm_version( WP_REST_Request $request ) {
         $version_id = (int) $request['id'];
 
         $version_repo  = new WP_Travel_Proposal_Version_Repository();
@@ -316,21 +366,20 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
             return $this->error( 'Proposal must be accepted before confirmation' );
         }
 
-// Preflight GIAV: bloquear confirmación si hay items sin mapeo activo
-$preflight = WP_Travel_GIAV_Preflight::check_version( $version_id );
-if ( empty( $preflight['ok'] ) ) {
-    return new WP_Error(
-        'wp_travel_giav_preflight_failed',
-        'GIAV mapping incomplete',
-        [
-            'status'    => 409,
-            'preflight' => $preflight,
-        ]
-    );
-}
+        // Preflight GIAV: bloquear confirmación si hay items sin mapeo activo
+        $preflight = WP_Travel_GIAV_Preflight::check_version( $version_id );
+        if ( empty( $preflight['ok'] ) ) {
+            return new WP_Error(
+                'wp_travel_giav_preflight_failed',
+                'GIAV mapping incomplete',
+                [
+                    'status'    => 409,
+                    'preflight' => $preflight,
+                ]
+            );
+        }
 
-$proposal_repo->update_status( $proposal['id'], 'queued' );
-
+        $proposal_repo->update_status( $proposal['id'], 'queued' );
 
         // Encolar tarea (sin SOAP aún)
         if ( class_exists( 'ActionScheduler' ) ) {
@@ -353,19 +402,49 @@ $proposal_repo->update_status( $proposal['id'], 'queued' );
         ] );
     }
 
-public function giav_preflight( WP_REST_Request $request ) {
+    public function retry_giav_sync( WP_REST_Request $request ) {
+        $proposal_id = (int) $request['id'];
 
-    $version_id = (int) $request['id'];
+        $proposal_repo = new WP_Travel_Proposal_Repository();
+        $proposal = $proposal_repo->get_by_id( $proposal_id );
 
-    $version_repo = new WP_Travel_Proposal_Version_Repository();
-    $version      = $version_repo->get_by_id( $version_id );
+        if ( ! $proposal ) {
+            return $this->error( 'Proposal not found', 404 );
+        }
 
-    if ( ! $version ) {
-        return $this->error( 'Version not found', 404 );
+        if ( ! empty( $proposal['giav_expediente_id'] ) ) {
+            return $this->response( [
+                'status'             => 'ok',
+                'giav_expediente_id' => $proposal['giav_expediente_id'],
+            ] );
+        }
+
+        if ( isset( $proposal['giav_sync_status'] ) && $proposal['giav_sync_status'] === 'pending' ) {
+            return $this->response( [
+                'status' => 'pending',
+            ], 202 );
+        }
+
+        $result = wp_travel_giav_create_expediente_from_proposal( $proposal_id );
+        if ( is_wp_error( $result ) ) {
+            return $this->error( $result->get_error_message(), 500 );
+        }
+
+        return $this->response( $result );
     }
 
-    $check = WP_Travel_GIAV_Preflight::check_version( $version_id );
+    public function giav_preflight( WP_REST_Request $request ) {
+        $version_id = (int) $request['id'];
 
-    return $this->response( $check );
-}
+        $version_repo = new WP_Travel_Proposal_Version_Repository();
+        $version      = $version_repo->get_by_id( $version_id );
+
+        if ( ! $version ) {
+            return $this->error( 'Version not found', 404 );
+        }
+
+        $check = WP_Travel_GIAV_Preflight::check_version( $version_id );
+
+        return $this->response( $check );
+    }
 }
