@@ -27,10 +27,10 @@ export default function StepPreview({
       customer_email: basics.customer_email,
       customer_country: basics.customer_country,
       customer_language: basics.customer_language,
-      start_date: snapshotHeader.start_date,
-      end_date: snapshotHeader.end_date,
-      pax_total: snapshotHeader.pax_total,
-      currency: snapshotHeader.currency,
+      start_date: basics.start_date,
+      end_date: basics.end_date,
+      pax_total: basics.pax_total,
+      currency: basics.currency,
       status: 'sent',
     };
 
