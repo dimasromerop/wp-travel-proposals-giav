@@ -652,10 +652,7 @@ class WP_Travel_Proposal_Viewer {
                             feedback.textContent = '';
                             feedback.style.display = 'none';
                         }
-                        const container = document.getElementById('proposal-accept');
-                        if (container) {
-                            container.innerHTML = '<div class="proposal-accept__message">Propuesta aceptada.</div>';
-                        }
+                        window.location.reload();
                     } catch (err) {
                         if (feedback) {
                             feedback.textContent = err?.message || 'No se pudo registrar la aceptación.';
@@ -804,7 +801,7 @@ class WP_Travel_Proposal_Viewer {
                     <?php echo esc_html__( 'Propuesta aceptada', 'wp-travel-giav' ); ?>
                 </div>
                 <p class="proposal-accepted__message">
-                    <?php echo esc_html__( 'Propuesta aceptada y confirmando con proveedores que hemos generado.', 'wp-travel-giav' ); ?>
+                    <?php echo esc_html__( 'Propuesta aceptada. Ahora vamos a confirmar los servicios.', 'wp-travel-giav' ); ?>
                 </p>
                 <p class="proposal-accepted__secondary">
                     <?php echo esc_html__( 'Te avisaremos por email cuando tu reserva esté confirmada y puedas acceder al portal para pagos y gestión.', 'wp-travel-giav' ); ?>
