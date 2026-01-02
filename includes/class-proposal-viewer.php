@@ -322,19 +322,21 @@ class WP_Travel_Proposal_Viewer {
         }
 
         $golf_courses = [];
-        $green_fees_per_person = 0;
+        $golf_fee_breakdown = [];
+        $total_green_fees_per_person = 0;
         foreach ( $golf_items as $golf_item ) {
             $course_name = trim( (string) ( $golf_item['display_name'] ?? '' ) );
             if ( $course_name !== '' ) {
                 $golf_courses[] = $course_name;
             }
             $green_value = absint( $golf_item['green_fees_per_person'] ?? 0 );
-            if ( $green_value > 0 && $green_fees_per_person === 0 ) {
-                $green_fees_per_person = $green_value;
+            if ( $green_value > 0 ) {
+                $total_green_fees_per_person += $green_value;
+                $golf_fee_breakdown[] = [
+                    'name'       => $course_name,
+                    'green_fees' => $green_value,
+                ];
             }
-        }
-        if ( $golf_courses && $green_fees_per_person <= 0 ) {
-            $green_fees_per_person = 1;
         }
 
         $other_includes = [];
@@ -351,6 +353,8 @@ class WP_Travel_Proposal_Viewer {
                 }
             }
         }
+
+        $has_green_fee_breakdown = $total_green_fees_per_person > 0 && ! empty( $golf_fee_breakdown );
 
         $current_version_message = $current_label
             ? sprintf(
@@ -666,7 +670,7 @@ class WP_Travel_Proposal_Viewer {
 
             <div class="proposal-section">
                 <h2>Programa de viaje</h2>
-                <?php if ( $includes_hotel || $golf_courses || $other_includes ) : ?>
+                <?php if ( $includes_hotel || $includes_regimens || $has_green_fee_breakdown || $other_includes ) : ?>
                     <div class="includes-block">
                         <h3>Incluye:</h3>
                         <ul class="includes-list">
@@ -676,12 +680,22 @@ class WP_Travel_Proposal_Viewer {
                             <?php foreach ( $includes_regimens as $line ) : ?>
                                 <li><?php echo esc_html( $line ); ?></li>
                             <?php endforeach; ?>
-                            <?php if ( $golf_courses ) : ?>
+                            <?php if ( $has_green_fee_breakdown ) : ?>
                                 <li>
-                                    <?php echo esc_html( sprintf( '%d green-fees por jugador en:', $green_fees_per_person ) ); ?>
+                                    <?php echo esc_html( sprintf( '%d green-fees por jugador en:', $total_green_fees_per_person ) ); ?>
                                     <ul>
-                                        <?php foreach ( $golf_courses as $course ) : ?>
-                                            <li><?php echo esc_html( $course ); ?></li>
+                                        <?php foreach ( $golf_fee_breakdown as $fee_detail ) : ?>
+                                            <?php
+                                            $fee_count = absint( $fee_detail['green_fees'] ?? 0 );
+                                            if ( $fee_count <= 0 ) {
+                                                continue;
+                                            }
+                                            $course_label = trim( (string) ( $fee_detail['name'] ?? '' ) );
+                                            if ( $course_label === '' ) {
+                                                $course_label = __( 'Campo de golf', 'wp-travel-giav' );
+                                            }
+                                            ?>
+                                            <li><?php echo esc_html( sprintf( '%dx %s', $fee_count, $course_label ) ); ?></li>
                                         <?php endforeach; ?>
                                     </ul>
                                 </li>
