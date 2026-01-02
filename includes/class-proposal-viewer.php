@@ -120,6 +120,13 @@ class WP_Travel_Proposal_Viewer {
         self::output_html( $header, $items, array_values( $warnings ), $totals, $version );
     }
 
+    /**
+     * Render the customer-facing HTML.
+     *
+     * Only reads snapshot header + totals + warnings; it never recalculates costs, margins
+     * or consults external services. Internals (coste neto, margen, IDs) stay stored in the
+     * snapshot/database but are deliberately excluded from the commercial view.
+     */
     private static function output_html( array $header, array $items, array $warnings, array $totals, array $version ) {
         status_header( 200 );
         header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
@@ -308,17 +315,18 @@ class WP_Travel_Proposal_Viewer {
                 <h2>Totales</h2>
                 <div class="totals-grid">
                     <div class="totals-card">
-                        <div class="label">Coste neto</div>
-                        <div class="value"><?php echo esc_html( $header['currency'] ); ?> <?php echo number_format( $totals['totals_cost_net'], 2 ); ?></div>
-                    </div>
-                    <div class="totals-card">
-                        <div class="label">PVP total</div>
+                        <div class="label">Precio total</div>
                         <div class="value"><?php echo esc_html( $header['currency'] ); ?> <?php echo number_format( $totals['totals_sell_price'], 2 ); ?></div>
                     </div>
+                    <?php
+                    $price_per_person = 0;
+                    if ( ! empty( $header['pax_total'] ) ) {
+                        $price_per_person = $totals['totals_sell_price'] / (int) $header['pax_total'];
+                    }
+                    ?>
                     <div class="totals-card">
-                        <div class="label">Margen</div>
-                        <div class="value"><?php echo esc_html( $header['currency'] ); ?> <?php echo number_format( $totals['totals_margin_abs'], 2 ); ?></div>
-                        <div class="label"><?php echo esc_html( round( $totals['totals_margin_pct'], 2 ) ); ?>%</div>
+                        <div class="label">Precio por persona</div>
+                        <div class="value"><?php echo esc_html( $header['currency'] ); ?> <?php echo number_format( $price_per_person, 2 ); ?></div>
                     </div>
                 </div>
             </div>
