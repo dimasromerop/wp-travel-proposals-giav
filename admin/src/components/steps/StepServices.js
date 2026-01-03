@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from '@wordpress/element';
+import { useEffect, useMemo, useRef, useState } from '@wordpress/element';
 import {
   Button,
   Card,
@@ -58,6 +58,14 @@ function daysDiff(startISO, endISO) {
   const ms = e - s;
   if (!Number.isFinite(ms) || ms <= 0) return 0;
   return Math.round(ms / (1000 * 60 * 60 * 24));
+}
+
+function addDaysISO(startISO, days) {
+  if (!startISO) return '';
+  const date = new Date(`${startISO}T00:00:00`);
+  if (!Number.isFinite(date.getTime())) return '';
+  date.setDate(date.getDate() + Math.max(0, days));
+  return date.toISOString().slice(0, 10);
 }
 
 function computeNights(item, basics) {
@@ -126,6 +134,7 @@ function defaultItem(basics, defaultMarkupPct = 0) {
     giav_mapping_status: 'needs_review', // 'active' | 'needs_review' | 'deprecated' | 'missing'
     show_supplier_picker: false,
     supplier_override: false,
+    dates_inherited: true,
 
   };
 }
@@ -224,10 +233,22 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
   const [applyMarkupToNew, setApplyMarkupToNew] = useState(true);
 
   const [error, setError] = useState('');
+  const prevBasicsRef = useRef({ start_date: basics?.start_date, end_date: basics?.end_date });
 
   const [items, setItems] = useState(() => {
     const base = initialItems.length ? initialItems : [defaultItem(basics, 20)];
-    return base.map((it) => computeLine(it, basics, 20));
+    return base.map((it) => {
+      const next = { ...it };
+      const hasInheritedFlag = typeof next.dates_inherited === 'boolean';
+      const startFallback = next.start_date || basics?.start_date || '';
+      const endFallback = next.end_date || basics?.end_date || '';
+      if (!next.start_date) next.start_date = startFallback;
+      if (!next.end_date) next.end_date = endFallback;
+      next.dates_inherited = hasInheritedFlag
+        ? next.dates_inherited
+        : (startFallback === (basics?.start_date || '') && endFallback === (basics?.end_date || ''));
+      return computeLine(next, basics, 20);
+    });
   });
 
   const totals = useMemo(() => computeTotals(items), [items]);
@@ -243,6 +264,34 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
 
   const perPerson = totals.totals_sell_price > 0 ? totals.totals_sell_price / pax : 0;
 
+  useEffect(() => {
+    const prev = prevBasicsRef.current;
+    const nextStart = basics?.start_date || '';
+    const nextEnd = basics?.end_date || '';
+    if (prev.start_date === nextStart && prev.end_date === nextEnd) return;
+
+    setItems((prevItems) =>
+      prevItems.map((it) => {
+        const datesInherited = typeof it.dates_inherited === 'boolean'
+          ? it.dates_inherited
+          : (it.start_date === prev.start_date && it.end_date === prev.end_date);
+        if (!datesInherited) return it;
+        return computeLine(
+          {
+            ...it,
+            start_date: nextStart,
+            end_date: nextEnd,
+            dates_inherited: true,
+          },
+          basics,
+          globalMarkupPct
+        );
+      })
+    );
+
+    prevBasicsRef.current = { start_date: nextStart, end_date: nextEnd };
+  }, [basics?.start_date, basics?.end_date, globalMarkupPct, basics]);
+
   const updateItem = (idx, patch) => {
     setItems((prev) => {
       const next = [...prev];
@@ -255,6 +304,88 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
 
       next[idx] = computeLine(merged, basics, globalMarkupPct);
       return next;
+    });
+  };
+
+  const onChangeServiceStartDate = (idx, value) => {
+    setItems((prev) => {
+      const next = [...prev];
+      const current = next[idx];
+      const startDate = value || '';
+      const endDate = current.end_date && startDate && current.end_date < startDate ? startDate : current.end_date;
+      next[idx] = computeLine(
+        {
+          ...current,
+          start_date: startDate,
+          end_date: endDate,
+          dates_inherited: false,
+        },
+        basics,
+        globalMarkupPct
+      );
+      return next;
+    });
+
+    window.setTimeout(() => {
+      const el = document.getElementById(`wp-travel-end-date-${idx}`);
+      if (!el) return;
+      el.focus();
+      if (typeof el.showPicker === 'function') {
+        try {
+          el.showPicker();
+        } catch (e) {}
+      }
+    }, 0);
+  };
+
+  const onChangeServiceEndDate = (idx, value) => {
+    setItems((prev) => {
+      const next = [...prev];
+      const current = next[idx];
+      const endDate = value || '';
+      const startDate = current.start_date || '';
+      next[idx] = computeLine(
+        {
+          ...current,
+          start_date: startDate,
+          end_date: startDate && endDate && endDate < startDate ? startDate : endDate,
+          dates_inherited: false,
+        },
+        basics,
+        globalMarkupPct
+      );
+      return next;
+    });
+  };
+
+  const onChangeServiceNights = (idx, value) => {
+    setItems((prev) => {
+      const next = [...prev];
+      const current = next[idx];
+      const nights = Math.max(0, toInt(value, 0));
+      const startDate = current.start_date || basics?.start_date || '';
+      const endDate = startDate ? addDaysISO(startDate, nights) : current.end_date;
+      next[idx] = computeLine(
+        {
+          ...current,
+          start_date: startDate,
+          end_date: endDate,
+          dates_inherited: false,
+        },
+        basics,
+        globalMarkupPct
+      );
+      return next;
+    });
+  };
+
+  const resetServiceDates = (idx) => {
+    const startDate = basics?.start_date || '';
+    const endDate = basics?.end_date || '';
+    updateItem(idx, {
+      start_date: startDate,
+      end_date: endDate,
+      dates_inherited: true,
     });
   };
 
@@ -387,28 +518,28 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                 <div className="service-card__title">
                   <div className="service-card__eyebrow">Servicio {idx + 1}</div>
                   <div className="service-card__name">
-                    {SERVICE_TYPES.find((type) => type.value === it.service_type)?.label || 'Servicio'} ┬À{' '}
-                    {it.title?.trim() || 'Sin t├¡tulo'}
+                    {SERVICE_TYPES.find((type) => type.value === it.service_type)?.label || 'Servicio'} ·{' '}
+                    {it.title?.trim() || 'Sin título'}
                   </div>
                 </div>
 
                 <div className="service-card__meta">
                   {(it.service_type === 'hotel' || it.service_type === 'golf') && (
-                    <div
-                      className={`service-card__badge service-card__badge--${it.giav_mapping_status}`}
-                    >
-                      {it.giav_mapping_status === 'active'
-                        ? (String(it.giav_supplier_id || '') === DEFAULT_SUPPLIER_ID
-                          ? 'Proveedor gen├®rico (GIAV)'
-                          : 'OK')
-                        : (it.giav_mapping_status === 'needs_review'
-                          ? 'Pendiente de revisar'
-                          : 'Sin mapeo GIAV')}
-                    </div>
+                      <div
+                        className={`service-card__badge service-card__badge--${it.giav_mapping_status}`}
+                      >
+                        {it.giav_mapping_status === 'active'
+                          ? (String(it.giav_supplier_id || '') === DEFAULT_SUPPLIER_ID
+                            ? 'Proveedor genérico (GIAV)'
+                            : 'OK')
+                          : (it.giav_mapping_status === 'needs_review'
+                            ? 'Pendiente de revisar'
+                            : 'Sin mapeo GIAV')}
+                      </div>
                   )}
 
                   <div className="service-card__total">
-                    <span>Total l├¡nea</span>
+                    <span>Total línea</span>
                     <strong>
                       {currency} {round2(it.line_sell_price || 0).toFixed(2)}
                     </strong>
@@ -421,7 +552,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
               </div>
 
               <div className="service-card__section">
-                <div className="service-card__section-title">Selecci├│n y contexto</div>
+                <div className="service-card__section-title">Selección y contexto</div>
                 <div className="service-card__grid service-card__grid--context">
                   <SelectControl
                     label="Tipo de servicio"
@@ -579,7 +710,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
 
                   {it.service_type === 'hotel' && (
                     <TextControl
-                      label="Tipo de habitaci├│n"
+                      label="Tipo de habitación"
                       value={it.hotel_room_type || ''}
                       onChange={(v) => updateItem(idx, { hotel_room_type: v })}
                       placeholder="Deluxe / Sea View..."
@@ -588,7 +719,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
 
                   {it.service_type === 'hotel' && (
                     <SelectControl
-                      label="R├®gimen"
+                      label="Régimen"
                       value={it.hotel_regimen || ''}
                       options={[
                         { label: 'Seleccionar', value: '' },
@@ -599,22 +730,36 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                   )}
                 </div>
               </div>
-
               <div className="service-card__section">
-                <div className="service-card__section-title">Fechas y ocupaci├│n</div>
+                <div className="service-card__section-title">Fechas y ocupación</div>
+                <div className="service-card__date-status">
+                  <span className={`service-card__date-label ${it.dates_inherited ? 'is-inherited' : 'is-custom'}`}>
+                    {it.dates_inherited ? 'Fechas del viaje' : 'Fechas personalizadas'}
+                  </span>
+                  {!it.dates_inherited && (
+                    <Button
+                      variant="tertiary"
+                      className="service-card__date-reset"
+                      onClick={() => resetServiceDates(idx)}
+                    >
+                      Restablecer fechas del viaje
+                    </Button>
+                  )}
+                </div>
                 <div className="service-card__grid service-card__grid--dates">
                   <TextControl
                     label="Fecha inicio"
                     type="date"
                     value={it.start_date}
-                    onChange={(v) => updateItem(idx, { start_date: v })}
+                    onChange={(v) => onChangeServiceStartDate(idx, v)}
                   />
 
                   <TextControl
+                    id={`wp-travel-end-date-${idx}`}
                     label="Fecha fin"
                     type="date"
                     value={it.end_date}
-                    onChange={(v) => updateItem(idx, { end_date: v })}
+                    onChange={(v) => onChangeServiceEndDate(idx, v)}
                     min={it.start_date || undefined}
                   />
 
@@ -622,8 +767,10 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                     <>
                       <TextControl
                         label="Noches"
+                        type="number"
+                        min={0}
                         value={String(it.hotel_nights ?? computeNights(it, basics))}
-                        disabled
+                        onChange={(v) => onChangeServiceNights(idx, v)}
                       />
 
                       {(it.hotel_rate_basis || 'per_room_per_night') === 'per_room_per_night' ? (
@@ -637,7 +784,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                       ) : (
                         <TextControl
                           label="Habitaciones"
-                          value="ÔÇö"
+                          value="—"
                           disabled
                         />
                       )}
