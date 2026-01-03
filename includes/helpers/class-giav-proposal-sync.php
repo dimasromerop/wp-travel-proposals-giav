@@ -172,6 +172,33 @@ function wp_travel_giav_resolve_destination( array $proposal, array $snapshot ):
     ];
 }
 
+function wp_travel_giav_extract_client_search_id( $item ): ?int {
+    if ( ! is_object( $item ) ) {
+        return null;
+    }
+
+    $keys = [ 'Id', 'ID', 'id', 'idCliente', 'IdCliente', 'idcliente', 'IDCliente' ];
+    foreach ( $keys as $key ) {
+        if ( isset( $item->$key ) && is_numeric( $item->$key ) ) {
+            $value = (int) $item->$key;
+            if ( $value > 0 ) {
+                return $value;
+            }
+        }
+    }
+
+    foreach ( get_object_vars( $item ) as $value ) {
+        if ( is_numeric( $value ) ) {
+            $value = (int) $value;
+            if ( $value > 0 ) {
+                return $value;
+            }
+        }
+    }
+
+    return null;
+}
+
 function wp_travel_giav_get_default_tax_type(): string {
     return (string) apply_filters( 'wp_travel_giav_default_tax_type', 'G' );
 }
@@ -242,11 +269,9 @@ function wp_travel_giav_cliente_search_por_dni( string $dni, array &$trace = nul
     }
 
     foreach ( $items as $item ) {
-        if ( is_object( $item ) ) {
-            $id = $item->Id ?? $item->ID ?? $item->id ?? null;
-            if ( is_numeric( $id ) && (int) $id > 0 ) {
-                return (int) $id;
-            }
+        $id = wp_travel_giav_extract_client_search_id( $item );
+        if ( $id ) {
+            return $id;
         }
     }
 
