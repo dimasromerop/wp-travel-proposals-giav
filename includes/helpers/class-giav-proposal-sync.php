@@ -172,6 +172,10 @@ function wp_travel_giav_resolve_destination( array $proposal, array $snapshot ):
     ];
 }
 
+function wp_travel_giav_get_default_tax_type(): string {
+    return (string) apply_filters( 'wp_travel_giav_default_tax_type', 'G' );
+}
+
 function wp_travel_giav_cliente_search_por_dni( string $dni, array &$trace = null ): ?int {
     $dni = wp_travel_giav_normalize_dni( $dni );
     if ( $dni === '' ) {
@@ -341,7 +345,7 @@ function wp_travel_giav_build_reserva_payload( array $data ): array {
         'recuperacion'                   => 0,
         'margenOperacionPrevisto'        => null,
         'comisionAgenteComercial'        => 0,
-        'tipoIVA'                        => null,
+        'tipoIVA'                        => wp_travel_giav_get_default_tax_type(),
         'rooming'                        => null,
         'fechadesde'                     => null,
         'fechahasta'                     => null,
@@ -373,6 +377,7 @@ function wp_travel_giav_build_reserva_payload( array $data ): array {
         'idEntityStage'                  => null,
         'customDataValues'               => null,
         'idsPasajeros'                   => null,
+        'Anidacion_IdReservaContenedora' => null,
     ];
 
     return array_merge( $defaults, $data );
@@ -615,9 +620,9 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
     $totals = isset( $snapshot['totals'] ) && is_array( $snapshot['totals'] ) ? $snapshot['totals'] : [];
     $total_sell = isset( $totals['totals_sell_price'] ) ? (float) $totals['totals_sell_price'] : 0.0;
     $total_cost = isset( $totals['totals_cost_net'] ) ? (float) $totals['totals_cost_net'] : 0.0;
-
-    $pq_reserva_id = (int) ( $proposal['giav_pq_reserva_id'] ?? 0 );
     $destination_meta = wp_travel_giav_resolve_destination( $proposal, $snapshot );
+    $tax_type = wp_travel_giav_get_default_tax_type();
+    $pq_reserva_id = (int) ( $proposal['giav_pq_reserva_id'] ?? 0 );
     if ( $pq_reserva_id <= 0 ) {
         $pq_response = wp_travel_giav_reserva_normal_create(
             [
@@ -630,7 +635,7 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
                 'fechadesde'   => $fecha_desde,
                 'fechahasta'   => $fecha_hasta,
                 'ventacomis'   => $total_sell,
-                'costeComis'   => $total_cost,
+                'costeComis'   => 0,
                 'ventaNoComis' => 0,
                 'costeNoComis' => 0,
                 'gastosGestion'=> 0,
@@ -639,6 +644,8 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
                 'Destino'                          => $destination_meta['destino'],
                 'destinationCountryISO3166Code'    => $destination_meta['code'] ?? null,
                 'destinationIdCountryZone'         => $destination_meta['zone'],
+                'tipoIVA'                          => $tax_type,
+                'Anidacion_IdReservaContenedora'   => null,
             ],
             $trace
         );
@@ -741,6 +748,8 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
             'Destino'      => $destination_meta['destino'],
             'destinationCountryISO3166Code' => $destination_meta['code'] ?? null,
             'destinationIdCountryZone'      => $destination_meta['zone'],
+            'tipoIVA'      => $tax_type,
+            'Anidacion_IdReservaContenedora' => $pq_reserva_id > 0 ? $pq_reserva_id : null,
             'numPax'       => isset( $item['pax_quantity'] ) ? (int) $item['pax_quantity'] : (int) ( $proposal['pax_total'] ?? 0 ),
                 ],
                 $trace
