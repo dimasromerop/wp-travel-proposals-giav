@@ -1,9 +1,83 @@
 import { useMemo, useState } from '@wordpress/element';
-import { Notice, Button, Spinner } from '@wordpress/components';
+import { Notice, Button, Card, CardBody, CardHeader } from '@wordpress/components';
 import StepBasics from './steps/StepBasics';
 import StepServices from './steps/StepServices';
 import StepPreview from './steps/StepPreview';
-import API from '../api';
+
+const STATUS_LABELS = {
+  draft: 'Borrador',
+  sent: 'Enviada',
+  accepted: 'Aceptada',
+  queued: 'En cola',
+  synced: 'Sincronizada',
+  error: 'Error',
+  revoked: 'Revocada',
+  lost: 'Perdida',
+};
+
+const formatDate = (value) => {
+  if (!value) return '-';
+  const raw = String(value);
+  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+};
+
+const buildAdminUrl = (params = {}) => {
+  const url = new URL(window.location.href);
+  url.searchParams.set('page', 'travel_proposals');
+  url.searchParams.delete('proposal_id');
+  url.searchParams.delete('action');
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === null || value === undefined || value === '') {
+      url.searchParams.delete(key);
+      return;
+    }
+    url.searchParams.set(key, value);
+  });
+  return url.toString();
+};
+
+const buildPublicUrl = (proposalToken, versionToken) => {
+  if (!proposalToken) return '';
+  const base = `${window.location.origin}/travel-proposal/${proposalToken}/`;
+  if (!versionToken) return base;
+  return `${window.location.origin}/travel-proposal/${proposalToken}/v/${versionToken}/`;
+};
+
+async function copyToClipboard(text) {
+  if (!text) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (err) {
+    // fall back below
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.top = '-1000px';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const ok = document.execCommand('copy');
+  document.body.removeChild(textarea);
+  return ok;
+}
+
+const buildEmailLink = ({ email, name, publicUrl }) => {
+  if (!email || !publicUrl) return '';
+  const subject = `Tu propuesta de viaje`;
+  const greeting = name ? `Hola ${name},` : 'Hola,';
+  const body = `${greeting}\n\nAquí tienes el enlace a tu propuesta:\n${publicUrl}\n\nQuedamos a tu disposición para cualquier duda.`;
+  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+};
 
 export default function ProposalWizard({
   onExit,
@@ -15,6 +89,12 @@ export default function ProposalWizard({
   const [step, setStep] = useState(1);
 
   const [proposalId, setProposalId] = useState(initialProposal?.id || null);
+  const [proposalStatus, setProposalStatus] = useState(initialProposal?.status || 'draft');
+  const [proposalAcceptedAt] = useState(initialProposal?.accepted_at || '');
+  const [proposalToken] = useState(initialProposal?.proposal_token || '');
+  const [publicUrl, setPublicUrl] = useState(initialProposal?.public_url || '');
+  const [publicToken, setPublicToken] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const initialBasics = useMemo(() => {
     if (!initialProposal && !initialSnapshot) {
@@ -41,29 +121,6 @@ export default function ProposalWizard({
 
   const [snapshot, setSnapshot] = useState(null);
   const [versionId, setVersionId] = useState(null);
-
-  // GIAV preflight & confirm
-  const [confirmLoading, setConfirmLoading] = useState(false);
-  const [confirmError, setConfirmError] = useState('');
-  const [confirmOk, setConfirmOk] = useState(false);
-
-
-  const onConfirmGiav = async () => {
-    if (!versionId) return;
-    setConfirmLoading(true);
-    setConfirmError('');
-    setConfirmOk(false);
-
-    try {
-      await API.confirmGiav(versionId);
-      setConfirmOk(true);
-    } catch (e) {
-      setConfirmError(e?.message || 'Error confirmando en GIAV.');
-    } finally {
-      setConfirmLoading(false);
-    }
-  };
-
 
   if (step === 1) {
     return (
@@ -114,9 +171,18 @@ export default function ProposalWizard({
         mode={mode}
         versionNumber={nextVersionNumber}
         onBack={() => setStep(2)}
-        onSent={({ versionId: vId, snapshot: sentSnapshot }) => {
+        onSent={({ versionId: vId, snapshot: sentSnapshot, publicUrl: sentUrl, publicToken: sentToken, status }) => {
           setVersionId(vId);
           setSnapshot(sentSnapshot || null);
+          if (sentUrl) {
+            setPublicUrl(sentUrl);
+          }
+          if (sentToken) {
+            setPublicToken(sentToken);
+          }
+          if (status) {
+            setProposalStatus(status);
+          }
           setStep(4);
         }}
       />
@@ -125,80 +191,82 @@ export default function ProposalWizard({
 
 
   if (step === 4) {
-    const snapshotItems = Array.isArray(snapshot?.items) ? snapshot.items : [];
-    const warningCount = snapshotItems.reduce((acc, it) => {
-      const warnings = Array.isArray(it?.warnings) ? it.warnings : [];
-      return acc + warnings.length;
-    }, 0);
-    const blockingCount = snapshotItems.reduce((acc, it) => {
-      const blocking = Array.isArray(it?.blocking) ? it.blocking : [];
-      return acc + blocking.length;
-    }, 0);
-
-    const statusType = blockingCount > 0 ? 'error' : warningCount > 0 ? 'warning' : 'success';
-    const statusLabel = blockingCount > 0
-      ? 'No se puede confirmar'
-      : warningCount > 0
-      ? `Listo para confirmar (${warningCount} avisos)`
-      : 'Listo para confirmar';
-
-    const canConfirm = blockingCount === 0;
+    const resolvedPublicUrl = publicUrl || buildPublicUrl(proposalToken, publicToken);
+    const statusLabel = STATUS_LABELS[proposalStatus] || proposalStatus || '-';
+    const acceptanceLabel = proposalAcceptedAt
+      ? `Aceptada el ${formatDate(proposalAcceptedAt)}`
+      : 'Pendiente';
+    const emailLink = buildEmailLink({
+      email: basics?.customer_email,
+      name: basics?.customer_name,
+      publicUrl: resolvedPublicUrl,
+    });
+    const handleCopyLink = async () => {
+      const ok = await copyToClipboard(resolvedPublicUrl);
+      if (ok) {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      }
+    };
 
     return (
-      <div>
-        <Notice status="success" isDismissible={false}>
-          {mode === 'edit' ? 'Nueva versión creada:' : 'Propuesta enviada. Versión creada:'}{' '}
-          <strong>{versionId}</strong>
-        </Notice>
-
-        {confirmOk && (
+      <Card>
+        <CardHeader>
+          <strong>Preview y envío</strong>
+        </CardHeader>
+        <CardBody>
           <Notice status="success" isDismissible={false}>
-            Confirmacion GIAV iniciada (encolada).
+            {mode === 'edit' ? 'Nueva versión creada:' : 'Propuesta enviada. Versión creada:'}{' '}
+            <strong>{versionId}</strong>
           </Notice>
-        )}
 
-        {confirmError && (
-          <Notice status="error" isDismissible onRemove={() => setConfirmError('')}>
-            {confirmError}
-          </Notice>
-        )}
-
-        <div style={{ marginTop: 12 }}>
-          <strong>Estado GIAV</strong>
-          <div style={{ marginTop: 8 }}>
-            <Notice status={statusType} isDismissible={false}>
-              {statusLabel}
+          {proposalStatus === 'accepted' && proposalAcceptedAt ? (
+            <Notice status="info" isDismissible={false}>
+              Aceptada el {formatDate(proposalAcceptedAt)}.
             </Notice>
+          ) : null}
+
+          <div style={{ marginTop: 16, display: 'grid', gap: 8 }}>
+            <div>
+              <strong>Estado:</strong> {statusLabel}
+            </div>
+            <div>
+              <strong>Aceptación:</strong> {acceptanceLabel}
+            </div>
+            <div>
+              <strong>GIAV:</strong> El expediente se creará tras la aceptación del cliente.
+            </div>
           </div>
-        </div>
 
-        <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Button variant="primary" onClick={onExit}>
-            Salir
-          </Button>
+          <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {proposalStatus !== 'accepted' ? (
+              <Button variant="primary" onClick={handleCopyLink} disabled={!resolvedPublicUrl}>
+                {copied ? 'Enlace copiado' : 'Copiar enlace público'}
+              </Button>
+            ) : null}
 
-          <Button
-            variant="secondary"
-            onClick={onConfirmGiav}
-            disabled={!canConfirm || confirmLoading}
-          >
-            {confirmLoading ? (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <Spinner />
-                Confirmando...
-              </span>
-            ) : (
-              'Confirmar en GIAV'
-            )}
-          </Button>
+            {emailLink ? (
+              <Button variant="secondary" onClick={() => window.location.assign(emailLink)}>
+                Enviar email al cliente
+              </Button>
+            ) : null}
 
-          {!canConfirm && (
-            <span style={{ fontSize: 12, color: '#b91c1c' }}>
-              Hay servicios que requieren correccion.
-            </span>
-          )}
-        </div>
-      </div>
+            {resolvedPublicUrl ? (
+              <Button variant="link" href={resolvedPublicUrl} target="_blank" rel="noopener noreferrer">
+                Abrir vista pública
+              </Button>
+            ) : null}
+
+            <Button variant="link" href={buildAdminUrl({ proposal_id: proposalId })}>
+              Ir al repositorio / ver detalle
+            </Button>
+
+            <Button variant="tertiary" onClick={onExit}>
+              Salir
+            </Button>
+          </div>
+        </CardBody>
+      </Card>
     );
   }
   return null;

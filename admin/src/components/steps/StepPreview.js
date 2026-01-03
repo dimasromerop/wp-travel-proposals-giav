@@ -148,13 +148,19 @@ export default function StepPreview({
 
   const statusLabel =
     issueSummary.blockingCount > 0
-      ? 'No se puede confirmar'
+      ? `Hay ${issueSummary.blockingCount} servicios con errores`
       : issueSummary.warningCount > 0
-      ? `Listo para confirmar (${issueSummary.warningCount} avisos)`
-      : 'Listo para confirmar';
+      ? `Hay ${issueSummary.warningCount} avisos en servicios`
+      : 'Servicios listos para enviar';
 
   const pax = Math.max(1, parseInt(snapshotHeader?.pax_total || 1, 10));
   const perPerson = (snapshotTotals?.totals_sell_price || 0) / pax;
+  const primaryLabel =
+    mode === 'edit'
+      ? 'Guardar nueva versión'
+      : snapshotHeader.customer_email
+      ? 'Enviar propuesta'
+      : 'Crear enlace';
 
   const send = async () => {
     setLoading(true);
@@ -170,6 +176,7 @@ export default function StepPreview({
         versionId: res.version_id,
         publicToken: res.public_token,
         publicUrl: res.public_url,
+        status: res.status,
         snapshot,
       });
     } catch (e) {
@@ -182,7 +189,7 @@ export default function StepPreview({
   return (
     <Card>
       <CardHeader>
-        <strong>Preview y envio</strong>
+        <strong>Preview y envío</strong>
       </CardHeader>
 
       <CardBody>
@@ -291,11 +298,6 @@ export default function StepPreview({
             <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
               Precio por persona: {snapshotHeader.currency} {round2(perPerson).toFixed(2)}
             </div>
-
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
-              Margen interno: {snapshotHeader.currency} {round2(snapshotTotals?.totals_margin_abs || 0).toFixed(2)} (
-              {round2(snapshotTotals?.totals_margin_pct || 0).toFixed(2)}%)
-            </div>
           </div>
         </div>
 
@@ -305,7 +307,7 @@ export default function StepPreview({
           </Button>
 
           <Button variant="primary" onClick={send} disabled={loading}>
-            {mode === 'edit' ? 'Guardar nueva versión' : 'Enviar propuesta'}
+            {primaryLabel}
           </Button>
 
           {loading && <Spinner />}
