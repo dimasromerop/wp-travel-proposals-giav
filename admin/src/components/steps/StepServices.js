@@ -810,6 +810,13 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                     it.service_type === 'golf' ? (
                       <>
                         <TextControl
+                          label="Jugadores"
+                          type="number"
+                          min={1}
+                          value={String(it.number_of_players ?? pax)}
+                          onChange={(v) => updateItem(idx, { number_of_players: v })}
+                        />
+                        <TextControl
                           label="Green-fees por jugador *"
                           type="number"
                           min={1}
@@ -817,7 +824,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                           onChange={(v) => updateItem(idx, { green_fees_per_person: v })}
                         />
                         <div className="service-card__golf-summary">
-                          Total green-fees (interno): {toInt(it.green_fees_per_person, 0)} × {toInt(it.number_of_players ?? pax, 1)} ={' '}
+                          Total green-fees (interno): {toInt(it.number_of_players ?? pax, 1)} x {toInt(it.green_fees_per_person, 0)} ={' '}
                           {toInt(it.total_green_fees, 0)}
                         </div>
                         {toInt(it.green_fees_per_person, 0) < 1 && (
