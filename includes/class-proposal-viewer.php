@@ -330,6 +330,9 @@ class WP_Travel_Proposal_Viewer {
                 $golf_courses[] = $course_name;
             }
             $green_value = absint( $golf_item['green_fees_per_person'] ?? 0 );
+            if ( $green_value <= 0 ) {
+                $green_value = 1;
+            }
             if ( $green_value > 0 ) {
                 $total_green_fees_per_person += $green_value;
                 $golf_fee_breakdown[] = [
@@ -815,6 +818,9 @@ class WP_Travel_Proposal_Viewer {
                                 $end_date = self::format_spanish_date( (string) ( $item['end_date'] ?? '' ) );
                                 $notes = trim( (string) ( $item['notes_public'] ?? '' ) );
                                 $green_value = absint( $item['green_fees_per_person'] ?? 0 );
+                                if ( $green_value <= 0 ) {
+                                    $green_value = 1;
+                                }
                                 $golf_meta = [];
                                 if ( $start_date || $end_date ) {
                                     $golf_meta[] = trim( implode( ' → ', array_filter( [ $start_date, $end_date ] ) ) );

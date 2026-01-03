@@ -66,6 +66,17 @@ class WP_Travel_GIAV_Snapshot_Resolver {
                 ];
             }
 
+            if ( $service_type === 'golf' ) {
+                $green_fees_per_person = isset( $item['green_fees_per_person'] ) ? (int) $item['green_fees_per_person'] : 0;
+                if ( $green_fees_per_person <= 0 ) {
+                    $item_blocking[] = self::build_message(
+                        'MISSING_GREEN_FEES',
+                        'green_fees_per_person must be >= 1 for golf services',
+                        'blocking'
+                    );
+                }
+            }
+
             $override = ! empty( $item['supplier_override'] ) || ! empty( $item['giav_supplier_override'] );
 
             $mapping = null;

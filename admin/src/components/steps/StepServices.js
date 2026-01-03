@@ -74,6 +74,32 @@ function computeNights(item, basics) {
   return daysDiff(start, end);
 }
 
+export function computeGolfTotals(item = {}, players = 1) {
+  const safePlayers = Math.max(1, toInt(players, 1));
+  let greenFeesPerPerson = Math.max(0, toInt(item.green_fees_per_person ?? 0, 0));
+  let totalGreenFees = Math.max(0, toInt(item.total_green_fees ?? 0, 0));
+  const legacyQuantity = Math.max(0, toInt(item.quantity ?? 0, 0));
+
+  if (greenFeesPerPerson > 0) {
+    totalGreenFees = greenFeesPerPerson * safePlayers;
+  } else if (totalGreenFees > 0) {
+    greenFeesPerPerson = Math.max(1, Math.round(totalGreenFees / safePlayers));
+    totalGreenFees = greenFeesPerPerson * safePlayers;
+  } else if (legacyQuantity > 0) {
+    totalGreenFees = legacyQuantity;
+    greenFeesPerPerson = Math.max(1, Math.round(totalGreenFees / safePlayers));
+    totalGreenFees = greenFeesPerPerson * safePlayers;
+  } else {
+    greenFeesPerPerson = 1;
+    totalGreenFees = greenFeesPerPerson * safePlayers;
+  }
+
+  return {
+    greenFeesPerPerson,
+    totalGreenFees,
+  };
+}
+
 function computeUnitSellFromMarkup(unitNet, markupPct) {
   const net = Math.max(0, toNumber(unitNet));
   const pct = Math.max(0, toNumber(markupPct));
@@ -176,18 +202,7 @@ function computeLine(item, basics, globalMarkupPct) {
     it.line_sell_price = round2(mult * it.unit_sell_price);
   } else if (it.service_type === 'golf') {
     const players = Math.max(1, toInt(it.number_of_players ?? basics?.pax_total ?? 1, 1));
-    const legacyQuantity = Math.max(1, toInt(it.quantity, 1));
-    let greenFeesPerPerson = Math.max(0, toInt(it.green_fees_per_person ?? 0, 0));
-    let totalGreenFees = Math.max(0, toInt(it.total_green_fees ?? 0, 0));
-
-    if (greenFeesPerPerson > 0) {
-      totalGreenFees = greenFeesPerPerson * players;
-    } else if (totalGreenFees > 0) {
-      greenFeesPerPerson = Math.max(1, Math.round(totalGreenFees / players));
-    } else {
-      totalGreenFees = legacyQuantity;
-      greenFeesPerPerson = Math.max(1, Math.round(totalGreenFees / players));
-    }
+    const { greenFeesPerPerson, totalGreenFees } = computeGolfTotals(it, players);
 
     it.number_of_players = players;
     it.green_fees_per_person = greenFeesPerPerson;
@@ -289,6 +304,10 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
       return synced.map((item, idx) => (item === prev[idx] ? item : computeLine(item, basics, globalMarkupPct)));
     });
   }, [basics?.start_date, basics?.end_date, globalMarkupPct, basics]);
+
+  useEffect(() => {
+    setItems((prev) => prev.map((item) => computeLine(item, basics, globalMarkupPct)));
+  }, [pax]);
 
   const updateItem = (idx, patch) => {
     setItems((prev) => {
@@ -788,21 +807,40 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                       )}
                     </>
                   ) : (
-                    <TextControl
-                      label={
-                        it.service_type === 'golf'
-                          ? 'Cantidad (green fees)'
-                          : it.service_type === 'transfer'
-                          ? 'Cantidad (servicios)'
-                          : it.service_type === 'package'
-                          ? 'Cantidad (paquetes)'
-                          : 'Cantidad'
-                      }
-                      type="number"
-                      min={1}
-                      value={String(it.quantity)}
-                      onChange={(v) => updateItem(idx, { quantity: v })}
-                    />
+                    it.service_type === 'golf' ? (
+                      <>
+                        <TextControl
+                          label="Green-fees por jugador *"
+                          type="number"
+                          min={1}
+                          value={String(it.green_fees_per_person ?? '')}
+                          onChange={(v) => updateItem(idx, { green_fees_per_person: v })}
+                        />
+                        <div className="service-card__golf-summary">
+                          Total green-fees (interno): {toInt(it.green_fees_per_person, 0)} × {toInt(it.number_of_players ?? pax, 1)} ={' '}
+                          {toInt(it.total_green_fees, 0)}
+                        </div>
+                        {toInt(it.green_fees_per_person, 0) < 1 && (
+                          <Notice status="warning" isDismissible={false}>
+                            Pendiente de revisar: completa los green-fees por jugador.
+                          </Notice>
+                        )}
+                      </>
+                    ) : (
+                      <TextControl
+                        label={
+                          it.service_type === 'transfer'
+                            ? 'Cantidad (servicios)'
+                            : it.service_type === 'package'
+                            ? 'Cantidad (paquetes)'
+                            : 'Cantidad'
+                        }
+                        type="number"
+                        min={1}
+                        value={String(it.quantity)}
+                        onChange={(v) => updateItem(idx, { quantity: v })}
+                      />
+                    )
                   )}
                 </div>
               </div>
