@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from '@wordpress/element';
+import { useEffect, useMemo, useRef, useState } from '@wordpress/element';
 import {
   Button,
   Card,
@@ -305,6 +305,7 @@ function normalizeToISO(value) {
 
 function DateField({ id, label, value, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
+  const fieldRef = useRef(null);
   const displayValue = formatDisplayDate(value);
 
   const handleSelect = (next) => {
@@ -316,7 +317,7 @@ function DateField({ id, label, value, onChange }) {
   };
 
   return (
-    <div className="proposal-basics__field">
+    <div className="proposal-basics__field" ref={fieldRef}>
       <TextControl
         id={id}
         label={label}
@@ -327,7 +328,12 @@ function DateField({ id, label, value, onChange }) {
         placeholder="DD/MM/AAAA"
       />
       {isOpen && (
-        <Popover position="bottom left" onClose={() => setIsOpen(false)}>
+        <Popover
+          anchorRef={fieldRef}
+          placement="bottom-start"
+          className="proposal-basics__date-popover"
+          onClose={() => setIsOpen(false)}
+        >
           <DatePicker currentDate={value || todayISO()} onChange={handleSelect} />
         </Popover>
       )}
@@ -527,17 +533,18 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
 
           <div className="proposal-basics__section">
             <div className="proposal-basics__section-title">Fechas y pasajeros</div>
-            <div className="proposal-basics__grid proposal-basics__grid--two">
+            <div className="proposal-basics__grid proposal-basics__grid--dates">
               <DateField label="Fecha inicio *" value={values.start_date} onChange={onChangeStartDate} />
+              <div className="proposal-basics__date-arrow" aria-hidden="true">
+                →
+              </div>
               <DateField
                 id="wp-travel-end-date"
                 label="Fecha fin *"
                 value={values.end_date}
                 onChange={onChangeEndDate}
               />
-            </div>
-            <div className="proposal-basics__grid proposal-basics__grid--one">
-              <div className="proposal-basics__field">
+              <div className="proposal-basics__field proposal-basics__field--pax">
                 <TextControl
                   label="Pax *"
                   type="number"

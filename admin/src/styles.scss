@@ -553,37 +553,45 @@
   gap: 24px;
 }
 
+
 .proposal-basics__section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: #fff;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: #f8fafc;
+  overflow: visible;
+  box-shadow: 0 16px 35px rgba(15, 23, 42, 0.08);
 }
 
 .proposal-basics__section-title {
   font-weight: 600;
-  color: #1f2937;
+  color: #0f172a;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .proposal-basics__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 18px 20px;
+  overflow: visible;
 }
 
-.proposal-basics__grid--two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.proposal-basics__grid--one {
-  grid-template-columns: minmax(0, 1fr);
+.proposal-basics__grid--dates {
+  grid-template-columns: minmax(0, 1.3fr) 32px minmax(0, 1.3fr) minmax(0, 0.6fr);
+  align-items: flex-end;
 }
 
 .proposal-basics__field--full {
   grid-column: 1 / -1;
+}
+
+.proposal-basics__field--pax {
+  min-width: 120px;
 }
 
 .proposal-basics__field .components-base-control__field {
@@ -597,12 +605,31 @@
 }
 
 .proposal-basics__field .components-combobox-control__input {
-  padding-top: 0;
-  padding-bottom: 0;
+  padding: 0 12px;
+  line-height: 40px;
 }
 
-.proposal-basics__field .components-popover {
+.proposal-basics__field .components-combobox-control__clear-button {
+  align-self: center;
+  margin-right: 6px;
+}
+
+.proposal-basics__date-popover {
   z-index: 1000;
+}
+
+.proposal-basics__date-popover .components-popover__content {
+  padding: 6px;
+}
+
+.proposal-basics__date-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  color: #64748b;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .proposal-basics__field .components-text-control__input:focus,
@@ -616,4 +643,13 @@
   .proposal-basics__grid {
     grid-template-columns: 1fr;
   }
+
+  .proposal-basics__grid--dates {
+    grid-template-columns: 1fr;
+  }
+
+  .proposal-basics__date-arrow {
+    display: none;
+  }
 }
+
