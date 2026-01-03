@@ -99,7 +99,8 @@ function wp_travel_giav_split_full_name( string $full_name ): array {
 
     $parts = explode( ' ', $full_name );
     if ( count( $parts ) === 1 ) {
-        return [ 'nombre' => $full_name, 'apellidos' => '' ];
+        $word = $parts[0];
+        return [ 'nombre' => $word, 'apellidos' => $word ];
     }
 
     $surname = array_pop( $parts );
