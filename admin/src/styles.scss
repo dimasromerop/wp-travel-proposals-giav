@@ -546,3 +546,74 @@
   font-size: 12px;
   color: #475569;
 }
+
+.proposal-basics {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.proposal-basics__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.proposal-basics__section-title {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.proposal-basics__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.proposal-basics__grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.proposal-basics__grid--one {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.proposal-basics__field--full {
+  grid-column: 1 / -1;
+}
+
+.proposal-basics__field .components-base-control__field {
+  margin-bottom: 0;
+}
+
+.proposal-basics__field input,
+.proposal-basics__field select,
+.proposal-basics__field .components-combobox-control__input {
+  height: 40px;
+}
+
+.proposal-basics__field .components-combobox-control__input {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.proposal-basics__field .components-popover {
+  z-index: 1000;
+}
+
+.proposal-basics__field .components-text-control__input:focus,
+.proposal-basics__field .components-select-control__input:focus,
+.proposal-basics__field .components-combobox-control__input:focus {
+  box-shadow: 0 0 0 2px rgba(30, 64, 175, 0.25);
+  border-color: #2563eb;
+}
+
+@media (max-width: 960px) {
+  .proposal-basics__grid {
+    grid-template-columns: 1fr;
+  }
+}
