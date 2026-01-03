@@ -1,7 +1,7 @@
 import { useMemo, useState } from '@wordpress/element';
 import { Notice, Button, Card, CardBody, CardHeader } from '@wordpress/components';
 import StepBasics from './steps/StepBasics';
-import StepServices from './steps/StepServices';
+import StepServices, { syncServiceDatesFromBasics } from './steps/StepServices';
 import StepPreview from './steps/StepPreview';
 
 const STATUS_LABELS = {
@@ -129,12 +129,14 @@ export default function ProposalWizard({
         // Si ya existe proposalId, no recreamos. Solo avanzamos guardando el state.
         onNext={({ basics: b }) => {
           setBasics(b);
+          setItems((prev) => syncServiceDatesFromBasics(prev, b));
           setStep(2);
         }}
         // Si no existe proposalId aún, StepBasics creará la propuesta y llamará aquí.
         onCreated={({ proposalId: id, basics: b }) => {
           setProposalId(id);
           setBasics(b);
+          setItems((prev) => syncServiceDatesFromBasics(prev, b));
           setStep(2);
         }}
         proposalId={proposalId}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from '@wordpress/element';
+import { useEffect, useMemo, useState } from '@wordpress/element';
 import {
   Button,
   Card,
@@ -225,6 +225,25 @@ function computeTotals(items) {
   };
 }
 
+export function syncServiceDatesFromBasics(services = [], basics = {}) {
+  if (!Array.isArray(services) || !services.length) return services;
+  const start = basics?.start_date || '';
+  const end = basics?.end_date || '';
+  let changed = false;
+  const synced = services.map((service) => {
+    if (!service || !service.dates_inherited) return service;
+    if (service.start_date === start && service.end_date === end) return service;
+    changed = true;
+    return {
+      ...service,
+      start_date: start,
+      end_date: end,
+      dates_inherited: true,
+    };
+  });
+  return changed ? synced : services;
+}
+
 export default function StepServices({ basics, initialItems = [], onBack, onNext, onDraftChange }) {
   const currency = basics?.currency || 'EUR';
   const pax = Math.max(1, toInt(basics?.pax_total ?? 1, 1));
@@ -233,7 +252,6 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
   const [applyMarkupToNew, setApplyMarkupToNew] = useState(true);
 
   const [error, setError] = useState('');
-  const prevBasicsRef = useRef({ start_date: basics?.start_date, end_date: basics?.end_date });
 
   const [items, setItems] = useState(() => {
     const base = initialItems.length ? initialItems : [defaultItem(basics, 20)];
@@ -265,31 +283,11 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
   const perPerson = totals.totals_sell_price > 0 ? totals.totals_sell_price / pax : 0;
 
   useEffect(() => {
-    const prev = prevBasicsRef.current;
-    const nextStart = basics?.start_date || '';
-    const nextEnd = basics?.end_date || '';
-    if (prev.start_date === nextStart && prev.end_date === nextEnd) return;
-
-    setItems((prevItems) =>
-      prevItems.map((it) => {
-        const datesInherited = typeof it.dates_inherited === 'boolean'
-          ? it.dates_inherited
-          : (it.start_date === prev.start_date && it.end_date === prev.end_date);
-        if (!datesInherited) return it;
-        return computeLine(
-          {
-            ...it,
-            start_date: nextStart,
-            end_date: nextEnd,
-            dates_inherited: true,
-          },
-          basics,
-          globalMarkupPct
-        );
-      })
-    );
-
-    prevBasicsRef.current = { start_date: nextStart, end_date: nextEnd };
+    setItems((prev) => {
+      const synced = syncServiceDatesFromBasics(prev, basics);
+      if (synced === prev) return prev;
+      return synced.map((item, idx) => (item === prev[idx] ? item : computeLine(item, basics, globalMarkupPct)));
+    });
   }, [basics?.start_date, basics?.end_date, globalMarkupPct, basics]);
 
   const updateItem = (idx, patch) => {
