@@ -31,6 +31,15 @@ const HOTEL_RATE_BASIS = [
   { label: 'Por persona / noche', value: 'per_person_per_night' },
 ];
 
+const HOTEL_REGIMENS = [
+  { label: 'Alojamiento y Desayuno', value: 'AD' },
+  { label: 'Solo Alojamiento', value: 'SA' },
+  { label: 'Media Pensión', value: 'MP' },
+  { label: 'Pensión Completa', value: 'PC' },
+  { label: 'Todo Incluido', value: 'TI' },
+  { label: 'Según Programa', value: 'SP' },
+];
+
 function toNumber(v) {
   const n = parseFloat(String(v).replace(',', '.'));
   return Number.isFinite(n) ? n : 0;
@@ -78,6 +87,7 @@ function defaultItem(basics, defaultMarkupPct = 0) {
     hotel_regimen: '',
     hotel_rooms: 1,
     hotel_rate_basis: 'per_room_per_night',
+    hotel_regimen: '',
 
     // Generic quantity for non-hotel
     quantity: 1,
@@ -376,7 +386,10 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
               <div className="service-card__header">
                 <div className="service-card__title">
                   <div className="service-card__eyebrow">Servicio {idx + 1}</div>
-                  <div className="service-card__name">{it.title?.trim() || 'Sin título'}</div>
+                  <div className="service-card__name">
+                    {SERVICE_TYPES.find((type) => type.value === it.service_type)?.label || 'Servicio'} ┬À{' '}
+                    {it.title?.trim() || 'Sin t├¡tulo'}
+                  </div>
                 </div>
 
                 <div className="service-card__meta">
@@ -386,8 +399,8 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                     >
                       {it.giav_mapping_status === 'active'
                         ? (String(it.giav_supplier_id || '') === DEFAULT_SUPPLIER_ID
-                          ? 'Proveedor genérico (GIAV)'
-                          : 'Mapeado GIAV')
+                          ? 'Proveedor gen├®rico (GIAV)'
+                          : 'OK')
                         : (it.giav_mapping_status === 'needs_review'
                           ? 'Pendiente de revisar'
                           : 'Sin mapeo GIAV')}
@@ -395,7 +408,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                   )}
 
                   <div className="service-card__total">
-                    <span>Total línea</span>
+                    <span>Total l├¡nea</span>
                     <strong>
                       {currency} {round2(it.line_sell_price || 0).toFixed(2)}
                     </strong>
@@ -407,10 +420,11 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                 </div>
               </div>
 
-              <div className="service-card__content">
-                <div className="service-card__grid">
+              <div className="service-card__section">
+                <div className="service-card__section-title">Selecci├│n y contexto</div>
+                <div className="service-card__grid service-card__grid--context">
                   <SelectControl
-                    label="Tipo"
+                    label="Tipo de servicio"
                     value={it.service_type}
                     options={SERVICE_TYPES}
                     onChange={(v) => updateItem(idx, { service_type: v })}
@@ -418,6 +432,42 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
 
                   {(it.service_type === 'hotel' || it.service_type === 'golf') ? (
                     <>
+                      <ToggleControl
+                        label="Entrada manual (fuera de catálogo)"
+                        checked={!!it.use_manual_entry}
+                        onChange={() => {
+                          const next = !it.use_manual_entry;
+
+                          if (next) {
+                            const manualLabel = it.display_name || it.title || '';
+                            updateItem(idx, {
+                              use_manual_entry: true,
+                              wp_object_type: 'manual',
+                              wp_object_id: 0,
+                              show_supplier_picker: true,
+                              giav_entity_type: 'supplier',
+                              giav_entity_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
+                              giav_mapping_status: it.giav_supplier_id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
+                              giav_supplier_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
+                              giav_supplier_name: it.giav_supplier_name || DEFAULT_SUPPLIER_NAME,
+                              supplier_override: false,
+                              display_name: manualLabel,
+                              title: manualLabel,
+                            });
+                          } else {
+                            updateItem(idx, {
+                              use_manual_entry: false,
+                              wp_object_type: null,
+                              wp_object_id: null,
+                              show_supplier_picker: false,
+                              giav_mapping_status: 'missing',
+                              supplier_override: false,
+                              display_name: '',
+                            });
+                          }
+                        }}
+                      />
+
                       {!it.use_manual_entry ? (
                         <CatalogSelect
                           label={it.service_type === 'hotel' ? 'Hotel' : 'Campo de golf'}
@@ -473,50 +523,11 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                           label={it.service_type === 'hotel' ? 'Hotel (manual) *' : 'Campo de golf (manual) *'}
                           value={it.display_name || ''}
                           onChange={(v) => updateItem(idx, { display_name: v, title: v })}
-                          placeholder={it.service_type === 'hotel' ? 'Ej: Hotel X (fuera de catálogo)' : 'Ej: Campo Y (fuera de catálogo)'}
+                          placeholder={it.service_type === 'hotel' ? 'Ej: Hotel X (fuera de cat├ílogo)' : 'Ej: Campo Y (fuera de cat├ílogo)'}
                         />
                       )}
 
-                      <div className="service-card__inline-options">
-                        <div className="service-card__inline-toggle">
-                          <ToggleControl
-                            label="Entrada manual (fuera de catálogo)"
-                            checked={!!it.use_manual_entry}
-                            onChange={() => {
-                              const next = !it.use_manual_entry;
-                              if (next) {
-                                const manualLabel = it.display_name || it.title || '';
-                                // Manual: detach from WP catalog reference
-                                updateItem(idx, {
-                                  use_manual_entry: true,
-                                  wp_object_type: 'manual',
-                                  wp_object_id: 0,
-                                  show_supplier_picker: true,
-                                  giav_entity_type: 'supplier',
-                                  giav_entity_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
-                                  giav_mapping_status: it.giav_supplier_id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
-                                  giav_supplier_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
-                                  giav_supplier_name: it.giav_supplier_name || DEFAULT_SUPPLIER_NAME,
-                                  supplier_override: false,
-                                  display_name: manualLabel,
-                                  title: manualLabel,
-                                });
-                              } else {
-                                // Back to catalog mode: clear wp ref until user picks one
-                                updateItem(idx, {
-                                  use_manual_entry: false,
-                                  wp_object_type: null,
-                                  wp_object_id: null,
-                                  show_supplier_picker: false,
-                                  giav_mapping_status: 'missing',
-                                  supplier_override: false,
-                                  display_name: '',
-                                });
-                              }
-                            }}
-                          />
-                        </div>
-
+                      <div className="service-card__supplier">
                         {!isSupplierPickerVisible(it) && (
                           <Button
                             variant="tertiary"
@@ -525,26 +536,25 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                             Cambiar proveedor
                           </Button>
                         )}
-                      </div>
 
-                      {isSupplierPickerVisible(it) && (
-                        <div className="service-card__supplier">
-                          {!it.use_manual_entry && (
-                            <ToggleControl
-                              label="Proveedor (opcional)"
-                              checked={!!it.show_supplier_picker}
-                              onChange={() => toggleSupplierPicker(idx)}
-                            />
-                          )}
+                        {isSupplierPickerVisible(it) && (
+                          <>
+                            {!it.use_manual_entry && (
+                              <ToggleControl
+                                label="Proveedor (opcional)"
+                                checked={!!it.show_supplier_picker}
+                                onChange={() => toggleSupplierPicker(idx)}
+                              />
+                            )}
 
-                          <SupplierSearchSelect
-                            selectedId={it.giav_supplier_id || DEFAULT_SUPPLIER_ID}
-                            selectedLabel={it.giav_supplier_name || DEFAULT_SUPPLIER_NAME}
-                            disabled={false}
-                            onPick={(prov) => {
-                              const id = String(prov?.id || '');
-                              const label = String(prov?.label || '');
-                              if (!id) return;
+                            <SupplierSearchSelect
+                              selectedId={it.giav_supplier_id || DEFAULT_SUPPLIER_ID}
+                              selectedLabel={it.giav_supplier_name || DEFAULT_SUPPLIER_NAME}
+                              disabled={false}
+                              onPick={(prov) => {
+                                const id = String(prov?.id || '');
+                                const label = String(prov?.label || '');
+                                if (!id) return;
                                 updateItem(idx, {
                                   giav_entity_type: 'supplier',
                                   giav_entity_id: id,
@@ -555,27 +565,53 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                                 });
                               }}
                             />
-                        </div>
-                      )}
+                          </>
+                        )}
+                      </div>
                     </>
                   ) : (
                     <TextControl
-                      label="Título / descripción *"
+                      label="T├¡tulo / descripci├│n *"
                       value={it.title}
                       onChange={(v) => updateItem(idx, { title: v })}
                     />
                   )}
 
+                  {it.service_type === 'hotel' && (
+                    <TextControl
+                      label="Tipo de habitaci├│n"
+                      value={it.hotel_room_type || ''}
+                      onChange={(v) => updateItem(idx, { hotel_room_type: v })}
+                      placeholder="Deluxe / Sea View..."
+                    />
+                  )}
 
+                  {it.service_type === 'hotel' && (
+                    <SelectControl
+                      label="R├®gimen"
+                      value={it.hotel_regimen || ''}
+                      options={[
+                        { label: 'Seleccionar', value: '' },
+                        ...HOTEL_REGIMENS,
+                      ]}
+                      onChange={(v) => updateItem(idx, { hotel_regimen: v })}
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="service-card__section">
+                <div className="service-card__section-title">Fechas y ocupaci├│n</div>
+                <div className="service-card__grid service-card__grid--dates">
                   <TextControl
-                    label="Inicio"
+                    label="Fecha inicio"
                     type="date"
                     value={it.start_date}
                     onChange={(v) => updateItem(idx, { start_date: v })}
                   />
 
                   <TextControl
-                    label="Fin"
+                    label="Fecha fin"
                     type="date"
                     value={it.end_date}
                     onChange={(v) => updateItem(idx, { end_date: v })}
@@ -584,75 +620,34 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
 
                   {it.service_type === 'hotel' ? (
                     <>
-                      <SelectControl
-                        label="Tarifa"
-                        value={it.hotel_rate_basis || 'per_room_per_night'}
-                        options={HOTEL_RATE_BASIS}
-                        onChange={(v) => updateItem(idx, { hotel_rate_basis: v })}
-                      />
-
                       <TextControl
                         label="Noches"
                         value={String(it.hotel_nights ?? computeNights(it, basics))}
                         disabled
-                        style={{ width: 120 }}
                       />
 
-                      {(it.hotel_rate_basis || 'per_room_per_night') === 'per_room_per_night' && (
+                      {(it.hotel_rate_basis || 'per_room_per_night') === 'per_room_per_night' ? (
                         <TextControl
                           label="Habitaciones"
                           type="number"
                           min={1}
                           value={String(it.hotel_rooms)}
                           onChange={(v) => updateItem(idx, { hotel_rooms: v })}
-                          style={{ width: 150 }}
+                        />
+                      ) : (
+                        <TextControl
+                          label="Habitaciones"
+                          value="ÔÇö"
+                          disabled
                         />
                       )}
-
-                      <TextControl
-                        label="Tipo habitación"
-                        value={it.hotel_room_type || ''}
-                        onChange={(v) => updateItem(idx, { hotel_room_type: v })}
-                        placeholder="Deluxe / Sea View / BB, HB..."
-                        style={{ minWidth: 240 }}
-                      />
-                      <TextControl
-                        label="Régimen"
-                        value={it.hotel_regimen || ''}
-                        onChange={(v) => updateItem(idx, { hotel_regimen: v })}
-                        placeholder="Solo alojamiento / Desayuno / Media pensión"
-                        style={{ minWidth: 240 }}
-                      />
-                    </>
-                  ) : it.service_type === 'golf' ? (
-                    <>
-                      <TextControl
-                        label="Jugadores"
-                        type="number"
-                        min={1}
-                        value={String(it.number_of_players ?? basics?.pax_total ?? 1)}
-                        onChange={(v) => updateItem(idx, { number_of_players: v })}
-                        style={{ width: 150 }}
-                      />
-                      <TextControl
-                        label="Green-fees por jugador"
-                        type="number"
-                        min={1}
-                        value={String(it.green_fees_per_person ?? 1)}
-                        onChange={(v) => updateItem(idx, { green_fees_per_person: v })}
-                        style={{ width: 180 }}
-                      />
-                      <TextControl
-                        label="Total green-fees"
-                        value={String(it.total_green_fees ?? (it.green_fees_per_person ?? 1) * (it.number_of_players ?? basics?.pax_total ?? 1))}
-                        disabled
-                        style={{ width: 160 }}
-                      />
                     </>
                   ) : (
                     <TextControl
                       label={
-                        it.service_type === 'transfer'
+                        it.service_type === 'golf'
+                          ? 'Cantidad (green fees)'
+                          : it.service_type === 'transfer'
                           ? 'Cantidad (servicios)'
                           : it.service_type === 'package'
                           ? 'Cantidad (paquetes)'
@@ -662,17 +657,29 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                       min={1}
                       value={String(it.quantity)}
                       onChange={(v) => updateItem(idx, { quantity: v })}
-                      style={{ width: 180 }}
                     />
                   )}
+                </div>
+              </div>
 
+              <div className="service-card__section service-card__section--pricing">
+                <div className="service-card__section-title">Pricing</div>
+                <div className="service-card__pricing">
                   <TextControl
                     label="Coste neto (unit.)"
                     value={String(it.unit_cost_net)}
                     onChange={(v) => updateItem(idx, { unit_cost_net: v })}
                     placeholder="120"
-                    style={{ width: 160 }}
                   />
+
+                  {it.service_type === 'hotel' && (
+                    <SelectControl
+                      label="Tarifa"
+                      value={it.hotel_rate_basis || 'per_room_per_night'}
+                      options={HOTEL_RATE_BASIS}
+                      onChange={(v) => updateItem(idx, { hotel_rate_basis: v })}
+                    />
+                  )}
 
                   <ToggleControl
                     label="Usar margen"
@@ -687,7 +694,6 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                       min={0}
                       value={String(it.markup_pct ?? globalMarkupPct)}
                       onChange={(v) => updateItem(idx, { markup_pct: v })}
-                      style={{ width: 140 }}
                     />
                   )}
 
@@ -703,16 +709,15 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                     onChange={(v) => updateItem(idx, { unit_sell_price: v })}
                     placeholder="165"
                     disabled={!it.lock_sell_price}
-                    style={{ width: 160 }}
                   />
                 </div>
               </div>
 
-              {/* Paquete: detalle de qué incluye */}
+              {/* Paquete: detalle de qu├® incluye */}
               {it.service_type === 'package' && (
                 <div className="service-card__package">
                   <TextControl
-                    label="Incluye (una línea por item)"
+                    label="Incluye (una l├¡nea por item)"
                     value={it.package_components_text || ''}
                     onChange={(v) => updateItem(idx, { package_components_text: v })}
                     placeholder={`3 noches\n2 green-fees\nDesayuno incluido`}
@@ -720,19 +725,22 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                 </div>
               )}
 
-              <div className="service-card__notes">
-                <TextControl
-                  label="Notas públicas (itinerario)"
-                  value={it.notes_public || ''}
-                  onChange={(v) => updateItem(idx, { notes_public: v })}
-                  placeholder="Incluye desayuno. Check-in 15:00."
-                />
-                <TextControl
-                  label="Notas internas"
-                  value={it.notes_internal || ''}
-                  onChange={(v) => updateItem(idx, { notes_internal: v })}
-                  placeholder="Neto negociado, release 14D."
-                />
+              <div className="service-card__section service-card__section--notes">
+                <div className="service-card__section-title">Notas</div>
+                <div className="service-card__notes">
+                  <TextControl
+                    label="Notas para el cliente (itinerario)"
+                    value={it.notes_public || ''}
+                    onChange={(v) => updateItem(idx, { notes_public: v })}
+                    placeholder="Incluye desayuno. Check-in 15:00."
+                  />
+                  <TextControl
+                    label="Notas internas (solo uso interno)"
+                    value={it.notes_internal || ''}
+                    onChange={(v) => updateItem(idx, { notes_internal: v })}
+                    placeholder="Neto negociado, release 14D."
+                  />
+                </div>
               </div>
             </div>
           ))}
