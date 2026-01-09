@@ -1304,41 +1304,43 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
 
                   {(it.service_type === 'hotel' || it.service_type === 'golf') ? (
                     <>
-                      <ToggleControl
-                        label="Entrada manual (fuera de catálogo)"
-                        checked={!!it.use_manual_entry}
-                        onChange={() => {
-                          const next = !it.use_manual_entry;
+                      <div className="service-card__field service-card__field--toggle">
+                        <ToggleControl
+                          label="Entrada manual (fuera de catálogo)"
+                          checked={!!it.use_manual_entry}
+                          onChange={() => {
+                            const next = !it.use_manual_entry;
 
-                          if (next) {
-                            const manualLabel = it.display_name || it.title || '';
-                            updateItem(idx, {
-                              use_manual_entry: true,
-                              wp_object_type: 'manual',
-                              wp_object_id: 0,
-                              show_supplier_picker: true,
-                              giav_entity_type: 'supplier',
-                              giav_entity_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
-                              giav_mapping_status: it.giav_supplier_id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
-                              giav_supplier_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
-                              giav_supplier_name: it.giav_supplier_name || DEFAULT_SUPPLIER_NAME,
-                              supplier_override: false,
-                              display_name: manualLabel,
-                              title: manualLabel,
-                            });
-                          } else {
-                            updateItem(idx, {
-                              use_manual_entry: false,
-                              wp_object_type: null,
-                              wp_object_id: null,
-                              show_supplier_picker: false,
-                              giav_mapping_status: 'missing',
-                              supplier_override: false,
-                              display_name: '',
-                            });
-                          }
-                        }}
-                      />
+                            if (next) {
+                              const manualLabel = it.display_name || it.title || '';
+                              updateItem(idx, {
+                                use_manual_entry: true,
+                                wp_object_type: 'manual',
+                                wp_object_id: 0,
+                                show_supplier_picker: true,
+                                giav_entity_type: 'supplier',
+                                giav_entity_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
+                                giav_mapping_status: it.giav_supplier_id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
+                                giav_supplier_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
+                                giav_supplier_name: it.giav_supplier_name || DEFAULT_SUPPLIER_NAME,
+                                supplier_override: false,
+                                display_name: manualLabel,
+                                title: manualLabel,
+                              });
+                            } else {
+                              updateItem(idx, {
+                                use_manual_entry: false,
+                                wp_object_type: null,
+                                wp_object_id: null,
+                                show_supplier_picker: false,
+                                giav_mapping_status: 'missing',
+                                supplier_override: false,
+                                display_name: '',
+                              });
+                            }
+                          }}
+                        />
+                      </div>
 
                       {!it.use_manual_entry ? (
                         <div className={`service-card__field ${fieldErrors.title ? 'is-error' : ''}`}>
@@ -1407,22 +1409,26 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
 
                       <div className="service-card__supplier">
                         {!isSupplierPickerVisible(it) && (
-                          <Button
-                            variant="tertiary"
-                            onClick={() => toggleSupplierPicker(idx)}
-                          >
-                            Cambiar proveedor
-                          </Button>
+                          <div className="service-card__supplier-actions">
+                            <Button
+                              variant="tertiary"
+                              onClick={() => toggleSupplierPicker(idx)}
+                            >
+                              Cambiar proveedor
+                            </Button>
+                          </div>
                         )}
 
                         {isSupplierPickerVisible(it) && (
                           <>
                             {!it.use_manual_entry && (
-                              <ToggleControl
-                                label="Proveedor (opcional)"
-                                checked={!!it.show_supplier_picker}
-                                onChange={() => toggleSupplierPicker(idx)}
-                              />
+                              <div className="service-card__field service-card__field--toggle">
+                                <ToggleControl
+                                  label="Proveedor (opcional)"
+                                  checked={!!it.show_supplier_picker}
+                                  onChange={() => toggleSupplierPicker(idx)}
+                                />
+                              </div>
                             )}
 
                             <SupplierSearchSelect

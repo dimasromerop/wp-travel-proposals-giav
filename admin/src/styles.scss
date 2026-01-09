@@ -634,6 +634,10 @@
   gap: 6px;
 }
 
+.service-card__field--toggle .components-toggle-control {
+  margin: 0;
+}
+
 .service-card__field.is-error .components-text-control__input,
 .service-card__field.is-error .components-select-control__input,
 .service-card__field.is-error .components-textarea-control__input {
@@ -669,6 +673,11 @@
   gap: 8px;
   min-width: 240px;
   grid-column: 1 / -1;
+}
+
+.service-card__supplier-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .service-card__package {

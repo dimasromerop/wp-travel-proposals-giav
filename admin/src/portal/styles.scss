@@ -1102,11 +1102,28 @@
   gap: 6px;
 }
 
+.service-card__field--toggle .components-toggle-control {
+  margin: 0;
+}
+
 .service-card__field.is-error .components-text-control__input,
 .service-card__field.is-error .components-select-control__input,
 .service-card__field.is-error .components-textarea-control__input {
   border-color: #dc2626;
   box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.2);
+}
+
+.service-card__supplier {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 240px;
+  grid-column: 1 / -1;
+}
+
+.service-card__supplier-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .service-card__field-error {
