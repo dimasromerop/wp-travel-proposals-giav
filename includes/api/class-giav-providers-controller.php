@@ -62,8 +62,7 @@ class WP_Travel_GIAV_Providers_Controller extends WP_REST_Controller {
     }
 
     public function permissions() {
-        // Only admins should map providers.
-        return current_user_can( 'manage_options' );
+        return wp_travel_giav_rest_permission_response();
     }
 
     public function search( WP_REST_Request $req ) {

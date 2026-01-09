@@ -35,6 +35,8 @@ define( 'WP_TRAVEL_GIAV_TABLE_RESERVAS', $wpdb->prefix . 'travel_giav_reservas' 
 define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_ID', '1734698' );
 define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_NAME', 'Proveedores varios' );
 define( 'WP_TRAVEL_GIAV_PQ_SUPPLIER_ID', '1734698' );
+define( 'WP_TRAVEL_GIAV_PORTAL_SLUG', 'gestion-reservas' );
+define( 'WP_TRAVEL_GIAV_CAPABILITY_MANAGE_PROPOSALS', 'manage_travel_proposals' );
 
 /**
  * Build the public proposal URL for admin listings and detail views.
@@ -748,6 +750,156 @@ function wp_travel_giav_admin_assets( $hook ) {
     );
 }
 
+
+function wp_travel_giav_can_manage_proposals() {
+    return current_user_can( 'manage_options' ) || current_user_can( WP_TRAVEL_GIAV_CAPABILITY_MANAGE_PROPOSALS );
+}
+
+function wp_travel_giav_is_portal_page() {
+    if ( is_admin() ) {
+        return false;
+    }
+
+    if ( ! function_exists( 'is_page' ) || ! did_action( 'wp' ) ) {
+        return false;
+    }
+
+    return is_page( WP_TRAVEL_GIAV_PORTAL_SLUG );
+}
+
+function wp_travel_giav_rest_permission_response() {
+    if ( ! wp_travel_giav_db_is_healthy() ) {
+        return new WP_Error(
+            'wp_travel_giav_db_unhealthy',
+            'La base de datos del plugin no está lista. Ejecuta las migraciones pendientes.',
+            [ 'status' => 503 ]
+        );
+    }
+
+    if ( ! wp_travel_giav_can_manage_proposals() ) {
+        return new WP_Error(
+            'rest_forbidden',
+            'No tienes permisos suficientes para acceder a Travel Proposals.',
+            [ 'status' => 403 ]
+        );
+    }
+
+    return true;
+}
+
+function wp_travel_giav_portal_access_control() {
+    if ( ! wp_travel_giav_is_portal_page() ) {
+        return;
+    }
+
+    if ( ! wp_travel_giav_db_is_healthy() ) {
+        wp_die(
+            'La base de datos del plugin no está lista. Revisa las migraciones pendientes.',
+            'Servicio no disponible',
+            [ 'response' => 503 ]
+        );
+    }
+
+    if ( ! is_user_logged_in() ) {
+        $scheme = ( isset( $_SERVER['HTTPS'] ) && 'off' !== $_SERVER['HTTPS'] && '0' !== $_SERVER['HTTPS'] ) ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        $request = $_SERVER['REQUEST_URI'] ?? '';
+        $current_url = $scheme . '://' . $host . $request;
+
+        if ( empty( $current_url ) ) {
+            $current_url = site_url( '/' . WP_TRAVEL_GIAV_PORTAL_SLUG );
+        }
+
+        wp_safe_redirect( wp_login_url( esc_url_raw( $current_url ) ) );
+        exit;
+    }
+
+    if ( ! wp_travel_giav_can_manage_proposals() ) {
+        wp_die( 'No autorizado', 'Acceso denegado', [ 'response' => 403 ] );
+    }
+}
+
+function wp_travel_giav_enqueue_portal_assets() {
+    if ( ! wp_travel_giav_is_portal_page() || ! wp_travel_giav_can_manage_proposals() ) {
+        return;
+    }
+
+    $handle = 'wp-travel-giav-portal';
+    $asset_file = plugin_dir_path( __FILE__ ) . 'admin/build/portal.asset.php';
+    $asset = file_exists( $asset_file )
+        ? include $asset_file
+        : [
+            'dependencies' => [ 'wp-element' ],
+            'version'      => WP_TRAVEL_GIAV_VERSION,
+        ];
+
+    wp_enqueue_script(
+        $handle,
+        plugins_url( 'admin/build/portal.js', __FILE__ ),
+        $asset['dependencies'],
+        $asset['version'],
+        true
+    );
+
+    $css_file = plugin_dir_path( __FILE__ ) . 'admin/build/portal.css';
+    if ( file_exists( $css_file ) ) {
+        wp_enqueue_style(
+            'wp-travel-giav-portal-style',
+            plugins_url( 'admin/build/portal.css', __FILE__ ),
+            [],
+            $asset['version']
+        );
+    }
+
+    $current_user = wp_get_current_user();
+    $caps = [];
+    if ( ! empty( $current_user->allcaps ) ) {
+        $caps = array_keys( array_filter( (array) $current_user->allcaps ) );
+    }
+
+    $page_base = get_permalink();
+    if ( ! $page_base ) {
+        $page_base = site_url( '/' . WP_TRAVEL_GIAV_PORTAL_SLUG );
+    }
+
+    wp_localize_script(
+        $handle,
+        'CASANOVA_GESTION_RESERVAS',
+        [
+            'restUrl'     => rest_url( 'travel/v1' ),
+            'wpRestRoot'  => rest_url(),
+            'nonce'       => wp_create_nonce( 'wp_rest' ),
+            'pageBase'    => $page_base,
+            'currentUser' => [
+                'id'          => (int) $current_user->ID,
+                'email'       => $current_user->user_email,
+                'displayName' => $current_user->display_name,
+                'roles'       => $current_user->roles,
+                'caps'        => $caps,
+            ],
+            'flags'       => [
+                'dbHealthy' => wp_travel_giav_db_is_healthy(),
+            ],
+            'endpoints'   => [
+                'proposals' => rest_url( 'travel/v1/proposals' ),
+                'detail'    => rest_url( 'travel/v1/proposals/%d' ),
+                'versions'  => rest_url( 'travel/v1/proposals/%d/versions' ),
+            ],
+        ]
+    );
+}
+
+function wp_travel_giav_render_portal_container( $content ) {
+    if ( ! is_main_query() || ! is_singular() || ! wp_travel_giav_is_portal_page() ) {
+        return $content;
+    }
+
+    return '<div id="casanova-gestion-reservas-app" class="casanova-gestion-reservas-app"></div>';
+}
+
+add_action( 'template_redirect', 'wp_travel_giav_portal_access_control' );
+add_action( 'wp_enqueue_scripts', 'wp_travel_giav_enqueue_portal_assets' );
+add_filter( 'the_content', 'wp_travel_giav_render_portal_container' );
 
 /**
  * Check DB schema required for the plugin and report missing tables/columns.

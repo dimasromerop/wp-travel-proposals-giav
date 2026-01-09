@@ -7,6 +7,9 @@
     "start": "wp-scripts start",
     "build": "wp-scripts build"
   },
+  "dependencies": {
+    "react-router-dom": "^6.14.1"
+  },
   "devDependencies": {
     "@wordpress/scripts": "^27.0.0"
   }

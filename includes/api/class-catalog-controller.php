@@ -192,11 +192,11 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
     }
 
     public function permissions() {
-        return current_user_can('edit_posts');
+        return wp_travel_giav_rest_permission_response();
     }
 
     public function permissions_admin() {
-        return current_user_can('manage_options');
+        return wp_travel_giav_rest_permission_response();
     }
 
     /**

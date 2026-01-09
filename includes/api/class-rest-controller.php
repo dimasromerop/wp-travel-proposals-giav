@@ -6,8 +6,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 abstract class WP_Travel_REST_Controller extends WP_REST_Controller {
 
     public function permission_check() {
-    return current_user_can( 'manage_options' );
-}
+        return wp_travel_giav_rest_permission_response();
+    }
 
 
     protected function response( $data, int $status = 200 ) {

@@ -1,0 +1,314 @@
+.casanova-portal {
+  background: #f5f7fb;
+  min-height: 100vh;
+  padding: 32px;
+  box-sizing: border-box;
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(34, 34, 34, 0.08);
+    margin-bottom: 24px;
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      color: #0a2140;
+    }
+
+    p {
+      margin: 4px 0 0;
+      color: #4b566b;
+    }
+  }
+
+  &__eyebrow {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: #75809b;
+  }
+
+  &__user {
+    text-align: right;
+    color: #0a2140;
+    span {
+      display: block;
+      font-weight: 600;
+    }
+    small {
+      color: #6d7893;
+    }
+  }
+
+  &__body {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 24px;
+  }
+
+  &__sidebar {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    nav {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      a {
+        color: #0a2140;
+        text-decoration: none;
+        font-weight: 600;
+      }
+    }
+  }
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  &__status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    color: #536580;
+
+    strong {
+      font-size: 16px;
+    }
+  }
+}
+
+.status-green {
+  color: #0f9d58;
+}
+
+.status-warning {
+  color: #d97706;
+}
+
+.casanova-portal-section {
+  background: #fff;
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.casanova-portal-section__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+
+  h2 {
+    margin: 0;
+    font-size: 24px;
+    color: #0a2140;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #5c6476;
+  }
+}
+
+.casanova-portal-section__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  select,
+  input {
+    border-radius: 8px;
+    border: 1px solid #d5dfe8;
+    padding: 8px 12px;
+    font-size: 14px;
+    background: #fdfdfd;
+    min-width: 180px;
+  }
+
+  button {
+    border-radius: 8px;
+    padding: 10px 16px;
+    border: none;
+    background: #101828;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+  }
+}
+
+.casanova-portal-section__notice {
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: #fef3c7;
+  color: #92400e;
+  font-weight: 600;
+}
+
+.casanova-portal-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__row {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: #f7f9fc;
+    font-size: 14px;
+
+    &--header {
+      background: #101828;
+      color: #fff;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+    }
+
+    &--item {
+      background: #fff;
+      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+    }
+
+    &--loading,
+    &--empty {
+      justify-content: center;
+      text-align: center;
+    }
+  }
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #e0e7ff;
+  color: #312e81;
+  font-weight: 600;
+}
+
+.status-error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.button-outline {
+  background: transparent;
+  border: 1px solid #cbd5f5;
+  color: #0f172a;
+  border-radius: 8px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.button-link {
+  background: #fff;
+  border: none;
+  color: #475569;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.button-primary {
+  background: #0ea5e9;
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+.button-secondary {
+  background: #0f172a;
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+.casanova-portal-detail__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.casanova-portal-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.casanova-portal-detail__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.casanova-portal-card {
+  background: #f9fafc;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+
+  h3 {
+    margin-top: 0;
+    color: #0f172a;
+  }
+}
+
+.casanova-portal-detail__actions-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.button-outline:disabled,
+.button-primary:disabled,
+.button-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.casanova-portal__loading {
+  padding: 24px;
+  font-size: 18px;
+  text-align: center;
+}
+
+@media (max-width: 960px) {
+  .casanova-portal {
+    padding: 16px;
+
+    &__body {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .casanova-portal-table__row {
+    grid-template-columns: 1fr;
+  }
+}
