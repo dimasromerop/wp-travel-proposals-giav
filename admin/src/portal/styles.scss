@@ -1141,6 +1141,22 @@
   color: var(--casanova-muted);
 }
 
+.service-card__section-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.service-card__section-summary-title {
+  font-weight: 600;
+}
+
+.service-card__section-summary-meta {
+  color: var(--casanova-muted);
+  font-size: 12px;
+}
+
 .services-add {
   display: flex;
 }
@@ -1333,6 +1349,7 @@
 .service-card__golf-summary {
   font-size: 12px;
   color: var(--casanova-muted);
+  grid-column: 1 / -1;
 }
 
 .service-card__hotel-panel {

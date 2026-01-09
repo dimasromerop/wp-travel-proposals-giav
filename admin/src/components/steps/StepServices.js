@@ -606,9 +606,9 @@ function HotelPricingPanel({ item, idx, updateItem, currency, pax, basics, globa
       </div>
 
       <details className="service-card__hotel-discounts-collapse">
-        <summary>
-          <span>Descuentos</span>
-          <span className="service-card__hotel-discounts-summary">{discountSummary}</span>
+        <summary className="service-card__section-summary">
+          <span className="service-card__section-summary-title">Descuentos</span>
+          <span className="service-card__section-summary-meta">{discountSummary}</span>
         </summary>
         <div className="service-card__hotel-discounts">
           <div className="service-card__hotel-discounts-grid">
@@ -669,9 +669,9 @@ function HotelPricingPanel({ item, idx, updateItem, currency, pax, basics, globa
       </div>
 
       <details className="service-card__hotel-notes">
-        <summary>
-          <span>Notas</span>
-          <span className="service-card__hotel-discounts-summary">{notesSummary}</span>
+        <summary className="service-card__section-summary">
+          <span className="service-card__section-summary-title">Notas</span>
+          <span className="service-card__section-summary-meta">{notesSummary}</span>
         </summary>
         <div className="service-card__hotel-notes-grid">
           <TextControl
@@ -871,6 +871,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
     focusServicePrimaryField(card, items[lastCreatedIndex]);
     setFlashIndex(lastCreatedIndex);
     const timer = window.setTimeout(() => setFlashIndex(null), 1200);
+    setLastCreatedIndex(null);
     return () => window.clearTimeout(timer);
   }, [lastCreatedIndex, items]);
 
@@ -1668,26 +1669,28 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                 </div>
               )}
 
-              <div className="service-card__section service-card__section--notes">
-                <div className="service-card__section-title">Notas</div>
-                <details className="service-card__notes-details">
-                  <summary>Mostrar notas</summary>
-                  <div className="service-card__notes">
-                    <TextControl
-                      label="Notas para el cliente (itinerario)"
-                      value={it.notes_public || ''}
-                      onChange={(v) => updateItem(idx, { notes_public: v })}
-                      placeholder="Incluye desayuno. Check-in 15:00."
-                    />
-                    <TextControl
-                      label="Notas internas (solo uso interno)"
-                      value={it.notes_internal || ''}
-                      onChange={(v) => updateItem(idx, { notes_internal: v })}
-                      placeholder="Neto negociado, release 14D."
-                    />
-                  </div>
-                </details>
-              </div>
+              {it.service_type !== 'hotel' && (
+                <div className="service-card__section service-card__section--notes">
+                  <div className="service-card__section-title">Notas</div>
+                  <details className="service-card__notes-details">
+                    <summary>Mostrar notas</summary>
+                    <div className="service-card__notes">
+                      <TextControl
+                        label="Notas para el cliente (itinerario)"
+                        value={it.notes_public || ''}
+                        onChange={(v) => updateItem(idx, { notes_public: v })}
+                        placeholder="Incluye desayuno. Check-in 15:00."
+                      />
+                      <TextControl
+                        label="Notas internas (solo uso interno)"
+                        value={it.notes_internal || ''}
+                        onChange={(v) => updateItem(idx, { notes_internal: v })}
+                        placeholder="Neto negociado, release 14D."
+                      />
+                    </div>
+                  </details>
+                </div>
+              )}
                 </div>
               )}
             </div>
