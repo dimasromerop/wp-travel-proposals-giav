@@ -719,10 +719,13 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
   const [globalMarkupPct, setGlobalMarkupPct] = useState(20);
   const [applyMarkupToNew, setApplyMarkupToNew] = useState(true);
 
-  const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
   const [highlightIndex, setHighlightIndex] = useState(null);
+  const [flashIndex, setFlashIndex] = useState(null);
   const [openIndex, setOpenIndex] = useState(0);
+  const [lastCreatedIndex, setLastCreatedIndex] = useState(null);
+  const [hasAttemptedContinue, setHasAttemptedContinue] = useState(false);
+  const [errorSummary, setErrorSummary] = useState([]);
   const topRef = useRef(null);
 
   const [items, setItems] = useState(() => {
@@ -843,6 +846,34 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
     }
   }, [items.length, openIndex]);
 
+  const focusServicePrimaryField = (card, item) => {
+    if (!card) return;
+    if (!item?.service_type) {
+      const select = card.querySelector('select');
+      if (select && typeof select.focus === 'function') {
+        select.focus();
+        return;
+      }
+    }
+    const primaryInput = card.querySelector('.service-card__grid--context input');
+    if (primaryInput && typeof primaryInput.focus === 'function') {
+      primaryInput.focus();
+      return;
+    }
+    focusFirstInput(card);
+  };
+
+  useEffect(() => {
+    if (lastCreatedIndex === null || lastCreatedIndex === undefined) return;
+    const card = document.querySelector(`[data-service-index="${lastCreatedIndex}"]`);
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    focusServicePrimaryField(card, items[lastCreatedIndex]);
+    setFlashIndex(lastCreatedIndex);
+    const timer = window.setTimeout(() => setFlashIndex(null), 1200);
+    return () => window.clearTimeout(timer);
+  }, [lastCreatedIndex, items]);
+
   const updateItem = (idx, patch) => {
     setItems((prev) => {
       const next = [...prev];
@@ -883,11 +914,147 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
       }
     }, 0);
   };
-  
+
+  const buildServiceValidation = (it, idx) => {
+    const issues = [];
+    const fieldErrors = {};
+    const name = (it.title || it.display_name || '').trim();
+
+    if (!name) {
+      issues.push('Falta título');
+      fieldErrors.title = 'Completa el título.';
+    }
+
+    if ((it.service_type === 'hotel' || it.service_type === 'golf') && !it.giav_supplier_id) {
+      issues.push('Falta proveedor');
+      fieldErrors.supplier = 'Selecciona un proveedor.';
+    }
+
+    if (it.service_type === 'hotel') {
+      const pricing = it.room_pricing || {};
+      const doubleEnabled = !!pricing.double?.enabled;
+      const singleEnabled = !!pricing.single?.enabled;
+      if (!doubleEnabled && !singleEnabled) {
+        issues.push('Activa doble/individual');
+        fieldErrors.pricing = 'Activa doble y/o individual.';
+      }
+
+      const validateMode = (modeKey, label) => {
+        const mode = pricing[modeKey] || {};
+        if (!mode.enabled) return '';
+        if (toInt(mode.rooms ?? 0, 0) < 1) {
+          return `Habitaciones ${label} < 1`;
+        }
+        if (toNumber(mode.net_price_per_night) <= 0) {
+          return `Neto ${label} faltante`;
+        }
+        if (mode.pvp_manual_enabled && toNumber(mode.pvp_price_per_night) <= 0) {
+          return `PVP manual ${label} faltante`;
+        }
+        return '';
+      };
+
+      const doubleError = validateMode('double', 'doble');
+      const singleError = validateMode('single', 'individual');
+      if (doubleError || singleError) {
+        issues.push(doubleError || singleError);
+        fieldErrors.pricing = 'Revisa pricing de habitaciones.';
+      }
+
+      const doubleRooms = doubleEnabled ? Math.max(0, toInt(pricing.double?.rooms ?? 0, 0)) : 0;
+      const singleRooms = singleEnabled ? Math.max(0, toInt(pricing.single?.rooms ?? 0, 0)) : 0;
+      const allocatedPax = (doubleEnabled ? doubleRooms * 2 : 0) + (singleEnabled ? singleRooms : 0);
+      if (allocatedPax !== pax) {
+        issues.push('Pax no cuadra');
+        fieldErrors.pricing = 'Ajusta pax doble/individual.';
+      }
+
+      const giavTotal = toNumber(it.giav_pricing?.giav_total_pvp ?? 0);
+      if (giavTotal <= 0) {
+        issues.push('Total GIAV faltante');
+        fieldErrors.pricing = 'Completa total GIAV.';
+      }
+    }
+
+    if (it.service_type === 'golf') {
+      if (toInt(it.green_fees_per_person, 1) < 1) {
+        issues.push('Green-fees faltante');
+        fieldErrors.greenFees = 'Define green-fees por jugador.';
+      }
+    }
+
+    if (['transfer', 'extra', 'package'].includes(it.service_type)) {
+      if (toInt(it.quantity, 1) < 1) {
+        issues.push('Cantidad inválida');
+        fieldErrors.quantity = 'Cantidad debe ser >= 1.';
+      }
+    }
+
+    if (toNumber(it.unit_sell_price) <= 0) {
+      issues.push('PVP unitario faltante');
+      fieldErrors.unitSell = 'Define PVP unitario.';
+    }
+
+    const hasMappingWarning = it.service_type === 'hotel' || it.service_type === 'golf'
+      ? ['needs_review', 'missing'].includes(it.giav_mapping_status)
+      : false;
+
+    const status = issues.length > 0 ? 'error' : (hasMappingWarning ? 'pending' : 'completed');
+
+    return {
+      issues,
+      fieldErrors,
+      status,
+      hasMappingWarning,
+    };
+  };
+
+  const validationMap = useMemo(() => items.map((it, idx) => buildServiceValidation(it, idx)), [items, pax]);
+
+  const buildServiceSummary = (it) => {
+    const start = it.start_date || basics?.start_date || '';
+    const end = it.end_date || basics?.end_date || '';
+    const dateLabel = start && end ? `${start} → ${end}` : 'Fechas por definir';
+    const amountLabel = `${currency} ${round2(it.line_sell_price || 0).toFixed(2)}`;
+
+    if (it.service_type === 'golf') {
+      return `${dateLabel} · Jugadores: ${playersCount || pax} · ${amountLabel}`;
+    }
+
+    if (it.service_type === 'hotel') {
+      return `${dateLabel} · Pax: ${pax} · ${amountLabel}`;
+    }
+
+    if (['transfer', 'extra', 'package'].includes(it.service_type)) {
+      return `Cantidad: ${toInt(it.quantity ?? 1, 1)} · ${amountLabel}`;
+    }
+
+    return `${dateLabel} · ${amountLabel}`;
+  };
+
+  const scrollToService = (idx) => {
+    setOpenIndex(idx);
+    setHighlightIndex(idx);
+    window.setTimeout(() => {
+      const card = document.querySelector(`[data-service-index="${idx}"]`);
+      if (!card) return;
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      focusFirstInput(card);
+    }, 50);
+  };
+
   const addItem = () => {
+    const lastIndex = items.length - 1;
+    const lastValidation = lastIndex >= 0 ? validationMap[lastIndex] : null;
+    if (lastValidation?.status === 'error') {
+      const confirmed = window.confirm('Tienes un servicio incompleto. ¿Crear otro igualmente?');
+      if (!confirmed) return;
+    }
     setItems((prev) => {
       const next = [...prev, defaultItem(basics, globalMarkupPct)];
-      setOpenIndex(next.length - 1);
+      const nextIndex = next.length - 1;
+      setOpenIndex(nextIndex);
+      setLastCreatedIndex(nextIndex);
       return next;
     });
   };
@@ -929,66 +1096,29 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
       }
   };
 
-  const validate = () => {
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      if (!it.title && !it.display_name) return `Linea ${i + 1}: falta titulo.`;
+  const validateAll = () => {
+    const errors = [];
+    const serviceErrors = [];
 
-      if ((it.service_type === 'hotel' || it.service_type === 'golf') && !it.giav_supplier_id) {
-        return `Linea ${i + 1}: falta proveedor.`;
+    validationMap.forEach((validation, idx) => {
+      if (validation.issues.length > 0) {
+        serviceErrors.push({
+          index: idx,
+          title: `Servicio ${idx + 1}`,
+          details: validation.issues.slice(0, 2).join(' · '),
+        });
       }
+    });
 
-      if (it.service_type === 'hotel') {
-        const pricing = it.room_pricing || {};
-        const doubleEnabled = !!pricing.double?.enabled;
-        const singleEnabled = !!pricing.single?.enabled;
-
-        if (!doubleEnabled && !singleEnabled) {
-          return `Linea ${i + 1} (Hotel): activa doble y/o individual.`;
-        }
-
-        const validateMode = (modeKey, label) => {
-          const mode = pricing[modeKey] || {};
-          if (!mode.enabled) return '';
-          if (toInt(mode.rooms ?? 0, 0) < 1) {
-            return `Linea ${i + 1} (Hotel): habitaciones ${label} debe ser >= 1.`;
-          }
-          if (toNumber(mode.net_price_per_night) <= 0) {
-            return `Linea ${i + 1} (Hotel): neto por noche (${label}) debe ser > 0.`;
-          }
-          if (mode.pvp_manual_enabled && toNumber(mode.pvp_price_per_night) <= 0) {
-            return `Linea ${i + 1} (Hotel): PVP manual (${label}) debe ser > 0.`;
-          }
-          return '';
-        };
-
-        const doubleError = validateMode('double', 'doble');
-        if (doubleError) return doubleError;
-        const singleError = validateMode('single', 'individual');
-        if (singleError) return singleError;
-
-        const doubleRooms = doubleEnabled ? Math.max(0, toInt(pricing.double?.rooms ?? 0, 0)) : 0;
-        const singleRooms = singleEnabled ? Math.max(0, toInt(pricing.single?.rooms ?? 0, 0)) : 0;
-        const allocatedPax = (doubleEnabled ? doubleRooms * 2 : 0) + (singleEnabled ? singleRooms : 0);
-        if (allocatedPax !== pax) {
-          return `Linea ${i + 1} (Hotel): revisa la asignacion de pax (doble/individual).`;
-        }
-
-        const giavTotal = toNumber(it.giav_pricing?.giav_total_pvp ?? 0);
-        if (giavTotal <= 0) return `Linea ${i + 1} (Hotel): total para GIAV debe ser > 0.`;
-      } else if (it.service_type === 'golf') {
-        if (toInt(it.green_fees_per_person, 1) < 1) {
-          return `Linea ${i + 1} (Golf): define green-fees por jugador.`;
-        }
-      } else {
-        if (toInt(it.quantity, 1) < 1) return `Linea ${i + 1}: cantidad debe ser >= 1.`;
-      }
-
-      if (toNumber(it.unit_sell_price) <= 0) return `Linea ${i + 1}: PVP unitario debe ser > 0.`;
+    if (items.some((it) => it.service_type === 'golf') && playersCount <= 0) {
+      errors.push('Define "Jugadores" en Datos básicos.');
     }
 
-    if (totals.totals_sell_price <= 0) return 'El PVP total debe ser > 0.';
-    return '';
+    if (totals.totals_sell_price <= 0) {
+      errors.push('El PVP total debe ser > 0.');
+    }
+
+    return { errors, serviceErrors };
   };
 
   const scrollToTop = () => {
@@ -1004,50 +1134,58 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
     }
   };
 
-  const handleValidationError = (msg) => {
-    window.setTimeout(() => {
-      const match = msg.match(/Linea\s+(\d+)/i);
-      if (match) {
-        const index = Math.max(0, parseInt(match[1], 10) - 1);
-        setHighlightIndex(index);
-        const card = document.querySelector(`[data-service-index="${index}"]`);
-        if (card) {
-          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          focusFirstInput(card);
-          return;
-        }
-      } else {
-        setHighlightIndex(null);
-      }
+  const handleValidationError = (serviceErrors, globalErrors) => {
+    if (serviceErrors.length > 0) {
+      scrollToService(serviceErrors[0].index);
+      return;
+    }
+
+    if (globalErrors.length > 0) {
+      setHighlightIndex(null);
       const fallback = document.querySelector('.services-step');
       if (fallback) {
         fallback.scrollIntoView({ behavior: 'smooth', block: 'start' });
         focusFirstInput(fallback);
       }
-    }, 50);
+    }
   };
 
   const continueNext = () => {
-    const msg = validate();
-    const hasGolf = items.some((it) => it.service_type === 'golf');
-    if (hasGolf && playersCount <= 0) {
-      const err = 'Hay servicios de golf pero "Jugadores" en Datos basicos esta vacio o a 0. Define el numero de jugadores en Datos basicos.';
-      setError(err);
-      setActionError('Revisa los campos marcados.');
-      handleValidationError(err);
+    const { errors: globalErrors, serviceErrors } = validateAll();
+    setHasAttemptedContinue(true);
+
+    if (serviceErrors.length > 0 || globalErrors.length > 0) {
+      const message = serviceErrors.length > 0
+        ? `Faltan datos en ${serviceErrors.length} servicios. Te llevo al primero.`
+        : globalErrors[0];
+      setActionError(message);
+      setErrorSummary(serviceErrors);
+      handleValidationError(serviceErrors, globalErrors);
       return;
     }
-    if (msg) {
-      setError(msg);
-      setActionError('Revisa los campos marcados.');
-      handleValidationError(msg);
-      return;
-    }
-    setError('');
+
     setActionError('');
+    setErrorSummary([]);
     setHighlightIndex(null);
     onNext({ items, totals });
   };
+
+  const validationSummary = useMemo(() => validateAll(), [validationMap, items, playersCount, totals.totals_sell_price]);
+  const hasBlockingIssues = validationSummary.serviceErrors.length > 0 || validationSummary.errors.length > 0;
+  const renderSummaryValue = (value, { missing, tooltip } = {}) => {
+    if (missing) {
+      return <span className="services-summary__value services-summary__value--missing" title={tooltip}>—</span>;
+    }
+    return <span className="services-summary__value">{value}</span>;
+  };
+
+  useEffect(() => {
+    if (!hasAttemptedContinue) return;
+    if (!hasBlockingIssues) {
+      setActionError('');
+      setErrorSummary([]);
+    }
+  }, [hasAttemptedContinue, hasBlockingIssues]);
 
   return (
     <Card className="services-step">
@@ -1059,24 +1197,6 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
       </CardHeader>
 
       <CardBody ref={topRef}>
-        {error && (
-          <Notice
-            status="error"
-            isDismissible
-            onRemove={() => {
-              setError('');
-              setActionError('');
-              setHighlightIndex(null);
-            }}
-          >
-            {error}
-          </Notice>
-        )}
-        {actionError && (
-          <Notice status="error" isDismissible={false} className="services-step__alert">
-            {actionError}
-          </Notice>
-        )}
 
         {/* Global markup bar */}
         <div className="services-toolbar">
@@ -1111,10 +1231,16 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
         <div className="services-items">
           {items.map((it, idx) => {
             const isOpen = openIndex === idx;
+            const validation = validationMap[idx] || { issues: [], status: 'pending', hasMappingWarning: false, fieldErrors: {} };
+            const status = validation.status;
+            const summaryLine = buildServiceSummary(it);
+            const pendingSummary = validation.hasMappingWarning ? 'Proveedor GIAV pendiente' : '';
+            const missingDetails = validation.issues.slice(0, 2).join(' · ');
+            const fieldErrors = validation.fieldErrors || {};
             return (
             <div
               key={idx}
-              className={`service-card ${highlightIndex === idx ? 'is-error' : ''}`.trim()}
+              className={`service-card service-card--status-${status} ${isOpen ? 'is-open' : ''} ${highlightIndex === idx ? 'is-error' : ''} ${flashIndex === idx ? 'is-highlighted' : ''}`.trim()}
               data-service-index={idx}
             >
               <div className="service-card__header">
@@ -1122,24 +1248,23 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                   <div className="service-card__eyebrow">Servicio {idx + 1}</div>
                   <div className="service-card__name">
                     {SERVICE_TYPES.find((type) => type.value === it.service_type)?.label || 'Servicio'} ·{' '}
-                    {it.title?.trim() || 'Sin título'}
+                    {it.title?.trim() || it.display_name?.trim() || 'Sin título'}
                   </div>
+                  <div className="service-card__summary">{summaryLine}</div>
+                  {status === 'pending' && pendingSummary && (
+                    <div className="service-card__missing">{pendingSummary}</div>
+                  )}
+                  {status === 'error' && missingDetails && (
+                    <div className="service-card__missing">{missingDetails}</div>
+                  )}
                 </div>
 
                 <div className="service-card__meta">
-                  {(it.service_type === 'hotel' || it.service_type === 'golf') && (
-                      <div
-                        className={`service-card__badge service-card__badge--${it.giav_mapping_status}`}
-                      >
-                        {it.giav_mapping_status === 'active'
-                          ? (String(it.giav_supplier_id || '') === DEFAULT_SUPPLIER_ID
-                            ? 'Proveedor genérico (GIAV)'
-                            : 'OK')
-                          : (it.giav_mapping_status === 'needs_review'
-                            ? 'Pendiente de revisar'
-                            : 'Sin mapeo GIAV')}
-                      </div>
-                  )}
+                  <div className={`service-card__badge service-card__badge--${status}`}>
+                    {status === 'completed' && '✓ OK'}
+                    {status === 'pending' && 'Pendiente'}
+                    {status === 'error' && `${validation.issues.length} errores`}
+                  </div>
 
                   <Button
                     variant="tertiary"
@@ -1167,12 +1292,14 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                   <div className="service-card__section">
                 <div className="service-card__section-title">Selección y contexto</div>
                 <div className="service-card__grid service-card__grid--context">
-                  <SelectControl
-                    label="Tipo de servicio"
-                    value={it.service_type}
-                    options={SERVICE_TYPES}
-                    onChange={(v) => updateItem(idx, { service_type: v })}
-                  />
+                  <div className="service-card__field">
+                    <SelectControl
+                      label="Tipo de servicio"
+                      value={it.service_type}
+                      options={SERVICE_TYPES}
+                      onChange={(v) => updateItem(idx, { service_type: v })}
+                    />
+                  </div>
 
                   {(it.service_type === 'hotel' || it.service_type === 'golf') ? (
                     <>
@@ -1213,11 +1340,12 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                       />
 
                       {!it.use_manual_entry ? (
-                        <CatalogSelect
-                          label={it.service_type === 'hotel' ? 'Hotel' : 'Campo de golf'}
-                          type={it.service_type === 'hotel' ? 'hotel' : 'golf'}
-                          valueTitle={it.title}
-                          onPick={async (r) => {
+                        <div className={`service-card__field ${fieldErrors.title ? 'is-error' : ''}`}>
+                          <CatalogSelect
+                            label={it.service_type === 'hotel' ? 'Hotel' : 'Campo de golf'}
+                            type={it.service_type === 'hotel' ? 'hotel' : 'golf'}
+                            valueTitle={it.title}
+                            onPick={async (r) => {
                             const wpType = it.service_type === 'hotel' ? 'hotel' : 'course';
                             updateItem(idx, {
                               title: r.title,
@@ -1261,14 +1389,19 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                               });
                             }
                           }}
-                        />
+                          />
+                          {fieldErrors.title && <div className="service-card__field-error">{fieldErrors.title}</div>}
+                        </div>
                       ) : (
-                        <TextControl
-                          label={it.service_type === 'hotel' ? 'Hotel (manual) *' : 'Campo de golf (manual) *'}
-                          value={it.display_name || ''}
-                          onChange={(v) => updateItem(idx, { display_name: v, title: v })}
-                          placeholder={it.service_type === 'hotel' ? 'Ej: Hotel X (fuera de cat├ílogo)' : 'Ej: Campo Y (fuera de cat├ílogo)'}
-                        />
+                        <div className={`service-card__field ${fieldErrors.title ? 'is-error' : ''}`}>
+                          <TextControl
+                            label={it.service_type === 'hotel' ? 'Hotel (manual) *' : 'Campo de golf (manual) *'}
+                            value={it.display_name || ''}
+                            onChange={(v) => updateItem(idx, { display_name: v, title: v })}
+                            placeholder={it.service_type === 'hotel' ? 'Ej: Hotel X (fuera de cat├ílogo)' : 'Ej: Campo Y (fuera de cat├ílogo)'}
+                          />
+                          {fieldErrors.title && <div className="service-card__field-error">{fieldErrors.title}</div>}
+                        </div>
                       )}
 
                       <div className="service-card__supplier">
@@ -1309,37 +1442,45 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                                 });
                               }}
                             />
+                            {fieldErrors.supplier && <div className="service-card__field-error">{fieldErrors.supplier}</div>}
                           </>
                         )}
                       </div>
                     </>
                   ) : (
-                    <TextControl
-                      label="T├¡tulo / descripci├│n *"
-                      value={it.title}
-                      onChange={(v) => updateItem(idx, { title: v })}
-                    />
+                    <div className={`service-card__field ${fieldErrors.title ? 'is-error' : ''}`}>
+                      <TextControl
+                        label="T├¡tulo / descripci├│n *"
+                        value={it.title}
+                        onChange={(v) => updateItem(idx, { title: v })}
+                      />
+                      {fieldErrors.title && <div className="service-card__field-error">{fieldErrors.title}</div>}
+                    </div>
                   )}
 
                   {it.service_type === 'hotel' && (
-                    <TextControl
-                      label="Tipo de habitación"
-                      value={it.hotel_room_type || ''}
-                      onChange={(v) => updateItem(idx, { hotel_room_type: v })}
-                      placeholder="Deluxe / Sea View..."
-                    />
+                    <div className="service-card__field">
+                      <TextControl
+                        label="Tipo de habitación"
+                        value={it.hotel_room_type || ''}
+                        onChange={(v) => updateItem(idx, { hotel_room_type: v })}
+                        placeholder="Deluxe / Sea View..."
+                      />
+                    </div>
                   )}
 
                   {it.service_type === 'hotel' && (
-                    <SelectControl
-                      label="Régimen"
-                      value={it.hotel_regimen || ''}
-                      options={[
-                        { label: 'Seleccionar', value: '' },
-                        ...HOTEL_REGIMENS,
-                      ]}
-                      onChange={(v) => updateItem(idx, { hotel_regimen: v })}
-                    />
+                    <div className="service-card__field">
+                      <SelectControl
+                        label="Régimen"
+                        value={it.hotel_regimen || ''}
+                        options={[
+                          { label: 'Seleccionar', value: '' },
+                          ...HOTEL_REGIMENS,
+                        ]}
+                        onChange={(v) => updateItem(idx, { hotel_regimen: v })}
+                      />
+                    </div>
                   )}
                 </div>
               </div>
@@ -1360,74 +1501,83 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                   )}
                 </div>
                 <div className="service-card__grid service-card__grid--dates">
-                  <TextControl
-                    label="Fecha inicio"
-                    type="date"
-                    value={it.start_date}
-                    onChange={(v) => onChangeServiceStartDate(idx, v)}
-                  />
+                  <div className="service-card__field">
+                    <TextControl
+                      label="Fecha inicio"
+                      type="date"
+                      value={it.start_date}
+                      onChange={(v) => onChangeServiceStartDate(idx, v)}
+                    />
+                  </div>
 
-                  <TextControl
-                    id={`wp-travel-end-date-${idx}`}
-                    label="Fecha fin"
-                    type="date"
-                    value={it.end_date}
-                    onChange={(v) => onChangeServiceEndDate(idx, v)}
-                    min={it.start_date || undefined}
-                  />
+                  <div className="service-card__field">
+                    <TextControl
+                      id={`wp-travel-end-date-${idx}`}
+                      label="Fecha fin"
+                      type="date"
+                      value={it.end_date}
+                      onChange={(v) => onChangeServiceEndDate(idx, v)}
+                      min={it.start_date || undefined}
+                    />
+                  </div>
 
                   {it.service_type === 'hotel' ? (
                     <>
-                      <TextControl
-                        label="Noches"
-                        type="number"
-                        min={0}
-                        value={String(it.hotel_nights ?? computeNights(it, basics))}
-                        onChange={(v) => onChangeServiceNights(idx, v)}
-                      />
+                      <div className="service-card__field">
+                        <TextControl
+                          label="Noches"
+                          type="number"
+                          min={0}
+                          value={String(it.hotel_nights ?? computeNights(it, basics))}
+                          onChange={(v) => onChangeServiceNights(idx, v)}
+                        />
+                      </div>
                     </>
                   ) : (
                     it.service_type === 'golf' ? (
                       <>
-                        <TextControl
-                          label="Jugadores"
-                          type="number"
-                          min={1}
-                          value={String(playersCount || pax)}
-                          disabled
-                          help="Definido en Datos basicos"
-                        />
-                        <TextControl
-                          label="Green-fees por jugador *"
-                          type="number"
-                          min={1}
-                          value={String(it.green_fees_per_person ?? '')}
-                          onChange={(v) => updateItem(idx, { green_fees_per_person: v })}
-                        />
+                        <div className="service-card__field">
+                          <TextControl
+                            label="Jugadores"
+                            type="number"
+                            min={1}
+                            value={String(playersCount || pax)}
+                            disabled
+                            help="Definido en Datos basicos"
+                          />
+                        </div>
+                        <div className={`service-card__field ${fieldErrors.greenFees ? 'is-error' : ''}`}>
+                          <TextControl
+                            label="Green-fees por jugador *"
+                            type="number"
+                            min={1}
+                            value={String(it.green_fees_per_person ?? '')}
+                            onChange={(v) => updateItem(idx, { green_fees_per_person: v })}
+                          />
+                          {fieldErrors.greenFees && <div className="service-card__field-error">{fieldErrors.greenFees}</div>}
+                        </div>
                         <div className="service-card__golf-summary">
                           Total green-fees (interno): {toInt(playersCount || pax, 1)} x {toInt(it.green_fees_per_person, 0)} ={' '}
                           {toInt(it.total_green_fees, 0)}
                         </div>
-                        {toInt(it.green_fees_per_person, 0) < 1 && (
-                          <Notice status="warning" isDismissible={false}>
-                            Pendiente de revisar: completa los green-fees por jugador.
-                          </Notice>
-                        )}
                       </>
                     ) : (
-                      <TextControl
-                        label={
-                          it.service_type === 'transfer'
-                            ? 'Cantidad (servicios)'
-                            : it.service_type === 'package'
-                            ? 'Cantidad (paquetes)'
-                            : 'Cantidad'
-                        }
-                        type="number"
-                        min={1}
-                        value={String(it.quantity)}
-                        onChange={(v) => updateItem(idx, { quantity: v })}
-                      />
+                      <div className={`service-card__field ${fieldErrors.quantity ? 'is-error' : ''}`}>
+                        <TextControl
+                          label={
+                            it.service_type === 'transfer'
+                              ? 'Cantidad (servicios)'
+                              : it.service_type === 'package'
+                              ? 'Cantidad (paquetes)'
+                              : 'Cantidad'
+                          }
+                          type="number"
+                          min={1}
+                          value={String(it.quantity)}
+                          onChange={(v) => updateItem(idx, { quantity: v })}
+                        />
+                        {fieldErrors.quantity && <div className="service-card__field-error">{fieldErrors.quantity}</div>}
+                      </div>
                     )
                   )}
                 </div>
@@ -1435,6 +1585,11 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
 
               <div className="service-card__section service-card__section--pricing">
                 <div className="service-card__section-title">Pricing</div>
+                {fieldErrors.pricing && (
+                  <div className="service-card__field-error service-card__field-error--inline">
+                    {fieldErrors.pricing}
+                  </div>
+                )}
                 {it.service_type === 'hotel' ? (
                   <HotelPricingPanel
                     item={it}
@@ -1447,74 +1602,91 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                   />
                 ) : (
                   <div className="service-card__pricing">
-                    <TextControl
-                      label="Coste neto (unit.)"
-                      value={String(it.unit_cost_net)}
-                      onChange={(v) => updateItem(idx, { unit_cost_net: v })}
-                      placeholder="120"
-                    />
+                    <div className="service-card__field">
+                      <TextControl
+                        label="Coste neto (unit.)"
+                        value={String(it.unit_cost_net)}
+                        onChange={(v) => updateItem(idx, { unit_cost_net: v })}
+                        placeholder="120"
+                      />
+                    </div>
 
-                    <ToggleControl
-                      label="Usar margen"
-                      checked={!!it.use_markup}
-                      onChange={() => updateItem(idx, { use_markup: !it.use_markup })}
-                    />
+                    <div className="service-card__field">
+                      <ToggleControl
+                        label="Usar margen"
+                        checked={!!it.use_markup}
+                        onChange={() => updateItem(idx, { use_markup: !it.use_markup })}
+                      />
+                    </div>
 
                     {it.use_markup && (
-                      <TextControl
-                        label="Margen (%)"
-                        type="number"
-                        min={0}
-                        value={String(it.markup_pct ?? globalMarkupPct)}
-                        onChange={(v) => updateItem(idx, { markup_pct: v })}
-                      />
+                      <div className="service-card__field">
+                        <TextControl
+                          label="Margen (%)"
+                          type="number"
+                          min={0}
+                          value={String(it.markup_pct ?? globalMarkupPct)}
+                          onChange={(v) => updateItem(idx, { markup_pct: v })}
+                        />
+                      </div>
                     )}
 
-                    <ToggleControl
-                      label="PVP manual"
-                      checked={!!it.lock_sell_price}
-                      onChange={() => updateItem(idx, { lock_sell_price: !it.lock_sell_price })}
-                    />
+                    <div className="service-card__field">
+                      <ToggleControl
+                        label="PVP manual"
+                        checked={!!it.lock_sell_price}
+                        onChange={() => updateItem(idx, { lock_sell_price: !it.lock_sell_price })}
+                      />
+                    </div>
 
-                    <TextControl
-                      label="PVP (unit.)"
-                      value={String(it.unit_sell_price)}
-                      onChange={(v) => updateItem(idx, { unit_sell_price: v })}
-                      placeholder="165"
-                      disabled={!it.lock_sell_price}
-                    />
+                    <div className={`service-card__field ${fieldErrors.unitSell ? 'is-error' : ''}`}>
+                      <TextControl
+                        label="PVP (unit.)"
+                        value={String(it.unit_sell_price)}
+                        onChange={(v) => updateItem(idx, { unit_sell_price: v })}
+                        placeholder="165"
+                        disabled={!it.lock_sell_price}
+                      />
+                      {fieldErrors.unitSell && <div className="service-card__field-error">{fieldErrors.unitSell}</div>}
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* Paquete: detalle de qu├® incluye */}
               {it.service_type === 'package' && (
-                <div className="service-card__package">
-                  <TextControl
-                    label="Incluye (una l├¡nea por item)"
-                    value={it.package_components_text || ''}
-                    onChange={(v) => updateItem(idx, { package_components_text: v })}
-                    placeholder={`3 noches\n2 green-fees\nDesayuno incluido`}
-                  />
+                <div className="service-card__section service-card__section--package">
+                  <div className="service-card__section-title">Detalle del paquete</div>
+                  <div className="service-card__package">
+                    <TextControl
+                      label="Incluye (una l├¡nea por item)"
+                      value={it.package_components_text || ''}
+                      onChange={(v) => updateItem(idx, { package_components_text: v })}
+                      placeholder={`3 noches\n2 green-fees\nDesayuno incluido`}
+                    />
+                  </div>
                 </div>
               )}
 
               <div className="service-card__section service-card__section--notes">
                 <div className="service-card__section-title">Notas</div>
-                <div className="service-card__notes">
-                  <TextControl
-                    label="Notas para el cliente (itinerario)"
-                    value={it.notes_public || ''}
-                    onChange={(v) => updateItem(idx, { notes_public: v })}
-                    placeholder="Incluye desayuno. Check-in 15:00."
-                  />
-                  <TextControl
-                    label="Notas internas (solo uso interno)"
-                    value={it.notes_internal || ''}
-                    onChange={(v) => updateItem(idx, { notes_internal: v })}
-                    placeholder="Neto negociado, release 14D."
-                  />
-                </div>
+                <details className="service-card__notes-details">
+                  <summary>Mostrar notas</summary>
+                  <div className="service-card__notes">
+                    <TextControl
+                      label="Notas para el cliente (itinerario)"
+                      value={it.notes_public || ''}
+                      onChange={(v) => updateItem(idx, { notes_public: v })}
+                      placeholder="Incluye desayuno. Check-in 15:00."
+                    />
+                    <TextControl
+                      label="Notas internas (solo uso interno)"
+                      value={it.notes_internal || ''}
+                      onChange={(v) => updateItem(idx, { notes_internal: v })}
+                      placeholder="Neto negociado, release 14D."
+                    />
+                  </div>
+                </details>
               </div>
                 </div>
               )}
@@ -1532,9 +1704,13 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
         <div className="services-summary">
           <div>
             <div className="services-summary__label">Total viaje</div>
-            <div className="services-summary__value">
-              {currency} {round2(pricingSummary.totalTrip).toFixed(2)}
-            </div>
+            {renderSummaryValue(
+              `${currency} ${round2(pricingSummary.totalTrip).toFixed(2)}`,
+              {
+                missing: totals.totals_sell_price <= 0,
+                tooltip: 'Completa servicios para calcular.',
+              }
+            )}
             <div className="services-summary__meta">
               Jugadores: {pricingSummary.playersCount} | No jugadores: {pricingSummary.nonPlayersCount}
             </div>
@@ -1543,62 +1719,90 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
           {pricingSummary.playersCount > 0 && (
             <div>
               <div className="services-summary__label">Precio jugador en doble</div>
-              <div className="services-summary__value">
-                {currency} {round2(pricingSummary.pricePlayerDouble || 0).toFixed(2)}
-              </div>
+              {renderSummaryValue(
+                `${currency} ${round2(pricingSummary.pricePlayerDouble || 0).toFixed(2)}`,
+                {
+                  missing: pricingSummary.playersCount <= 0,
+                  tooltip: 'Completa jugadores y servicios para calcular.',
+                }
+              )}
             </div>
           )}
 
-          <div>
-            <div className="services-summary__label">Precio no jugador en doble</div>
-            <div className="services-summary__value">
-              {currency} {round2(pricingSummary.priceNonPlayerDouble || 0).toFixed(2)}
+          {pricingSummary.nonPlayersCount > 0 && (
+            <div>
+              <div className="services-summary__label">Precio no jugador en doble</div>
+              {renderSummaryValue(
+                `${currency} ${round2(pricingSummary.priceNonPlayerDouble || 0).toFixed(2)}`,
+                {
+                  missing: pricingSummary.nonPlayersCount <= 0,
+                  tooltip: 'Completa no jugadores para calcular.',
+                }
+              )}
             </div>
-          </div>
+          )}
 
           {pricingSummary.hasSingleSupplement && (
             <div>
               <div className="services-summary__label">Suplemento individual</div>
-              <div className="services-summary__value">
-                {currency} {round2(pricingSummary.supplementSingle || 0).toFixed(2)}
-              </div>
+              {renderSummaryValue(
+                `${currency} ${round2(pricingSummary.supplementSingle || 0).toFixed(2)}`,
+                {
+                  missing: !pricingSummary.hasSingleSupplement,
+                  tooltip: 'Completa habitaciones para calcular.',
+                }
+              )}
             </div>
           )}
-
-          <div>
-            <div className="services-summary__label">Coste total</div>
-            <div className="services-summary__value">
-              {currency} {totals.totals_cost_net.toFixed(2)}
-            </div>
-          </div>
-
-          <div>
-            <div className="services-summary__label">Margen</div>
-            <div className="services-summary__value">
-              {currency} {totals.totals_margin_abs.toFixed(2)} ({totals.totals_margin_pct.toFixed(2)}%)
-            </div>
-          </div>
         </div>
 
-        <div className="services-actions">
-          {actionError && (
-            <div className="services-actions__notice">
-              <Notice status="error" isDismissible={false}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                  <span>{actionError}</span>
-                  <Button variant="link" onClick={scrollToTop}>
-                    Ver errores
-                  </Button>
+        <div className="services-footer">
+          {(actionError || (hasAttemptedContinue && errorSummary.length > 0)) && (
+            <div className="services-footer__errors">
+              <div className="services-footer__errors-header">
+                <span>Error summary</span>
+                <Button variant="link" onClick={scrollToTop}>
+                  Ver arriba
+                </Button>
+              </div>
+              {actionError && <div className="services-footer__errors-message">{actionError}</div>}
+              <ul>
+                {(errorSummary.length > 0 ? errorSummary : validationSummary.serviceErrors).slice(0, 3).map((err) => (
+                  <li key={err.index}>
+                    <button type="button" onClick={() => scrollToService(err.index)}>
+                      {err.title}: {err.details}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {validationSummary.serviceErrors.length > 3 && (
+                <div className="services-footer__errors-more">
+                  +{validationSummary.serviceErrors.length - 3} más
                 </div>
-              </Notice>
+              )}
             </div>
           )}
-          <Button variant="secondary" onClick={onBack}>
-            Volver
-          </Button>
-          <Button variant="primary" onClick={continueNext}>
-            {actionError ? 'Revisa los campos marcados' : 'Continuar'}
-          </Button>
+          <div className="services-footer__bar">
+            <div className="services-footer__left">
+              <Button variant="secondary" onClick={onBack}>
+                Volver
+              </Button>
+            </div>
+            <div className="services-footer__summary">
+              <span>Total viaje</span>
+              <strong>{currency} {round2(pricingSummary.totalTrip).toFixed(2)}</strong>
+            </div>
+            <div className="services-footer__right">
+              <Button
+                variant="primary"
+                onClick={continueNext}
+                disabled={hasBlockingIssues && hasAttemptedContinue}
+                title={hasBlockingIssues ? 'Completa los campos obligatorios para continuar.' : ''}
+              >
+                {actionError ? 'Revisa los campos marcados' : 'Continuar'}
+              </Button>
+            </div>
+          </div>
         </div>
       </CardBody>
     </Card>
