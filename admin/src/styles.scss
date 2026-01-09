@@ -461,6 +461,7 @@
 .services-items {
   display: grid;
   gap: 16px;
+  margin-top: 5px;
 }
 
 .service-card {
@@ -754,7 +755,7 @@ details[open] > .service-card__section-summary::after {
 }
 
 .services-add {
-  margin-top: 16px;
+  margin: 16px;
 }
 
 .services-summary {
