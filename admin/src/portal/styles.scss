@@ -1096,6 +1096,21 @@
   width: 100%;
 }
 
+.service-card .components-text-control__input,
+.service-card .components-select-control__input,
+.service-card .components-textarea-control__input {
+  border: 1px solid var(--casanova-border);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.service-card .components-select-control__input:focus,
+.service-card .components-text-control__input:focus,
+.service-card .components-textarea-control__input:focus {
+  border-color: var(--casanova-muted);
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.4);
+}
+
 .service-card__field {
   display: flex;
   flex-direction: column;
@@ -1172,6 +1187,31 @@
 .service-card__section-summary-meta {
   color: var(--casanova-muted);
   font-size: 12px;
+}
+
+.service-card__section-summary::after {
+  content: 'v';
+  display: inline-block;
+  font-size: 12px;
+  color: var(--casanova-muted);
+  transition: transform 0.2s ease;
+}
+
+details[open] > .service-card__section-summary::after {
+  transform: rotate(180deg);
+}
+
+.service-card__subcard {
+  background: #fff;
+  border: 1px solid var(--casanova-border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-top: 12px;
+}
+
+.service-card__subcard--giav {
+  background: #fff7ed;
+  border-color: #fed7aa;
 }
 
 .services-add {
@@ -1410,6 +1450,37 @@
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.service-card__hotel-giav {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.service-card__hotel-subtitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--casanova-ink);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.service-card__hotel-giav-label {
+  font-size: 12px;
+  color: var(--casanova-muted);
+}
+
+.service-card__hotel-giav-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--casanova-ink);
+}
+
+.service-card__hotel-giav-total {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .service-card__hotel-allocation {

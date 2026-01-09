@@ -605,89 +605,98 @@ function HotelPricingPanel({ item, idx, updateItem, currency, pax, basics, globa
         )}
       </div>
 
-      <details className="service-card__hotel-discounts-collapse">
-        <summary className="service-card__section-summary">
-          <span className="service-card__section-summary-title">Descuentos</span>
-          <span className="service-card__section-summary-meta">{discountSummary}</span>
-        </summary>
-        <div className="service-card__hotel-discounts">
-          <div className="service-card__hotel-discounts-grid">
-            <TextControl
-              label="Descuento (%)"
-              type="number"
-              min={0}
-              max={50}
-              value={String(item.discounts?.discount_pct ?? 0)}
-              onChange={(v) => updateDiscountField('discount_pct', v)}
-            />
-            <TextControl
-              label="Noches gratis (cada)"
-              type="number"
-              min={0}
-              value={String(item.discounts?.free_nights_every ?? '')}
-              onChange={(v) => updateDiscountField('free_nights_every', v)}
-            />
-            <TextControl
-              label="Noches gratis (cantidad)"
-              type="number"
-              min={0}
-              value={String(item.discounts?.free_nights_count ?? '')}
-              onChange={(v) => updateDiscountField('free_nights_count', v)}
-            />
-          </div>
-          {nights > 0 && (
-            <div className="service-card__hotel-discount-summary">
-              Se cobran {nightsPayable} noches de {nights}
+      <div className="service-card__subcard">
+        <details className="service-card__hotel-discounts-collapse">
+          <summary className="service-card__section-summary">
+            <span className="service-card__section-summary-title">Descuentos</span>
+            <span className="service-card__section-summary-meta">{discountSummary}</span>
+          </summary>
+          <div className="service-card__hotel-discounts">
+            <div className="service-card__hotel-discounts-grid">
+              <TextControl
+                label="Descuento (%)"
+                type="number"
+                min={0}
+                max={50}
+                value={String(item.discounts?.discount_pct ?? 0)}
+                onChange={(v) => updateDiscountField('discount_pct', v)}
+              />
+              <TextControl
+                label="Noches gratis (cada)"
+                type="number"
+                min={0}
+                value={String(item.discounts?.free_nights_every ?? '')}
+                onChange={(v) => updateDiscountField('free_nights_every', v)}
+              />
+              <TextControl
+                label="Noches gratis (cantidad)"
+                type="number"
+                min={0}
+                value={String(item.discounts?.free_nights_count ?? '')}
+                onChange={(v) => updateDiscountField('free_nights_count', v)}
+              />
             </div>
-          )}
-        </div>
-      </details>
-
-      <div className="service-card__hotel-giav">
-        <div className="service-card__hotel-subtitle">Total para GIAV</div>
-        <div className="service-card__hotel-giav-grid">
-          <div className="service-card__hotel-giav-total">
-            Total alojamiento (para GIAV): {currency} {round2(item.giav_pricing?.giav_total_pvp || 0).toFixed(2)}
+            {nights > 0 && (
+              <div className="service-card__hotel-discount-summary">
+                Se cobran {nightsPayable} noches de {nights}
+              </div>
+            )}
           </div>
-          <ToggleControl
-            label="Editar total para GIAV"
-            checked={!!item.giav_pricing?.giav_locked}
-            onChange={toggleGiavLocked}
-          />
-          <TextControl
-            label="Total editable"
-            value={String(item.giav_pricing?.giav_total_pvp ?? '')}
-            onChange={(v) => updateGiavTotal(v)}
-            disabled={!item.giav_pricing?.giav_locked}
-          />
-          {item.giav_pricing?.giav_locked && (
-            <Notice status="warning" isDismissible={false}>
-              Este total se enviará a GIAV. No se recalculará automáticamente.
-            </Notice>
-          )}
+        </details>
+      </div>
+
+      <div className="service-card__subcard service-card__subcard--giav">
+        <div className="service-card__hotel-giav">
+          <div className="service-card__hotel-subtitle">Total para GIAV</div>
+          <div className="service-card__hotel-giav-grid">
+            <div className="service-card__hotel-giav-total">
+              <div className="service-card__hotel-giav-label">Total alojamiento (para GIAV)</div>
+              <div className="service-card__hotel-giav-value">
+                {currency} {round2(item.giav_pricing?.giav_total_pvp || 0).toFixed(2)}
+              </div>
+            </div>
+            <ToggleControl
+              label="Editar total para GIAV"
+              checked={!!item.giav_pricing?.giav_locked}
+              onChange={toggleGiavLocked}
+            />
+            <TextControl
+              label="Total editable"
+              value={String(item.giav_pricing?.giav_total_pvp ?? '')}
+              onChange={(v) => updateGiavTotal(v)}
+              disabled={!item.giav_pricing?.giav_locked}
+            />
+            {item.giav_pricing?.giav_locked && (
+              <Notice status="warning" isDismissible={false}>
+                Este total se enviará a GIAV. No se recalculará automáticamente.
+              </Notice>
+            )}
+          </div>
         </div>
       </div>
 
-      <details className="service-card__hotel-notes">
-        <summary className="service-card__section-summary">
-          <span className="service-card__section-summary-title">Notas</span>
-          <span className="service-card__section-summary-meta">{notesSummary}</span>
-        </summary>
-        <div className="service-card__hotel-notes-grid">
-          <TextControl
-            label="Notas para el cliente (itinerario)"
-            value={item.notes_public || ''}
-            onChange={(v) => updateItem(idx, { notes_public: v })}
-            placeholder="Incluye desayuno. Check-in 15:00."
-          />
-          <TextControl
-            label="Notas internas (solo uso interno)"
-            value={item.notes_internal || ''}
-            onChange={(v) => updateItem(idx, { notes_internal: v })}
-            placeholder="Neto negociado, release 14D."
-          />
-        </div>
-      </details>
+      <div className="service-card__subcard">
+        <details className="service-card__hotel-notes">
+          <summary className="service-card__section-summary">
+            <span className="service-card__section-summary-title">Notas</span>
+            <span className="service-card__section-summary-meta">{notesSummary}</span>
+          </summary>
+          <div className="service-card__hotel-notes-grid">
+            <TextControl
+              label="Notas para el cliente (itinerario)"
+              value={item.notes_public || ''}
+              onChange={(v) => updateItem(idx, { notes_public: v })}
+              placeholder="Incluye desayuno. Check-in 15:00."
+            />
+            <TextControl
+              label="Notas internas (solo uso interno)"
+              value={item.notes_internal || ''}
+              onChange={(v) => updateItem(idx, { notes_internal: v })}
+              placeholder="Neto negociado, release 14D."
+            />
+          </div>
+        </details>
+      </div>
     </div>
   );
 }
@@ -1304,44 +1313,6 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
 
                   {(it.service_type === 'hotel' || it.service_type === 'golf') ? (
                     <>
-                      <div className="service-card__field service-card__field--toggle">
-                        <ToggleControl
-                          label="Entrada manual (fuera de catálogo)"
-                          checked={!!it.use_manual_entry}
-                          onChange={() => {
-                            const next = !it.use_manual_entry;
-
-                            if (next) {
-                              const manualLabel = it.display_name || it.title || '';
-                              updateItem(idx, {
-                                use_manual_entry: true,
-                                wp_object_type: 'manual',
-                                wp_object_id: 0,
-                                show_supplier_picker: true,
-                                giav_entity_type: 'supplier',
-                                giav_entity_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
-                                giav_mapping_status: it.giav_supplier_id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
-                                giav_supplier_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
-                                giav_supplier_name: it.giav_supplier_name || DEFAULT_SUPPLIER_NAME,
-                                supplier_override: false,
-                                display_name: manualLabel,
-                                title: manualLabel,
-                              });
-                            } else {
-                              updateItem(idx, {
-                                use_manual_entry: false,
-                                wp_object_type: null,
-                                wp_object_id: null,
-                                show_supplier_picker: false,
-                                giav_mapping_status: 'missing',
-                                supplier_override: false,
-                                display_name: '',
-                              });
-                            }
-                          }}
-                        />
-                      </div>
-
                       {!it.use_manual_entry ? (
                         <div className={`service-card__field ${fieldErrors.title ? 'is-error' : ''}`}>
                           <CatalogSelect
@@ -1406,6 +1377,44 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                           {fieldErrors.title && <div className="service-card__field-error">{fieldErrors.title}</div>}
                         </div>
                       )}
+
+                      <div className="service-card__field service-card__field--toggle">
+                        <ToggleControl
+                          label="Entrada manual (fuera de catálogo)"
+                          checked={!!it.use_manual_entry}
+                          onChange={() => {
+                            const next = !it.use_manual_entry;
+
+                            if (next) {
+                              const manualLabel = it.display_name || it.title || '';
+                              updateItem(idx, {
+                                use_manual_entry: true,
+                                wp_object_type: 'manual',
+                                wp_object_id: 0,
+                                show_supplier_picker: true,
+                                giav_entity_type: 'supplier',
+                                giav_entity_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
+                                giav_mapping_status: it.giav_supplier_id === DEFAULT_SUPPLIER_ID ? 'needs_review' : 'active',
+                                giav_supplier_id: it.giav_supplier_id || DEFAULT_SUPPLIER_ID,
+                                giav_supplier_name: it.giav_supplier_name || DEFAULT_SUPPLIER_NAME,
+                                supplier_override: false,
+                                display_name: manualLabel,
+                                title: manualLabel,
+                              });
+                            } else {
+                              updateItem(idx, {
+                                use_manual_entry: false,
+                                wp_object_type: null,
+                                wp_object_id: null,
+                                show_supplier_picker: false,
+                                giav_mapping_status: 'missing',
+                                supplier_override: false,
+                                display_name: '',
+                              });
+                            }
+                          }}
+                        />
+                      </div>
 
                       <div className="service-card__supplier">
                         {!isSupplierPickerVisible(it) && (

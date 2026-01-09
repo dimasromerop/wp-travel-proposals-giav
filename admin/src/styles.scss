@@ -628,6 +628,21 @@
   width: 100%;
 }
 
+.service-card .components-text-control__input,
+.service-card .components-select-control__input,
+.service-card .components-textarea-control__input {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.service-card .components-select-control__input:focus,
+.service-card .components-text-control__input:focus,
+.service-card .components-textarea-control__input:focus {
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.4);
+}
+
 .service-card__field {
   display: flex;
   flex-direction: column;
@@ -711,6 +726,31 @@
 .service-card__section-summary-meta {
   color: #64748b;
   font-size: 12px;
+}
+
+.service-card__section-summary::after {
+  content: 'v';
+  display: inline-block;
+  font-size: 12px;
+  color: #94a3b8;
+  transition: transform 0.2s ease;
+}
+
+details[open] > .service-card__section-summary::after {
+  transform: rotate(180deg);
+}
+
+.service-card__subcard {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-top: 12px;
+}
+
+.service-card__subcard--giav {
+  background: #fff7ed;
+  border-color: #fed7aa;
 }
 
 .services-add {
@@ -1393,6 +1433,14 @@
   gap: 12px;
 }
 
+.service-card__hotel-subtitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 .service-card__hotel-giav-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1401,6 +1449,18 @@
 }
 
 .service-card__hotel-giav-total {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.service-card__hotel-giav-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.service-card__hotel-giav-value {
+  font-size: 16px;
   font-weight: 700;
   color: #0f172a;
 }
