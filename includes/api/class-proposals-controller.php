@@ -76,65 +76,51 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
     public function list_proposals( WP_REST_Request $request ) {
         $repo = new WP_Travel_Proposal_Repository();
 
-        $search = $request->get_param( 'search' );
-        $author = $request->get_param( 'author' );
-        $page = $request->get_param( 'page' );
-        $per_page = $request->get_param( 'per_page' );
+        $page = max( 1, (int) $request->get_param( 'page' ) );
+        $per_page = (int) $request->get_param( 'per_page' );
+        $per_page = $per_page > 0 ? min( 200, $per_page ) : 50;
 
-        if ( $search !== null || $author !== null || $page !== null || $per_page !== null ) {
+        $search = sanitize_text_field( (string) $request->get_param( 'q' ) );
+        if ( $search === '' ) {
             $search = sanitize_text_field( (string) $request->get_param( 'search' ) );
-            $author = sanitize_text_field( (string) $request->get_param( 'author' ) );
-            $page = max( 1, (int) $request->get_param( 'page' ) );
-            $per_page = (int) $request->get_param( 'per_page' );
-            $per_page = $per_page > 0 ? min( 50, $per_page ) : 20;
-            $order_by = sanitize_text_field( (string) $request->get_param( 'order_by' ) ?: 'updated_at' );
-            $order = sanitize_text_field( (string) $request->get_param( 'order' ) ?: 'desc' );
-
-            $result = $repo->get_admin_list( $search, $page, $per_page, [
-                'author'   => $author,
-                'order_by' => $order_by,
-                'order'    => $order,
-            ] );
-            $items = array_map( function ( $proposal ) {
-                $proposal['public_url'] = wp_travel_giav_get_public_proposal_url( $proposal['proposal_token'] );
-                return $proposal;
-            }, $result['items'] );
-
-            return $this->response( [
-                'items'       => $items,
-                'total'       => $result['total'],
-                'page'        => $result['page'],
-                'per_page'    => $result['per_page'],
-                'total_pages' => $result['total_page'],
-            ] );
+        }
+        $search = ltrim( $search, '#' );
+        $status = sanitize_key( (string) $request->get_param( 'status' ) );
+        if ( $status === 'all' ) {
+            $status = '';
         }
 
-        $order_by = sanitize_text_field( (string) $request->get_param( 'order_by' ) ?: 'updated_at' );
-        $order = sanitize_text_field( (string) $request->get_param( 'order' ) ?: 'desc' );
-        $limit = (int) $request->get_param( 'limit' );
-        $offset = (int) $request->get_param( 'offset' );
-        $search = sanitize_text_field( (string) $request->get_param( 'search' ) );
-        $author = sanitize_text_field( (string) $request->get_param( 'author' ) );
+        $sort = sanitize_text_field( (string) $request->get_param( 'sort' ) ?: 'updated_at' );
+        $allowed_sort = [ 'id', 'proposal_title', 'customer_name', 'status', 'updated_at', 'totals_sell_price' ];
+        $order_by = in_array( $sort, $allowed_sort, true ) ? $sort : 'updated_at';
 
-        $limit = $limit > 0 ? $limit : 50;
-        $offset = max( 0, $offset );
+        $order = strtoupper( (string) $request->get_param( 'order' ) ?: 'DESC' );
+        $order = in_array( $order, [ 'ASC', 'DESC' ], true ) ? $order : 'DESC';
 
-        $proposals = $repo->list_proposals( [
-            'order_by' => $order_by,
-            'order'    => $order,
-            'limit'    => $limit,
-            'offset'   => $offset,
-            'search'   => $search,
-            'author'   => $author,
-        ] );
+        $result = $repo->get_admin_list(
+            $search,
+            $page,
+            $per_page,
+            [
+                'status'   => $status,
+                'order_by' => $order_by,
+                'order'    => $order,
+            ]
+        );
 
-        $proposals = array_map( function ( $proposal ) {
+        $items = array_map( function ( $proposal ) {
             $proposal['public_url'] = wp_travel_giav_get_public_proposal_url( $proposal['proposal_token'] );
             return $proposal;
-        }, $proposals );
+        }, $result['items'] );
+
+        $total_pages = isset( $result['total_pages'] ) ? $result['total_pages'] : (int) ceil( $result['total'] / max( 1, $result['per_page'] ?? $per_page ) );
 
         return $this->response( [
-            'items' => $proposals,
+            'items'       => $items,
+            'total'       => $result['total'],
+            'page'        => $result['page'],
+            'per_page'    => $result['per_page'],
+            'total_pages' => $total_pages,
         ] );
     }
 

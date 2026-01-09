@@ -178,12 +178,33 @@ class WP_Travel_Proposal_Repository extends WP_Travel_GIAV_DB {
         }
 
         if ( $search !== '' ) {
-            $like = '%' . $this->wpdb->esc_like( $search ) . '%';
-            $where .= " AND (customer_name LIKE %s OR customer_email LIKE %s OR proposal_token LIKE %s OR CAST(id AS CHAR) LIKE %s)";
+            $normalized = ltrim( trim( $search ), '#' );
+            $like = '%' . $this->wpdb->esc_like( $normalized ) . '%';
+            $search_clauses = [
+                'p.customer_name LIKE %s',
+                'p.customer_email LIKE %s',
+                'p.proposal_token LIKE %s',
+                'p.proposal_title LIKE %s',
+                'CAST(p.id AS CHAR) LIKE %s',
+            ];
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
+            $params[] = $like;
+
+            if ( ctype_digit( $normalized ) ) {
+                $search_clauses[] = 'p.id = %d';
+                $params[] = (int) $normalized;
+            }
+
+            $where .= ' AND (' . implode( ' OR ', $search_clauses ) . ')';
+        }
+
+        $status = isset( $args['status'] ) ? sanitize_key( (string) $args['status'] ) : '';
+        if ( $status !== '' && in_array( $status, WP_TRAVEL_GIAV_PROPOSAL_STATUSES, true ) ) {
+            $where .= ' AND p.status = %s';
+            $params[] = $status;
         }
 
         $count_sql = "SELECT COUNT(*) FROM {$this->table} p {$join} WHERE {$where}";
@@ -196,7 +217,8 @@ class WP_Travel_Proposal_Repository extends WP_Travel_GIAV_DB {
             $join = "LEFT JOIN {$this->wpdb->users} u ON u.ID = p.created_by";
         }
 
-        $order_by = isset( $args['order_by'] ) && in_array( $args['order_by'], [ 'id', 'updated_at' ], true )
+        $allowed_columns = [ 'id', 'updated_at', 'customer_name', 'proposal_title', 'status', 'totals_sell_price' ];
+        $order_by = isset( $args['order_by'] ) && in_array( $args['order_by'], $allowed_columns, true )
             ? $args['order_by']
             : 'updated_at';
         $order = strtoupper( isset( $args['order'] ) ? (string) $args['order'] : 'DESC' );

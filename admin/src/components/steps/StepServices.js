@@ -329,7 +329,7 @@ function defaultItem(basics, defaultMarkupPct = 0) {
 
     // Golf-specific
     green_fees_per_person: 1,
-    number_of_players: basics?.pax_total ?? 1,
+    number_of_players: basics?.players_count ?? basics?.pax_total ?? 1,
     total_green_fees: 0,
 
     // Pricing
@@ -714,12 +714,15 @@ export function syncServiceDatesFromBasics(services = [], basics = {}) {
 export default function StepServices({ basics, initialItems = [], onBack, onNext, onDraftChange }) {
   const currency = basics?.currency || 'EUR';
   const pax = Math.max(1, toInt(basics?.pax_total ?? 1, 1));
+  const playersCount = Math.max(0, toInt(basics?.players_count ?? 0, 0));
 
   const [globalMarkupPct, setGlobalMarkupPct] = useState(20);
   const [applyMarkupToNew, setApplyMarkupToNew] = useState(true);
 
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
+  const [highlightIndex, setHighlightIndex] = useState(null);
+  const [openIndex, setOpenIndex] = useState(0);
   const topRef = useRef(null);
 
   const [items, setItems] = useState(() => {
@@ -833,6 +836,13 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
     setItems((prev) => prev.map((item) => computeLine(item, basics, globalMarkupPct)));
   }, [pax]);
 
+  useEffect(() => {
+    if (openIndex === null || openIndex === undefined) return;
+    if (openIndex >= items.length) {
+      setOpenIndex(items.length ? items.length - 1 : null);
+    }
+  }, [items.length, openIndex]);
+
   const updateItem = (idx, patch) => {
     setItems((prev) => {
       const next = [...prev];
@@ -875,11 +885,21 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
   };
   
   const addItem = () => {
-     setItems(prev => [...prev, defaultItem(basics, globalMarkupPct)]);
+    setItems((prev) => {
+      const next = [...prev, defaultItem(basics, globalMarkupPct)];
+      setOpenIndex(next.length - 1);
+      return next;
+    });
   };
-  
+
   const removeItem = (idx) => {
-      setItems(prev => prev.filter((_, i) => i !== idx));
+    setItems((prev) => prev.filter((_, i) => i !== idx));
+    setOpenIndex((current) => {
+      if (current === null || current === undefined) return current;
+      if (current === idx) return Math.max(0, idx - 1);
+      if (current > idx) return current - 1;
+      return current;
+    });
   };
   
   const applyGlobalMarkupToAll = () => {
@@ -910,24 +930,34 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
   };
 
   const validate = () => {
-      for(let i=0; i<items.length; i++) {
-        const it = items[i];
-        if(!it.title && !it.display_name) return `Línea ${i+1}: falta título.`;
-        
-        if (it.service_type === 'hotel') {
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (!it.title && !it.display_name) return `Linea ${i + 1}: falta titulo.`;
+
+      if ((it.service_type === 'hotel' || it.service_type === 'golf') && !it.giav_supplier_id) {
+        return `Linea ${i + 1}: falta proveedor.`;
+      }
+
+      if (it.service_type === 'hotel') {
         const pricing = it.room_pricing || {};
-        
+        const doubleEnabled = !!pricing.double?.enabled;
+        const singleEnabled = !!pricing.single?.enabled;
+
+        if (!doubleEnabled && !singleEnabled) {
+          return `Linea ${i + 1} (Hotel): activa doble y/o individual.`;
+        }
+
         const validateMode = (modeKey, label) => {
-          const mode = pricing[modeKey];
+          const mode = pricing[modeKey] || {};
           if (!mode.enabled) return '';
           if (toInt(mode.rooms ?? 0, 0) < 1) {
-            return `Línea ${i + 1} (Hotel): habitaciones ${label} debe ser >= 1.`;
+            return `Linea ${i + 1} (Hotel): habitaciones ${label} debe ser >= 1.`;
           }
           if (toNumber(mode.net_price_per_night) <= 0) {
-            return `Línea ${i + 1} (Hotel): neto por noche (${label}) debe ser > 0.`;
+            return `Linea ${i + 1} (Hotel): neto por noche (${label}) debe ser > 0.`;
           }
           if (mode.pvp_manual_enabled && toNumber(mode.pvp_price_per_night) <= 0) {
-            return `Línea ${i + 1} (Hotel): PVP manual (${label}) debe ser > 0.`;
+            return `Linea ${i + 1} (Hotel): PVP manual (${label}) debe ser > 0.`;
           }
           return '';
         };
@@ -937,17 +967,24 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
         const singleError = validateMode('single', 'individual');
         if (singleError) return singleError;
 
+        const doubleRooms = doubleEnabled ? Math.max(0, toInt(pricing.double?.rooms ?? 0, 0)) : 0;
+        const singleRooms = singleEnabled ? Math.max(0, toInt(pricing.single?.rooms ?? 0, 0)) : 0;
+        const allocatedPax = (doubleEnabled ? doubleRooms * 2 : 0) + (singleEnabled ? singleRooms : 0);
+        if (allocatedPax !== pax) {
+          return `Linea ${i + 1} (Hotel): revisa la asignacion de pax (doble/individual).`;
+        }
+
         const giavTotal = toNumber(it.giav_pricing?.giav_total_pvp ?? 0);
-        if (giavTotal <= 0) return `Línea ${i + 1} (Hotel): total para GIAV debe ser > 0.`;
+        if (giavTotal <= 0) return `Linea ${i + 1} (Hotel): total para GIAV debe ser > 0.`;
       } else if (it.service_type === 'golf') {
         if (toInt(it.green_fees_per_person, 1) < 1) {
-          return `Línea ${i + 1} (Golf): green-fees por jugador debe ser >= 1.`;
+          return `Linea ${i + 1} (Golf): define green-fees por jugador.`;
         }
       } else {
-        if (toInt(it.quantity, 1) < 1) return `Línea ${i + 1}: cantidad debe ser >= 1.`;
+        if (toInt(it.quantity, 1) < 1) return `Linea ${i + 1}: cantidad debe ser >= 1.`;
       }
 
-      if (toNumber(it.unit_sell_price) <= 0) return `Línea ${i + 1}: PVP unitario debe ser > 0.`;
+      if (toNumber(it.unit_sell_price) <= 0) return `Linea ${i + 1}: PVP unitario debe ser > 0.`;
     }
 
     if (totals.totals_sell_price <= 0) return 'El PVP total debe ser > 0.';
@@ -969,15 +1006,18 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
 
   const handleValidationError = (msg) => {
     window.setTimeout(() => {
-      const match = msg.match(/Línea\s+(\d+)/i);
+      const match = msg.match(/Linea\s+(\d+)/i);
       if (match) {
         const index = Math.max(0, parseInt(match[1], 10) - 1);
+        setHighlightIndex(index);
         const card = document.querySelector(`[data-service-index="${index}"]`);
         if (card) {
           card.scrollIntoView({ behavior: 'smooth', block: 'center' });
           focusFirstInput(card);
           return;
         }
+      } else {
+        setHighlightIndex(null);
       }
       const fallback = document.querySelector('.services-step');
       if (fallback) {
@@ -990,22 +1030,22 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
   const continueNext = () => {
     const msg = validate();
     const hasGolf = items.some((it) => it.service_type === 'golf');
-    const playersFromBasics = Math.max(0, toInt(basics?.players_count ?? 0, 0));
-    if (hasGolf && playersFromBasics <= 0) {
-      const err = 'Hay servicios de golf pero "Jugadores" en Datos básicos está vacío o a 0. Define el número de jugadores en Datos básicos.';
+    if (hasGolf && playersCount <= 0) {
+      const err = 'Hay servicios de golf pero "Jugadores" en Datos basicos esta vacio o a 0. Define el numero de jugadores en Datos basicos.';
       setError(err);
-      setActionError('No se puede continuar. Revisa 1 error.');
+      setActionError('Revisa los campos marcados.');
       handleValidationError(err);
       return;
     }
     if (msg) {
       setError(msg);
-      setActionError('No se puede continuar. Revisa 1 error.');
+      setActionError('Revisa los campos marcados.');
       handleValidationError(msg);
       return;
     }
     setError('');
     setActionError('');
+    setHighlightIndex(null);
     onNext({ items, totals });
   };
 
@@ -1026,9 +1066,15 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
             onRemove={() => {
               setError('');
               setActionError('');
+              setHighlightIndex(null);
             }}
           >
             {error}
+          </Notice>
+        )}
+        {actionError && (
+          <Notice status="error" isDismissible={false} className="services-step__alert">
+            {actionError}
           </Notice>
         )}
 
@@ -1064,10 +1110,11 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
 
         <div className="services-items">
           {items.map((it, idx) => {
+            const isOpen = openIndex === idx;
             return (
             <div
               key={idx}
-              className="service-card"
+              className={`service-card ${highlightIndex === idx ? 'is-error' : ''}`.trim()}
               data-service-index={idx}
             >
               <div className="service-card__header">
@@ -1094,6 +1141,14 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                       </div>
                   )}
 
+                  <Button
+                    variant="tertiary"
+                    className="service-card__toggle"
+                    onClick={() => setOpenIndex(isOpen ? null : idx)}
+                  >
+                    {isOpen ? 'Ocultar' : 'Ver detalle'}
+                  </Button>
+
                   <div className="service-card__total">
                     <span>Total línea</span>
                     <strong>
@@ -1107,7 +1162,9 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                 </div>
               </div>
 
-              <div className="service-card__section">
+              {isOpen && (
+                <div className="service-card__content">
+                  <div className="service-card__section">
                 <div className="service-card__section-title">Selección y contexto</div>
                 <div className="service-card__grid service-card__grid--context">
                   <SelectControl
@@ -1336,8 +1393,9 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                           label="Jugadores"
                           type="number"
                           min={1}
-                          value={String(it.number_of_players ?? pax)}
-                          onChange={(v) => updateItem(idx, { number_of_players: v })}
+                          value={String(playersCount || pax)}
+                          disabled
+                          help="Definido en Datos basicos"
                         />
                         <TextControl
                           label="Green-fees por jugador *"
@@ -1347,7 +1405,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                           onChange={(v) => updateItem(idx, { green_fees_per_person: v })}
                         />
                         <div className="service-card__golf-summary">
-                          Total green-fees (interno): {toInt(it.number_of_players ?? pax, 1)} x {toInt(it.green_fees_per_person, 0)} ={' '}
+                          Total green-fees (interno): {toInt(playersCount || pax, 1)} x {toInt(it.green_fees_per_person, 0)} ={' '}
                           {toInt(it.total_green_fees, 0)}
                         </div>
                         {toInt(it.green_fees_per_person, 0) < 1 && (
@@ -1458,6 +1516,8 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                   />
                 </div>
               </div>
+                </div>
+              )}
             </div>
             );
           })}
@@ -1537,7 +1597,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
             Volver
           </Button>
           <Button variant="primary" onClick={continueNext}>
-            Continuar
+            {actionError ? 'Revisa los campos marcados' : 'Continuar'}
           </Button>
         </div>
       </CardBody>

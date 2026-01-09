@@ -473,6 +473,24 @@
   gap: 16px;
 }
 
+.service-card.is-error {
+  border-color: #b91c1c;
+  box-shadow: 0 0 0 2px rgba(185, 28, 28, 0.08);
+}
+
+.service-card__toggle {
+  margin-right: 8px;
+}
+
+.service-card__content {
+  display: grid;
+  gap: 16px;
+}
+
+.services-step__alert {
+  margin-bottom: 12px;
+}
+
 .service-card__header {
   display: flex;
   flex-wrap: wrap;
@@ -707,6 +725,89 @@
   color: #475569;
 }
 
+.proposal-preview {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  display: grid;
+  gap: 16px;
+}
+
+.proposal-preview__header {
+  display: grid;
+  gap: 4px;
+}
+
+.proposal-preview__name {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.proposal-preview__meta {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.proposal-preview__includes-title {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.preview-items {
+  display: grid;
+  gap: 10px;
+}
+
+.proposal-preview__totals {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.proposal-preview__totals-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.proposal-preview__totals-value {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.proposal-preview__totals-line {
+  font-size: 12px;
+}
+
+.proposal-preview__totals-note {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.proposal-preview__actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.proposal-wizard__final-meta {
+  margin-top: 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.proposal-wizard__final-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 .proposal-basics {
   display: flex;
   flex-direction: column;
@@ -772,6 +873,20 @@
 .proposal-basics__field .components-combobox-control__clear-button {
   align-self: center;
   margin-right: 6px;
+}
+
+.proposal-basics__field.is-error input,
+.proposal-basics__field.is-error select,
+.proposal-basics__field.is-error .components-combobox-control__input {
+  border-color: #b91c1c;
+  box-shadow: 0 0 0 2px rgba(185, 28, 28, 0.1);
+}
+
+.proposal-basics__actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 .proposal-basics__date-popover {

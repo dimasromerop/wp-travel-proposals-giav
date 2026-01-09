@@ -1,6 +1,28 @@
 import apiFetch from '@wordpress/api-fetch';
 
-apiFetch.use(apiFetch.createNonceMiddleware(WP_TRAVEL_GIAV.nonce));
+const globalConfig = window.WP_TRAVEL_GIAV || window.CASANOVA_GESTION_RESERVAS || {};
+const resolveRoot = (config) => {
+  if (config.wpRestRoot) {
+    return config.wpRestRoot;
+  }
+  const base = config.apiUrl || config.restUrl;
+  if (!base) {
+    return '/wp-json/';
+  }
+  return base.replace(/\/travel\/v1\/?$/, '/');
+};
+
+if (!apiFetch.__WP_TRAVEL_GIAV_CONFIGURED) {
+  const nonce = globalConfig.nonce || '';
+  const root = resolveRoot(globalConfig);
+  if (root) {
+    apiFetch.use(apiFetch.createRootURLMiddleware(root));
+  }
+  if (nonce) {
+    apiFetch.use(apiFetch.createNonceMiddleware(nonce));
+  }
+  apiFetch.__WP_TRAVEL_GIAV_CONFIGURED = true;
+}
 
 const API = {
   createProposal: (data) =>

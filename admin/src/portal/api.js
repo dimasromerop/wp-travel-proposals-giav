@@ -49,15 +49,16 @@ const listEndpoint = (params = {}) => {
   const searchParams = new URLSearchParams();
   const setParam = (key, value) => {
     if (value !== undefined && value !== null && value !== '') {
-      searchParams.set(key, value);
+      searchParams.set(key, String(value));
     }
   };
 
-  setParam('order_by', params.orderBy || 'updated_at');
+  setParam('q', params.search);
+  setParam('status', params.status);
+  setParam('sort', params.sortBy || 'updated_at');
   setParam('order', params.order || 'desc');
-  setParam('limit', params.limit ?? 50);
-  setParam('offset', params.offset ?? 0);
-  setParam('search', params.search);
+  setParam('page', params.page ?? 1);
+  setParam('per_page', params.perPage ?? 50);
 
   return `proposals?${searchParams.toString()}`;
 };
@@ -65,12 +66,13 @@ const listEndpoint = (params = {}) => {
 const API = {
   listProposals: async (options = {}) => {
     const result = await fetchJSON(listEndpoint(options));
-    const items = Array.isArray(result?.items)
-      ? result.items
-      : Array.isArray(result)
-      ? result
-      : [];
-    return items;
+    const items = Array.isArray(result?.items) ? result.items : [];
+    return {
+      items,
+      total: typeof result?.total === 'number' ? result.total : items.length,
+      page: result?.page ?? 1,
+      per_page: result?.per_page ?? 50,
+    };
   },
 
   getProposalDetail: (proposalId) => {

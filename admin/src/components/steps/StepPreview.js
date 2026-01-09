@@ -30,6 +30,10 @@ export default function StepPreview({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const sourceTag =
+    typeof window !== 'undefined' && window.CASANOVA_GESTION_RESERVAS
+      ? 'wp-travel-giav-portal'
+      : 'wp-travel-giav-admin';
 
   // Snapshot completo (cabecera + items + totales + metadata)
   const snapshot = useMemo(() => {
@@ -128,7 +132,7 @@ export default function StepPreview({
       metadata: {
         created_at: new Date().toISOString(),
         created_by: null,
-        source: 'wp-travel-giav-admin',
+        source: sourceTag,
         schema_version: 'v2',
       },
     };
@@ -173,48 +177,57 @@ export default function StepPreview({
     const playersCount = Math.min(Math.max(rawPlayers, 0), paxTotal);
     const nonPlayersCount = Math.max(0, paxTotal - playersCount);
 
-    let golfTotal = 0;
-    let totalDouble = 0;
-    let totalSingle = 0;
-    let doubleRooms = 0;
-    let singleRooms = 0;
+    const summary = {
+      paxTotal,
+      playersCount,
+      nonPlayersCount,
+      golfTotal: 0,
+      totalDouble: 0,
+      totalSingle: 0,
+      doubleRooms: 0,
+      singleRooms: 0,
+    };
 
     snapshotItems.forEach((item) => {
       if (item.service_type === 'golf') {
-        golfTotal += toNumber(item.line_sell_price || 0);
+        summary.golfTotal += toNumber(item.line_sell_price || 0);
       }
       if (item.service_type === 'hotel') {
         const roomPricing = item.room_pricing || {};
         if (roomPricing.double?.enabled) {
-          totalDouble += toNumber(roomPricing.double?.total_pvp || 0);
-          doubleRooms += Math.max(0, toInt(roomPricing.double?.rooms ?? 0, 0));
+          summary.totalDouble += toNumber(roomPricing.double?.total_pvp || 0);
+          summary.doubleRooms += Math.max(0, toInt(roomPricing.double?.rooms ?? 0, 0));
         }
         if (roomPricing.single?.enabled) {
-          totalSingle += toNumber(roomPricing.single?.total_pvp || 0);
-          singleRooms += Math.max(0, toInt(roomPricing.single?.rooms ?? 0, 0));
+          summary.totalSingle += toNumber(roomPricing.single?.total_pvp || 0);
+          summary.singleRooms += Math.max(0, toInt(roomPricing.single?.rooms ?? 0, 0));
         }
       }
     });
 
     const totalTrip = toNumber(snapshotTotals?.totals_sell_price || 0);
-    const baseTotal = totalTrip - golfTotal;
-    const priceNonPlayerDouble = paxTotal > 0 ? baseTotal / paxTotal : 0;
-    const pricePlayerDouble =
-      playersCount > 0 ? priceNonPlayerDouble + golfTotal / playersCount : null;
+    const baseTotal = totalTrip;
 
-    const hasSingleSupplement = doubleRooms > 0 && singleRooms > 0;
+    const ppDouble = summary.doubleRooms > 0 ? summary.totalDouble / (summary.doubleRooms * 2) : 0;
+    const ppSingle = summary.singleRooms > 0 ? summary.totalSingle / summary.singleRooms : 0;
+
+    const commonTotal = totalTrip - (summary.totalDouble + summary.totalSingle) - summary.golfTotal;
+    const commonPP = summary.paxTotal > 0 ? commonTotal / summary.paxTotal : 0;
+
+    const priceNonPlayerDouble = ppDouble + commonPP;
+    const pricePlayerDouble =
+      summary.playersCount > 0 ? priceNonPlayerDouble + summary.golfTotal / summary.playersCount : null;
+
+    const hasSingleSupplement = summary.doubleRooms > 0 && summary.singleRooms > 0;
     let supplementSingle = null;
     if (hasSingleSupplement) {
-      const ppDouble = totalDouble / (doubleRooms * 2);
-      const ppSingle = totalSingle / singleRooms;
       supplementSingle = Math.max(0, ppSingle - ppDouble);
     }
 
     return {
-      paxTotal,
-      playersCount,
-      nonPlayersCount,
+      ...summary,
       totalTrip,
+      baseTotal,
       priceNonPlayerDouble,
       pricePlayerDouble,
       supplementSingle,
@@ -274,6 +287,14 @@ export default function StepPreview({
       return;
     }
 
+    if (primaryLabel === 'Enviar propuesta') {
+      const confirmed = window.confirm('Confirmar envio de la propuesta?');
+      if (!confirmed) {
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       const res =
         mode === 'edit'
@@ -315,114 +336,108 @@ export default function StepPreview({
           El cliente vera solo el total del paquete. El desglose por lineas queda guardado internamente en la version.
         </Notice>
 
-        <div
-          style={{
-            marginTop: 12,
-            padding: 12,
-            border: '1px solid #e5e5e5',
-            borderRadius: 10,
-            background: '#fff',
-          }}
-        >
-          <div style={{ fontWeight: 800 }}>{snapshotHeader.customer_name}</div>
-          <div style={{ opacity: 0.8 }}>
-            {snapshotHeader.start_date} - {snapshotHeader.end_date} | Pax: {snapshotHeader.pax_total} | Moneda: {snapshotHeader.currency}
+        <div className="proposal-preview">
+          <div className="proposal-preview__header">
+            <div className="proposal-preview__name">{snapshotHeader.customer_name}</div>
+            <div className="proposal-preview__meta">
+              {snapshotHeader.start_date} - {snapshotHeader.end_date} | Pax: {snapshotHeader.pax_total} | Moneda: {snapshotHeader.currency}
+            </div>
           </div>
 
+          <div className="proposal-preview__includes">
+            <div className="proposal-preview__includes-title">Incluye</div>
+            <div className="preview-items">
+              {snapshotItems.map((it, idx) => {
+                const warnings = Array.isArray(it?.warnings) ? it.warnings : [];
+                const blocking = Array.isArray(it?.blocking) ? it.blocking : [];
+                const displayName = it.display_name || it.title || `Item ${idx + 1}`;
+                const supplierName = it.giav_supplier_name || 'Proveedor no especificado';
+                const hasBlocking = blocking.length > 0;
+                const hasWarnings = warnings.length > 0;
 
-          <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>
-            {snapshotItems.map((it, idx) => {
-              const warnings = Array.isArray(it?.warnings) ? it.warnings : [];
-              const blocking = Array.isArray(it?.blocking) ? it.blocking : [];
-              const displayName = it.display_name || it.title || `Item ${idx + 1}`;
-              const supplierName = it.giav_supplier_name || 'Proveedor no especificado';
-              const hasBlocking = blocking.length > 0;
-              const hasWarnings = warnings.length > 0;
+                return (
+                  <div key={idx} className="preview-item">
+                    <div className="preview-item__main">
+                      <div className="preview-item__title">
+                        <strong>{it.service_type?.toUpperCase()}</strong> - {displayName}
+                      </div>
+                      <div className="preview-item__supplier">Proveedor: {supplierName}</div>
 
-              return (
-                <div key={idx} className="preview-item">
-                  <div className="preview-item__main">
-                    <div className="preview-item__title">
-                      <strong>{it.service_type?.toUpperCase()}</strong> - {displayName}
+                      {it.service_type === 'hotel' && it.hotel_room_type ? (
+                        <div className="preview-item__meta">Habitacion: {it.hotel_room_type}</div>
+                      ) : null}
+
+                      {it.service_type === 'package' && it.package_components_text ? (
+                        <div className="preview-item__meta">
+                          Incluye: {it.package_components_text.split('\n').filter(Boolean).join(', ')}
+                        </div>
+                      ) : null}
+
+                      {hasBlocking && (
+                        <div className="preview-item__blocking">
+                          <span className="preview-item__badge preview-item__badge--error">Error</span>
+                          Este servicio impide la confirmacion.
+                        </div>
+                      )}
+
+                      {hasBlocking && (
+                        <details className="preview-item__details">
+                          <summary>Ver motivos</summary>
+                          <ul>
+                            {blocking.map((b, i) => (
+                              <li key={i}>{b?.message || 'Revision requerida'}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+
+                      {hasWarnings && (
+                        <details className="preview-item__details">
+                          <summary>
+                            <span className="preview-item__badge preview-item__badge--warning">Aviso</span>
+                            Ver avisos ({warnings.length})
+                          </summary>
+                          <ul>
+                            {warnings.map((w, i) => (
+                              <li key={i}>{w?.message || 'Aviso'}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
                     </div>
-                    <div className="preview-item__supplier">Proveedor: {supplierName}</div>
-
-                    {it.service_type === 'hotel' && it.hotel_room_type ? (
-                      <div className="preview-item__meta">Habitacion: {it.hotel_room_type}</div>
-                    ) : null}
-
-                    {it.service_type === 'package' && it.package_components_text ? (
-                      <div className="preview-item__meta">
-                        Incluye: {it.package_components_text.split('\\n').filter(Boolean).join(', ')}
-                      </div>
-                    ) : null}
-
-                    {hasBlocking && (
-                      <div className="preview-item__blocking">
-                        <span className="preview-item__badge preview-item__badge--error">Error</span>
-                        Este servicio impide la confirmacion.
-                      </div>
-                    )}
-
-                    {hasBlocking && (
-                      <details className="preview-item__details">
-                        <summary>Ver motivos</summary>
-                        <ul>
-                          {blocking.map((b, i) => (
-                            <li key={i}>{b?.message || 'Revision requerida'}</li>
-                          ))}
-                        </ul>
-                      </details>
-                    )}
-
-                    {hasWarnings && (
-                      <details className="preview-item__details">
-                        <summary>
-                          <span className="preview-item__badge preview-item__badge--warning">Aviso</span>
-                          Ver avisos ({warnings.length})
-                        </summary>
-                        <ul>
-                          {warnings.map((w, i) => (
-                            <li key={i}>{w?.message || 'Aviso'}</li>
-                          ))}
-                        </ul>
-                      </details>
-                    )}
                   </div>
-                  <div className="preview-item__price">
-                    {snapshotHeader.currency} {round2(it.line_sell_price || 0).toFixed(2)}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
-          <div style={{ marginTop: 12, borderTop: '1px solid #eee', paddingTop: 12 }}>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>Total paquete</div>
-            <div style={{ fontSize: 20, fontWeight: 900 }}>
+          <div className="proposal-preview__totals">
+            <div className="proposal-preview__totals-label">Total viaje</div>
+            <div className="proposal-preview__totals-value">
               {snapshotHeader.currency} {round2(pricingSummary.totalTrip).toFixed(2)}
             </div>
 
             {pricingSummary.playersCount > 0 && (
-              <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+              <div className="proposal-preview__totals-line">
                 Precio jugador en doble: {snapshotHeader.currency} {round2(pricingSummary.pricePlayerDouble || 0).toFixed(2)}
               </div>
             )}
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+            <div className="proposal-preview__totals-line">
               Precio no jugador en doble: {snapshotHeader.currency} {round2(pricingSummary.priceNonPlayerDouble || 0).toFixed(2)}
             </div>
             {pricingSummary.hasSingleSupplement && (
-              <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+              <div className="proposal-preview__totals-line">
                 Suplemento individual: {snapshotHeader.currency} {round2(pricingSummary.supplementSingle || 0).toFixed(2)}
               </div>
             )}
-            <div style={{ marginTop: 8, fontSize: 11, opacity: 0.7 }}>
-              Precios por persona. El suplemento individual aplica por persona alojada en habitación individual.
+            <div className="proposal-preview__totals-note">
+              Precios por persona. El suplemento individual aplica por persona alojada en habitacion individual.
             </div>
           </div>
         </div>
 
-        <div style={{ marginTop: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
+
+        <div className="proposal-preview__actions">
           <Button variant="secondary" onClick={onBack} disabled={loading}>
             Volver
           </Button>

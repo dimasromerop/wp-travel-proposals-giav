@@ -36,7 +36,18 @@ define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_ID', '1734698' );
 define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_NAME', 'Proveedores varios' );
 define( 'WP_TRAVEL_GIAV_PQ_SUPPLIER_ID', '1734698' );
 define( 'WP_TRAVEL_GIAV_PORTAL_SLUG', 'gestion-reservas' );
+define( 'WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESERVAS', 'casanova_manage_reservas' );
 define( 'WP_TRAVEL_GIAV_CAPABILITY_MANAGE_PROPOSALS', 'manage_travel_proposals' );
+define( 'WP_TRAVEL_GIAV_PROPOSAL_STATUSES', [
+    'draft',
+    'sent',
+    'accepted',
+    'queued',
+    'synced',
+    'error',
+    'revoked',
+    'lost',
+] );
 
 /**
  * Build the public proposal URL for admin listings and detail views.
@@ -752,7 +763,9 @@ function wp_travel_giav_admin_assets( $hook ) {
 
 
 function wp_travel_giav_can_manage_proposals() {
-    return current_user_can( 'manage_options' ) || current_user_can( WP_TRAVEL_GIAV_CAPABILITY_MANAGE_PROPOSALS );
+    return current_user_can( 'manage_options' )
+        || current_user_can( WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESERVAS )
+        || current_user_can( WP_TRAVEL_GIAV_CAPABILITY_MANAGE_PROPOSALS );
 }
 
 function wp_travel_giav_is_portal_page() {
@@ -765,6 +778,36 @@ function wp_travel_giav_is_portal_page() {
     }
 
     return is_page( WP_TRAVEL_GIAV_PORTAL_SLUG );
+}
+
+function wp_travel_giav_page_has_portal_shortcode() {
+    if ( ! wp_travel_giav_is_portal_page() ) {
+        return false;
+    }
+
+    $post = get_post();
+    if ( ! $post || empty( $post->post_content ) ) {
+        return false;
+    }
+
+    if ( ! function_exists( 'has_shortcode' ) ) {
+        return false;
+    }
+
+    return has_shortcode( $post->post_content, 'casanova_gestion_reservas' );
+}
+
+function wp_travel_giav_shortcode_portal() {
+    if ( ! wp_travel_giav_can_manage_proposals() ) {
+        $login_url = wp_login_url( get_permalink() );
+        if ( ! is_user_logged_in() ) {
+            return '<div class="casanova-portal-access"><strong>Acceso restringido.</strong> Inicia sesion con una cuenta autorizada. <a href="' . esc_url( $login_url ) . '">Iniciar sesion</a></div>';
+        }
+
+        return '<div class="casanova-portal-access"><strong>Acceso restringido.</strong> Esta cuenta no tiene permisos para acceder a Gestion de reservas.</div>';
+    }
+
+    return '<div id="casanova-gestion-reservas-app" class="casanova-gestion-reservas-app"></div>';
 }
 
 function wp_travel_giav_rest_permission_response() {
@@ -798,6 +841,10 @@ function wp_travel_giav_portal_access_control() {
             'Servicio no disponible',
             [ 'response' => 503 ]
         );
+    }
+
+    if ( wp_travel_giav_page_has_portal_shortcode() ) {
+        return;
     }
 
     if ( ! is_user_logged_in() ) {
@@ -846,7 +893,7 @@ function wp_travel_giav_enqueue_portal_assets() {
         wp_enqueue_style(
             'wp-travel-giav-portal-style',
             plugins_url( 'admin/build/portal.css', __FILE__ ),
-            [],
+            [ 'wp-components' ],
             $asset['version']
         );
     }
@@ -877,6 +924,7 @@ function wp_travel_giav_enqueue_portal_assets() {
                 'roles'       => $current_user->roles,
                 'caps'        => $caps,
             ],
+            'logoutUrl'  => wp_logout_url( $page_base ),
             'flags'       => [
                 'dbHealthy' => wp_travel_giav_db_is_healthy(),
             ],
@@ -894,12 +942,39 @@ function wp_travel_giav_render_portal_container( $content ) {
         return $content;
     }
 
-    return '<div id="casanova-gestion-reservas-app" class="casanova-gestion-reservas-app"></div>';
+    if ( function_exists( 'has_shortcode' ) && has_shortcode( $content, 'casanova_gestion_reservas' ) ) {
+        return do_shortcode( $content );
+    }
+
+    return do_shortcode( '[casanova_gestion_reservas]' );
 }
 
+function wp_travel_giav_hide_portal_title( $title, $post_id = null ) {
+    if ( ! wp_travel_giav_is_portal_page() ) {
+        return $title;
+    }
+
+    if ( ! wp_travel_giav_can_manage_proposals() ) {
+        return $title;
+    }
+
+    if ( ! is_main_query() ) {
+        return $title;
+    }
+
+    $queried_id = get_queried_object_id();
+    if ( $queried_id && $post_id && (int) $post_id === (int) $queried_id ) {
+        return '';
+    }
+
+    return $title;
+}
+
+add_filter( 'the_title', 'wp_travel_giav_hide_portal_title', 10, 2 );
 add_action( 'template_redirect', 'wp_travel_giav_portal_access_control' );
 add_action( 'wp_enqueue_scripts', 'wp_travel_giav_enqueue_portal_assets' );
 add_filter( 'the_content', 'wp_travel_giav_render_portal_container' );
+add_shortcode( 'casanova_gestion_reservas', 'wp_travel_giav_shortcode_portal' );
 
 /**
  * Check DB schema required for the plugin and report missing tables/columns.

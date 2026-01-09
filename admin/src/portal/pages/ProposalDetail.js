@@ -123,7 +123,7 @@ const ProposalDetail = () => {
         <div className="casanova-portal-detail__actions">
           <button
             type="button"
-            className="button-outline"
+            className="button-secondary"
             onClick={() => {
               if (publicUrl) {
                 window.open(publicUrl, '_blank', 'noopener,noreferrer');
@@ -131,23 +131,32 @@ const ProposalDetail = () => {
             }}
             disabled={!publicUrl}
           >
-            Abrir vista pública
+            🔗 Abrir vista pública
           </button>
           <button
             type="button"
-            className="button-outline"
+            className="button-secondary"
             onClick={handleCopyLink}
             disabled={!publicUrl}
           >
-            {copied ? 'Copiado' : 'Copiar enlace'}
+            📋 Copiar enlace
           </button>
           <button
             type="button"
-            onClick={() => navigate(-1)}
-            className="button-link"
+            className="button-primary"
+            onClick={() => navigate('/proposals')}
           >
             Volver al listado
           </button>
+          {copied ? (
+            <span
+              className="casanova-portal-detail__copy-feedback"
+              role="status"
+              aria-live="polite"
+            >
+              Copiado
+            </span>
+          ) : null}
         </div>
       </header>
 
@@ -192,7 +201,7 @@ const ProposalDetail = () => {
           type="button"
           className="button-primary"
           onClick={() => {
-            window.location.href = adminUrl();
+            navigate(`/propuesta/${proposalId}/editar`);
           }}
         >
           Editar propuesta

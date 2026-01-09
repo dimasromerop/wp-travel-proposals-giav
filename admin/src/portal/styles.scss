@@ -1,27 +1,46 @@
 .casanova-portal {
-  background: #f5f7fb;
+  --casanova-green: #0E3B2E;
+  --casanova-green-2: #145A43;
+  --casanova-ink: #0B1220;
+  --casanova-muted: #6B7280;
+  --casanova-bg: #F6F7F9;
+  --casanova-card: #FFFFFF;
+  --casanova-border: #E6E8EC;
+  --casanova-accent: #C8A95B;
+
+  --sidebar-width: 240px;
+  background: var(--casanova-bg);
   min-height: 100vh;
-  padding: 32px;
+  padding: 20px 24px 24px calc(var(--sidebar-width) + 24px);
   box-sizing: border-box;
+  color: var(--casanova-ink);
 
   &__header {
     display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(11, 18, 32, 0.08);
+    margin-bottom: 12px;
+  }
+
+  &__header h1 {
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.2;
+  }
+
+  &__header-main {
+    display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-bottom: 16px;
-    border-bottom: 1px solid rgba(34, 34, 34, 0.08);
-    margin-bottom: 24px;
+    gap: 16px;
+  }
 
-    h1 {
-      margin: 0;
-      font-size: 28px;
-      color: #0a2140;
-    }
-
-    p {
-      margin: 4px 0 0;
-      color: #4b566b;
-    }
+  &__subtitle {
+    margin: 0;
+    font-size: 12px;
+    color: var(--casanova-muted);
   }
 
   &__eyebrow {
@@ -29,52 +48,134 @@
     font-size: 12px;
     letter-spacing: 0.4px;
     text-transform: uppercase;
-    color: #75809b;
+    color: var(--casanova-muted);
   }
 
   &__user {
     text-align: right;
-    color: #0a2140;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+
     span {
       display: block;
       font-weight: 600;
+      font-size: 14px;
     }
+
     small {
-      color: #6d7893;
+      color: var(--casanova-muted);
+      font-size: 11px;
     }
+  }
+
+  &__user-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__user-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  &__logout {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--casanova-border);
+    background: #fff;
+    font-size: 11px;
+    color: var(--casanova-green);
+    text-decoration: none;
+    font-weight: 600;
+    transition: background 0.2s ease, border 0.2s ease;
+  }
+
+  &__logout:hover {
+    background: rgba(14, 59, 46, 0.06);
+    border-color: rgba(14, 59, 46, 0.2);
   }
 
   &__body {
-    display: grid;
-    grid-template-columns: 220px 1fr;
-    gap: 24px;
+    display: block;
   }
 
   &__sidebar {
-    background: #fff;
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.06);
+    background: var(--casanova-card);
+    border-radius: 0;
+    padding: 24px;
+    border-right: 1px solid var(--casanova-border);
     display: flex;
     flex-direction: column;
-    gap: 16px;
-
-    nav {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      a {
-        color: #0a2140;
-        text-decoration: none;
-        font-weight: 600;
-      }
-    }
+    gap: 20px;
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--sidebar-width);
+    box-shadow: none;
+    z-index: 2;
+    overflow-y: auto;
   }
 
-  &__content {
+  &__branding {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__branding strong {
+    font-size: 18px;
+    display: block;
+  }
+
+  &__branding small {
+    display: block;
+    color: var(--casanova-muted);
+    font-size: 12px;
+  }
+
+  &__branding-icon {
+    width: 42px;
+    height: 42px;
+    background: var(--casanova-green);
+    border-radius: 12px;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+
+  &__nav {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 10px;
+  }
+
+  &__nav-link {
+    padding: 12px 16px;
+    border-radius: 12px;
+    color: var(--casanova-ink);
+    text-decoration: none;
+    font-weight: 600;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+  }
+
+  &__nav-link:hover {
+    background: rgba(14, 59, 46, 0.05);
+    border-color: rgba(14, 59, 46, 0.15);
+  }
+
+  &__nav-link--active {
+    background: rgba(14, 59, 46, 0.08);
+    border-color: rgba(14, 59, 46, 0.2);
   }
 
   &__status {
@@ -82,170 +183,321 @@
     justify-content: space-between;
     align-items: center;
     font-size: 14px;
-    color: #536580;
+    color: var(--casanova-muted);
+  }
 
-    strong {
-      font-size: 16px;
-    }
+  &__status strong {
+    font-size: 16px;
+    color: var(--casanova-green);
+  }
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
   }
 }
 
-.status-green {
-  color: #0f9d58;
+.casanova-portal-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 10px;
 }
 
-.status-warning {
-  color: #d97706;
+.casanova-portal-filters__actions {
+  display: flex;
+  align-items: flex-end;
+}
+
+.casanova-portal-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--casanova-muted);
+}
+
+.casanova-portal-filter span {
+  line-height: 1.1;
+}
+
+.casanova-portal-filter input,
+.casanova-portal-filter select {
+  border-radius: 10px;
+  border: 1px solid var(--casanova-border);
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+  background: #fff;
+  min-width: 150px;
+  color: var(--casanova-ink);
 }
 
 .casanova-portal-section {
-  background: #fff;
-  border-radius: 18px;
-  padding: 24px;
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
+  background: var(--casanova-card);
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.1);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .casanova-portal-section__header {
   display: flex;
   justify-content: space-between;
-  gap: 24px;
-  flex-wrap: wrap;
+  align-items: center;
+}
 
-  h2 {
-    margin: 0;
-    font-size: 24px;
-    color: #0a2140;
-  }
+.casanova-portal-section__header h2 {
+  margin: 0;
+  font-size: 22px;
+}
 
-  p {
-    margin: 4px 0 0;
-    color: #5c6476;
-  }
+.casanova-portal-section__header p {
+  margin: 6px 0 0;
+  color: var(--casanova-muted);
 }
 
 .casanova-portal-section__actions {
   display: flex;
-  flex-wrap: wrap;
   gap: 12px;
+}
 
-  select,
-  input {
-    border-radius: 8px;
-    border: 1px solid #d5dfe8;
-    padding: 8px 12px;
-    font-size: 14px;
-    background: #fdfdfd;
-    min-width: 180px;
-  }
-
-  button {
-    border-radius: 8px;
-    padding: 10px 16px;
-    border: none;
-    background: #101828;
-    color: #fff;
-    font-weight: 600;
-    cursor: pointer;
-  }
+.casanova-portal-filters .button-secondary {
+  height: 36px;
+  padding: 8px 14px;
 }
 
 .casanova-portal-section__notice {
-  padding: 12px 16px;
-  border-radius: 10px;
-  background: #fef3c7;
-  color: #92400e;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(248, 227, 209, 0.6);
+  color: #b45309;
   font-weight: 600;
 }
 
 .casanova-portal-table {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-
-  &__row {
-    display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    border-radius: 10px;
-    background: #f7f9fc;
-    font-size: 14px;
-
-    &--header {
-      background: #101828;
-      color: #fff;
-      text-transform: uppercase;
-      font-size: 12px;
-      letter-spacing: 0.04em;
-    }
-
-    &--item {
-      background: #fff;
-      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
-    }
-
-    &--loading,
-    &--empty {
-      justify-content: center;
-      text-align: center;
-    }
-  }
+  gap: 12px;
 }
 
-.status-badge {
+.casanova-portal-table__row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.casanova-portal-table__row--header {
+  background: linear-gradient(90deg, #0E3B2E, #0B2A20);
+  color: #f4f7f5;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 14px;
+  box-shadow: 0 6px 14px rgba(14, 59, 46, 0.25);
+}
+
+.casanova-portal-table__row--header span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.casanova-portal-table__sort-button {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.casanova-portal-table__sort-button:focus-visible {
+  outline: 2px solid var(--casanova-green);
+  outline-offset: 2px;
+}
+
+.casanova-portal-table__sort-icon {
+  position: relative;
+  width: 10px;
+  height: 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
-  padding: 4px 10px;
-  background: #e0e7ff;
-  color: #312e81;
-  font-weight: 600;
+  margin-left: 4px;
 }
 
-.status-error {
-  background: #fee2e2;
-  color: #b91c1c;
+.casanova-portal-table__sort-icon::before,
+.casanova-portal-table__sort-icon::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  opacity: 0.45;
 }
 
-.button-outline {
-  background: transparent;
-  border: 1px solid #cbd5f5;
-  color: #0f172a;
-  border-radius: 8px;
-  padding: 10px 16px;
-  cursor: pointer;
+.casanova-portal-table__sort-icon::before {
+  top: 2px;
+  border-bottom: 4px solid currentColor;
 }
 
-.button-link {
+.casanova-portal-table__sort-icon::after {
+  bottom: 2px;
+  border-top: 4px solid currentColor;
+}
+
+.casanova-portal-table__sort-icon.is-asc::before {
+  opacity: 1;
+}
+
+.casanova-portal-table__sort-icon.is-asc::after {
+  opacity: 0.25;
+}
+
+.casanova-portal-table__sort-icon.is-desc::before {
+  opacity: 0.25;
+}
+
+.casanova-portal-table__sort-icon.is-desc::after {
+  opacity: 1;
+}
+
+.casanova-portal-table__row--item {
   background: #fff;
-  border: none;
-  color: #475569;
-  padding: 0;
+  border: 1px solid var(--casanova-border);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+
+.casanova-portal-table__row--item:hover {
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.casanova-portal-table__row--loading,
+.casanova-portal-table__row--empty {
+  justify-content: center;
+  text-align: center;
+  grid-column: 1 / -1;
+  background: rgba(14, 59, 46, 0.04);
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.status-chip--draft {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.status-chip--sent {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status-chip--accepted {
+  background: #dcfce7;
+  color: #0f5132;
+}
+
+.status-chip--queued {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.status-chip--synced {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.status-chip--error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-chip--revoked {
+  background: #ffe7d6;
+  color: #7c2d12;
+}
+
+.status-chip--lost {
+  background: #fff7ed;
+  color: #92400e;
+}
+
+.status-chip--ok {
+  background: rgba(14, 59, 46, 0.15);
+  color: var(--casanova-green);
+}
+
+.status-chip--warning {
+  background: rgba(194, 65, 12, 0.15);
+  color: #b45309;
+}
+
+.button-primary,
+.button-secondary,
+.button-link {
+  border-radius: 12px;
+  padding: 8px 16px;
+  font-weight: 600;
   cursor: pointer;
-  text-decoration: underline;
+  transition: background 0.2s ease, border 0.2s ease;
 }
 
 .button-primary {
-  background: #0ea5e9;
-  border: none;
+  background: var(--casanova-green);
   color: #fff;
-  border-radius: 8px;
-  padding: 10px 20px;
-  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.button-primary:hover:not(:disabled) {
+  background: var(--casanova-green-2);
 }
 
 .button-secondary {
-  background: #0f172a;
+  background: #fff;
+  color: var(--casanova-ink);
+  border: 1px solid var(--casanova-border);
+}
+
+.button-secondary:hover:not(:disabled) {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.button-link {
+  background: transparent;
   border: none;
-  color: #fff;
-  border-radius: 8px;
-  padding: 10px 20px;
-  cursor: pointer;
+  color: var(--casanova-ink);
+  text-decoration: underline;
+  padding: 0;
+}
+
+.casanova-portal-table__action {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  text-decoration: none;
 }
 
 .casanova-portal-detail__header {
@@ -259,7 +511,8 @@
 .casanova-portal-detail__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
+  align-items: center;
 }
 
 .casanova-portal-detail__grid {
@@ -269,15 +522,16 @@
 }
 
 .casanova-portal-card {
-  background: #f9fafc;
+  background: #fff;
   border-radius: 16px;
-  padding: 16px;
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+  padding: 18px;
+  border: 1px solid var(--casanova-border);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
 
-  h3 {
-    margin-top: 0;
-    color: #0f172a;
-  }
+.casanova-portal-card h3 {
+  margin-top: 0;
+  color: var(--casanova-ink);
 }
 
 .casanova-portal-detail__actions-row {
@@ -286,11 +540,17 @@
   flex-wrap: wrap;
 }
 
-.button-outline:disabled,
-.button-primary:disabled,
-.button-secondary:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
+.casanova-portal-detail__note {
+  color: var(--casanova-muted);
+  font-size: 14px;
+  margin: 0;
+  padding-left: 12px;
+}
+
+.casanova-portal-detail__copy-feedback {
+  font-size: 12px;
+  color: var(--casanova-muted);
+  margin-left: 10px;
 }
 
 .casanova-portal__loading {
@@ -299,16 +559,700 @@
   text-align: center;
 }
 
+.casanova-portal-access {
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--casanova-border);
+  color: var(--casanova-ink);
+}
+
+.casanova-portal-breadcrumbs {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--casanova-muted);
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.casanova-portal-breadcrumbs a {
+  color: var(--casanova-green);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.casanova-portal-section--wizard {
+  gap: 16px;
+}
+
+.casanova-portal-wizard {
+  max-width: 1200px;
+}
+
+.proposal-wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.proposal-wizard__stepper {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.proposal-wizard__content {
+  display: grid;
+  gap: 16px;
+}
+
+.proposal-wizard__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid var(--casanova-border);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.proposal-wizard__step-index {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--casanova-border);
+  color: var(--casanova-muted);
+}
+
+.proposal-wizard__step.is-active {
+  border-color: rgba(14, 59, 46, 0.3);
+  box-shadow: 0 6px 14px rgba(14, 59, 46, 0.15);
+}
+
+.proposal-wizard__step.is-active .proposal-wizard__step-index {
+  background: var(--casanova-green);
+  color: #fff;
+}
+
+.proposal-wizard__step.is-complete {
+  background: rgba(14, 59, 46, 0.06);
+  border-color: rgba(14, 59, 46, 0.2);
+}
+
+.proposal-wizard__step.is-complete .proposal-wizard__step-index {
+  background: var(--casanova-green);
+  color: #fff;
+}
+
+.proposal-wizard__step-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--casanova-ink);
+}
+
+.proposal-wizard__step-subtitle {
+  font-size: 11px;
+  color: var(--casanova-muted);
+}
+
+.proposal-wizard__final-meta {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.proposal-wizard__final-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.proposal-preview {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid var(--casanova-border);
+  border-radius: 16px;
+  background: #fff;
+  display: grid;
+  gap: 16px;
+}
+
+.proposal-preview__header {
+  display: grid;
+  gap: 4px;
+}
+
+.proposal-preview__name {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.proposal-preview__meta {
+  font-size: 12px;
+  color: var(--casanova-muted);
+}
+
+.proposal-preview__includes-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--casanova-ink);
+  margin-bottom: 8px;
+}
+
+.preview-items {
+  display: grid;
+  gap: 12px;
+}
+
+.preview-item {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--casanova-border);
+}
+
+.preview-item__title {
+  font-weight: 700;
+}
+
+.preview-item__supplier,
+.preview-item__meta {
+  font-size: 12px;
+  color: var(--casanova-muted);
+}
+
+.preview-item__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.preview-item__badge--warning {
+  background: #fff7ed;
+  color: #92400e;
+}
+
+.preview-item__badge--error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.preview-item__details summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--casanova-muted);
+}
+
+.preview-item__details ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--casanova-muted);
+}
+
+.proposal-preview__totals {
+  border-top: 1px solid var(--casanova-border);
+  padding-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.proposal-preview__totals-label {
+  font-size: 12px;
+  color: var(--casanova-muted);
+}
+
+.proposal-preview__totals-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--casanova-ink);
+}
+
+.proposal-preview__totals-line {
+  font-size: 12px;
+  color: var(--casanova-ink);
+}
+
+.proposal-preview__totals-note {
+  font-size: 11px;
+  color: var(--casanova-muted);
+}
+
+.proposal-preview__actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  position: sticky;
+  bottom: 12px;
+  padding-top: 10px;
+  background: var(--casanova-card);
+  z-index: 2;
+}
+
+.casanova-portal .components-card {
+  border-radius: 18px;
+  border: 1px solid var(--casanova-border);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.casanova-portal .components-card__header {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--casanova-border);
+}
+
+.casanova-portal .components-card__body {
+  padding: 18px;
+}
+
+.casanova-portal .components-base-control__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--casanova-muted);
+}
+
+.casanova-portal .components-text-control__input,
+.casanova-portal .components-select-control__input,
+.casanova-portal .components-combobox-control__input {
+  border-radius: 10px;
+  border: 1px solid var(--casanova-border);
+  background: #fff;
+}
+
+.proposal-basics {
+  display: grid;
+  gap: 18px;
+}
+
+.proposal-basics__section {
+  display: grid;
+  gap: 12px;
+}
+
+.proposal-basics__section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--casanova-ink);
+}
+
+.proposal-basics__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.proposal-basics__grid--dates {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
+}
+
+.proposal-basics__field--full {
+  grid-column: 1 / -1;
+}
+
+.proposal-basics__field--pax {
+  min-width: 140px;
+}
+
+.proposal-basics__field input,
+.proposal-basics__field select,
+.proposal-basics__field .components-combobox-control__input {
+  border-radius: 10px;
+  border: 1px solid var(--casanova-border);
+  height: 38px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.proposal-basics__field.is-error input,
+.proposal-basics__field.is-error select,
+.proposal-basics__field.is-error .components-combobox-control__input {
+  border-color: #b91c1c;
+  box-shadow: 0 0 0 2px rgba(185, 28, 28, 0.1);
+}
+
+.proposal-basics__date-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--casanova-muted);
+}
+
+.proposal-basics__actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  position: sticky;
+  bottom: 12px;
+  padding-top: 10px;
+  background: var(--casanova-card);
+}
+
+.services-step {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.services-step__title {
+  display: grid;
+  gap: 4px;
+}
+
+.services-step__subtitle {
+  font-size: 12px;
+  color: var(--casanova-muted);
+}
+
+.services-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.services-toolbar__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.services-items {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.service-card {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid var(--casanova-border);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.service-card.is-error {
+  border-color: #b91c1c;
+  box-shadow: 0 0 0 2px rgba(185, 28, 28, 0.08);
+}
+
+.service-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.service-card__title {
+  display: grid;
+  gap: 2px;
+}
+
+.service-card__eyebrow {
+  font-size: 11px;
+  color: var(--casanova-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.service-card__name {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.service-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.service-card__toggle {
+  border-radius: 999px;
+  padding: 4px 10px;
+  border: 1px solid var(--casanova-border);
+  font-size: 11px;
+}
+
+.service-card__badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(14, 59, 46, 0.08);
+  color: var(--casanova-green);
+}
+
+.service-card__content {
+  display: grid;
+  gap: 16px;
+}
+
+.service-card__section {
+  display: grid;
+  gap: 12px;
+}
+
+.service-card__section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--casanova-ink);
+}
+
+.service-card__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.service-card__grid--dates {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  align-items: end;
+}
+
+.service-card__pricing {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.service-card__notes {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.services-add {
+  display: flex;
+}
+
+.services-summary {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid var(--casanova-border);
+  padding: 16px;
+}
+
+.services-summary__label {
+  font-size: 12px;
+  color: var(--casanova-muted);
+}
+
+.services-summary__value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--casanova-ink);
+}
+
+.services-summary__meta {
+  font-size: 12px;
+  color: var(--casanova-muted);
+}
+
+.services-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  position: sticky;
+  bottom: 12px;
+  padding-top: 10px;
+  background: var(--casanova-card);
+  z-index: 2;
+}
+
+.services-actions__notice {
+  flex: 1 1 100%;
+}
+
+.services-step__alert {
+  margin-top: 8px;
+}
+
+.services-toolbar__summary {
+  display: grid;
+  gap: 4px;
+  text-align: right;
+}
+
+.services-toolbar__label {
+  font-size: 11px;
+  color: var(--casanova-muted);
+}
+
+.services-toolbar__value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--casanova-ink);
+}
+
+.service-card__total {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.service-card__total span {
+  font-size: 11px;
+  color: var(--casanova-muted);
+}
+
+.service-card__total strong {
+  font-size: 14px;
+}
+
+.service-card__badge--needs_review,
+.service-card__badge--missing {
+  background: #fff7ed;
+  color: #92400e;
+}
+
+.service-card__badge--active {
+  background: rgba(14, 59, 46, 0.1);
+  color: var(--casanova-green);
+}
+
+.service-card__date-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.service-card__date-label {
+  font-size: 11px;
+  color: var(--casanova-muted);
+}
+
+.service-card__date-label.is-custom {
+  color: var(--casanova-green);
+}
+
+.service-card__date-reset {
+  font-size: 11px;
+}
+
+.service-card__golf-summary {
+  font-size: 12px;
+  color: var(--casanova-muted);
+}
+
+.service-card__hotel-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.service-card__hotel-occupancy {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.service-card__hotel-occupancy-card {
+  border: 1px solid var(--casanova-border);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  background: #f9fafb;
+}
+
+.service-card__hotel-occupancy-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.service-card__hotel-mode-details summary,
+.service-card__hotel-discounts-collapse summary,
+.service-card__hotel-notes summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--casanova-muted);
+}
+
+.service-card__hotel-mode-details-grid,
+.service-card__hotel-discounts-grid,
+.service-card__hotel-notes-grid,
+.service-card__hotel-giav-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.service-card__hotel-allocation {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+
+body.admin-bar .casanova-portal__sidebar {
+  top: 32px;
+  height: calc(100vh - 32px);
+}
+
+body.admin-bar .casanova-portal {
+  padding-top: 12px;
+}
+
 @media (max-width: 960px) {
   .casanova-portal {
     padding: 16px;
 
-    &__body {
-      grid-template-columns: 1fr;
+    &__sidebar {
+      position: static;
+      width: auto;
+      border-right: none;
+      border-radius: 18px;
+      margin-bottom: 16px;
     }
   }
 
   .casanova-portal-table__row {
     grid-template-columns: 1fr;
+  }
+
+  .casanova-portal-filters {
+    flex-direction: column;
+  }
+
+  .proposal-wizard__stepper {
+    grid-template-columns: 1fr;
+  }
+
+  .proposal-basics__grid,
+  .proposal-basics__grid--dates,
+  .service-card__grid,
+  .service-card__grid--dates,
+  .service-card__pricing,
+  .service-card__notes {
+    grid-template-columns: 1fr;
+  }
+
+  .services-toolbar__summary {
+    text-align: left;
   }
 }

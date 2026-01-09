@@ -42,6 +42,14 @@ const buildAdminUrl = (params = {}) => {
   return url.toString();
 };
 
+const buildPortalDetailUrl = (proposalId) => {
+  if (typeof window === 'undefined') return '';
+  const config = window.CASANOVA_GESTION_RESERVAS;
+  if (!config?.pageBase || !proposalId) return '';
+  const base = config.pageBase.replace(/\/$/, '');
+  return `${base}#/propuesta/${proposalId}`;
+};
+
 const buildPublicUrl = (proposalToken, versionToken) => {
   if (!proposalToken) return '';
   const base = `${window.location.origin}/travel-proposal/${proposalToken}/`;
@@ -85,6 +93,7 @@ export default function ProposalWizard({
   initialProposal = null,
   initialSnapshot = null,
   nextVersionNumber = 1,
+  showStepper = false,
 }) {
   const [step, setStep] = useState(1);
 
@@ -95,6 +104,7 @@ export default function ProposalWizard({
   const [publicUrl, setPublicUrl] = useState(initialProposal?.public_url || '');
   const [publicToken, setPublicToken] = useState(null);
   const [copied, setCopied] = useState(false);
+  const isPortal = typeof window !== 'undefined' && !!window.CASANOVA_GESTION_RESERVAS;
 
   const initialBasics = useMemo(() => {
     if (!initialProposal && !initialSnapshot) {
@@ -122,8 +132,10 @@ export default function ProposalWizard({
   const [snapshot, setSnapshot] = useState(null);
   const [versionId, setVersionId] = useState(null);
 
+  let content = null;
+
   if (step === 1) {
-    return (
+    content = (
       <StepBasics
         initialValues={basics || { customer_language: 'en', currency: 'EUR', pax_total: 1 }}
         // Si ya existe proposalId, no recreamos. Solo avanzamos guardando el state.
@@ -132,7 +144,7 @@ export default function ProposalWizard({
           setItems((prev) => syncServiceDatesFromBasics(prev, b));
           setStep(2);
         }}
-        // Si no existe proposalId aún, StepBasics creará la propuesta y llamará aquí.
+        // Si no existe proposalId aun, StepBasics creara la propuesta y llamara aqui.
         onCreated={({ proposalId: id, basics: b }) => {
           setProposalId(id);
           setBasics(b);
@@ -142,29 +154,25 @@ export default function ProposalWizard({
         proposalId={proposalId}
       />
     );
-  }
-
-  if (step === 2) {
-  return (
-    <StepServices
-      basics={basics}
-      initialItems={items}
-      onDraftChange={({ items: it, totals: t }) => {
-        setItems(it);
-        setTotals(t);
-      }}
-      onBack={() => setStep(1)}
-      onNext={({ items: it, totals: t }) => {
-        setItems(it);
-        setTotals(t);
-        setStep(3);
-      }}
-    />
-  );
-}
-
-  if (step === 3) {
-    return (
+  } else if (step === 2) {
+    content = (
+      <StepServices
+        basics={basics}
+        initialItems={items}
+        onDraftChange={({ items: it, totals: t }) => {
+          setItems(it);
+          setTotals(t);
+        }}
+        onBack={() => setStep(1)}
+        onNext={({ items: it, totals: t }) => {
+          setItems(it);
+          setTotals(t);
+          setStep(3);
+        }}
+      />
+    );
+  } else if (step === 3) {
+    content = (
       <StepPreview
         proposalId={proposalId}
         basics={basics}
@@ -189,10 +197,7 @@ export default function ProposalWizard({
         }}
       />
     );
-  }
-
-
-  if (step === 4) {
+  } else if (step === 4) {
     const resolvedPublicUrl = publicUrl || buildPublicUrl(proposalToken, publicToken);
     const statusLabel = STATUS_LABELS[proposalStatus] || proposalStatus || '-';
     const acceptanceLabel = proposalAcceptedAt
@@ -203,6 +208,8 @@ export default function ProposalWizard({
       name: basics?.customer_name,
       publicUrl: resolvedPublicUrl,
     });
+    const detailUrl = buildPortalDetailUrl(proposalId) || buildAdminUrl({ proposal_id: proposalId });
+    const detailLabel = isPortal ? 'Ver detalle en portal' : 'Ir al repositorio / ver detalle';
     const handleCopyLink = async () => {
       const ok = await copyToClipboard(resolvedPublicUrl);
       if (ok) {
@@ -211,14 +218,14 @@ export default function ProposalWizard({
       }
     };
 
-    return (
+    content = (
       <Card>
         <CardHeader>
-          <strong>Preview y envío</strong>
+          <strong>Preview y envio</strong>
         </CardHeader>
         <CardBody>
           <Notice status="success" isDismissible={false}>
-            {mode === 'edit' ? 'Nueva versión creada:' : 'Propuesta enviada. Versión creada:'}{' '}
+            {mode === 'edit' ? 'Nueva version creada:' : 'Propuesta enviada. Version creada:'}{' '}
             <strong>{versionId}</strong>
           </Notice>
 
@@ -228,22 +235,22 @@ export default function ProposalWizard({
             </Notice>
           ) : null}
 
-          <div style={{ marginTop: 16, display: 'grid', gap: 8 }}>
+          <div className="proposal-wizard__final-meta">
             <div>
               <strong>Estado:</strong> {statusLabel}
             </div>
             <div>
-              <strong>Aceptación:</strong> {acceptanceLabel}
+              <strong>Aceptacion:</strong> {acceptanceLabel}
             </div>
             <div>
-              <strong>GIAV:</strong> El expediente se creará tras la aceptación del cliente.
+              <strong>GIAV:</strong> El expediente se creara tras la aceptacion del cliente.
             </div>
           </div>
 
-          <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="proposal-wizard__final-actions">
             {proposalStatus !== 'accepted' ? (
               <Button variant="primary" onClick={handleCopyLink} disabled={!resolvedPublicUrl}>
-                {copied ? 'Enlace copiado' : 'Copiar enlace público'}
+                {copied ? 'Enlace copiado' : 'Copiar enlace publico'}
               </Button>
             ) : null}
 
@@ -255,13 +262,15 @@ export default function ProposalWizard({
 
             {resolvedPublicUrl ? (
               <Button variant="link" href={resolvedPublicUrl} target="_blank" rel="noopener noreferrer">
-                Abrir vista pública
+                Abrir vista publica
               </Button>
             ) : null}
 
-            <Button variant="link" href={buildAdminUrl({ proposal_id: proposalId })}>
-              Ir al repositorio / ver detalle
-            </Button>
+            {detailUrl ? (
+              <Button variant="link" href={detailUrl}>
+                {detailLabel}
+              </Button>
+            ) : null}
 
             <Button variant="tertiary" onClick={onExit}>
               Salir
@@ -271,7 +280,52 @@ export default function ProposalWizard({
       </Card>
     );
   }
-  return null;
+
+  if (!content) {
+    return null;
+  }
+
+  if (!showStepper) {
+    return content;
+  }
+
+  const stepItems = [
+    {
+      title: 'Datos basicos',
+      subtitle: 'Identidad y fechas',
+    },
+    {
+      title: 'Servicios y precios',
+      subtitle: 'Hotel, golf y extras',
+    },
+    {
+      title: 'Vista previa y envio',
+      subtitle: 'Resumen final',
+    },
+  ];
+  const activeStep = step > 3 ? 3 : step;
+
+  return (
+    <div className="proposal-wizard">
+      <div className="proposal-wizard__stepper">
+        {stepItems.map((item, index) => {
+          const stepNumber = index + 1;
+          const state =
+            activeStep === stepNumber ? 'is-active' : activeStep > stepNumber ? 'is-complete' : 'is-upcoming';
+          return (
+            <div key={item.title} className={`proposal-wizard__step ${state}`.trim()}>
+              <div className="proposal-wizard__step-index">{stepNumber}</div>
+              <div className="proposal-wizard__step-text">
+                <div className="proposal-wizard__step-title">{item.title}</div>
+                <div className="proposal-wizard__step-subtitle">{item.subtitle}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="proposal-wizard__content">{content}</div>
+    </div>
+  );
 }
     
 

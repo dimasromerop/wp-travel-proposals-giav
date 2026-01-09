@@ -303,9 +303,9 @@ function normalizeToISO(value) {
   return '';
 }
 
-function DateField({ id, label, value, onChange }) {
+function DateField({ id, label, value, onChange, className = '', fieldRef }) {
   const [isOpen, setIsOpen] = useState(false);
-  const fieldRef = useRef(null);
+  const [anchorEl, setAnchorEl] = useState(null);
   const displayValue = formatDisplayDate(value);
 
   const handleSelect = (next) => {
@@ -317,22 +317,38 @@ function DateField({ id, label, value, onChange }) {
   };
 
   return (
-    <div className="proposal-basics__field" ref={fieldRef}>
+    <div
+      className={`proposal-basics__field ${className}`.trim()}
+      ref={(node) => {
+        if (typeof fieldRef === 'function') {
+          fieldRef(node);
+        }
+      }}
+    >
       <TextControl
         id={id}
         label={label}
         value={displayValue}
-        onClick={() => setIsOpen(true)}
-        onFocus={() => setIsOpen(true)}
+        onClick={(event) => {
+          setAnchorEl(event.currentTarget);
+          setIsOpen(true);
+        }}
+        onFocus={(event) => {
+          setAnchorEl(event.currentTarget);
+          setIsOpen(true);
+        }}
         readOnly
         placeholder="DD/MM/AAAA"
       />
-      {isOpen && (
+      {isOpen && anchorEl && (
         <Popover
-          anchorRef={fieldRef}
+          anchor={anchorEl}
           placement="bottom-start"
           className="proposal-basics__date-popover"
-          onClose={() => setIsOpen(false)}
+          onClose={() => {
+            setIsOpen(false);
+            setAnchorEl(null);
+          }}
         >
           <DatePicker currentDate={value || todayISO()} onChange={handleSelect} />
         </Popover>
@@ -362,7 +378,9 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
   const [values, setValues] = useState(defaults);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldError, setFieldError] = useState('');
   const [countryQuery, setCountryQuery] = useState('');
+  const fieldRefs = useRef({});
 
   // ✅ FIX: al volver atrás, rehidratar el formulario con initialValues
   useEffect(() => {
@@ -391,7 +409,26 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
     };
   }, []);
 
-  const set = (key) => (val) => setValues((v) => ({ ...v, [key]: val }));
+  const set = (key) => (val) => {
+    setValues((v) => ({ ...v, [key]: val }));
+    setFieldError((prev) => (prev === key ? '' : prev));
+  };
+
+  const registerField = (key) => (node) => {
+    if (node) {
+      fieldRefs.current[key] = node;
+    }
+  };
+
+  const focusField = (key) => {
+    const target = fieldRefs.current[key];
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const input = target.querySelector('input, select, textarea, button');
+    if (input && typeof input.focus === 'function') {
+      input.focus();
+    }
+  };
 
   const onChangeStartDate = (v) => {
     setValues((prev) => {
@@ -425,30 +462,44 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
   };
 
   const validate = () => {
-    if (!values.customer_name?.trim()) return 'El nombre del cliente es obligatorio.';
-    if (!values.start_date) return 'La fecha de inicio es obligatoria.';
-    if (!values.end_date) return 'La fecha de fin es obligatoria.';
-    if (values.end_date < values.start_date) return 'La fecha fin no puede ser anterior a la fecha inicio.';
+    if (!values.customer_name?.trim()) {
+      return { message: 'El nombre del cliente es obligatorio.', field: 'customer_name' };
+    }
+    if (!values.start_date) {
+      return { message: 'La fecha de inicio es obligatoria.', field: 'start_date' };
+    }
+    if (!values.end_date) {
+      return { message: 'La fecha de fin es obligatoria.', field: 'end_date' };
+    }
+    if (values.end_date < values.start_date) {
+      return { message: 'La fecha fin no puede ser anterior a la fecha inicio.', field: 'end_date' };
+    }
     const pax = parseInt(values.pax_total, 10);
-    if (Number.isNaN(pax) || pax < 1) return 'Pax debe ser un número >= 1.';
+    if (Number.isNaN(pax) || pax < 1) {
+      return { message: 'Pax debe ser un numero >= 1.', field: 'pax_total' };
+    }
     const playersCount = parseInt(values.players_count, 10);
     if (Number.isNaN(playersCount) || playersCount < 0) {
-      return 'Jugadores debe ser un número >= 0.';
+      return { message: 'Jugadores debe ser un numero >= 0.', field: 'players_count' };
     }
-    if (playersCount > pax) return 'Jugadores no puede ser mayor que Pax.';
+    if (playersCount > pax) {
+      return { message: 'Jugadores no puede ser mayor que Pax.', field: 'players_count' };
+    }
     if (values.customer_email && !/^\S+@\S+\.\S+$/.test(values.customer_email)) {
-      return 'El email no parece válido (si lo rellenas, que sea correcto).';
+      return { message: 'El email no parece valido (si lo rellenas, que sea correcto).', field: 'customer_email' };
     }
     if (values.customer_country && values.customer_country.length !== 2) {
-      return 'País debe ser ISO2 (2 letras) o vacío.';
+      return { message: 'Pais debe ser ISO2 (2 letras) o vacio.', field: 'customer_country' };
     }
-    return '';
+    return null;
   };
 
   const onSubmit = async () => {
-    const msg = validate();
-    if (msg) {
-      setError(msg);
+    const issue = validate();
+    if (issue) {
+      setError(issue.message);
+      setFieldError(issue.field || '');
+      focusField(issue.field);
       return;
     }
 
@@ -506,7 +557,14 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
 
       <CardBody>
         {error && (
-          <Notice status="error" isDismissible onRemove={() => setError('')}>
+          <Notice
+            status="error"
+            isDismissible
+            onRemove={() => {
+              setError('');
+              setFieldError('');
+            }}
+          >
             {error}
           </Notice>
         )}
@@ -515,7 +573,12 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
           <div className="proposal-basics__section">
             <div className="proposal-basics__section-title">Identidad de la propuesta</div>
             <div className="proposal-basics__grid">
-              <div className="proposal-basics__field proposal-basics__field--full">
+              <div
+                className={`proposal-basics__field proposal-basics__field--full ${
+                  fieldError === 'proposal_title' ? 'is-error' : ''
+                }`.trim()}
+                ref={registerField('proposal_title')}
+              >
                 <TextControl
                   label="Título de la propuesta"
                   value={values.proposal_title}
@@ -524,7 +587,10 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
                 />
               </div>
 
-              <div className="proposal-basics__field">
+              <div
+                className={`proposal-basics__field ${fieldError === 'customer_name' ? 'is-error' : ''}`.trim()}
+                ref={registerField('customer_name')}
+              >
                 <TextControl
                   label="Nombre del cliente *"
                   value={values.customer_name}
@@ -533,7 +599,10 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
                 />
               </div>
 
-              <div className="proposal-basics__field">
+              <div
+                className={`proposal-basics__field ${fieldError === 'customer_email' ? 'is-error' : ''}`.trim()}
+                ref={registerField('customer_email')}
+              >
                 <TextControl
                   label="Email"
                   value={values.customer_email}
@@ -547,7 +616,13 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
           <div className="proposal-basics__section">
             <div className="proposal-basics__section-title">Fechas y pasajeros</div>
             <div className="proposal-basics__grid proposal-basics__grid--dates">
-              <DateField label="Fecha inicio *" value={values.start_date} onChange={onChangeStartDate} />
+              <DateField
+                label="Fecha inicio *"
+                value={values.start_date}
+                onChange={onChangeStartDate}
+                className={fieldError === 'start_date' ? 'is-error' : ''}
+                fieldRef={registerField('start_date')}
+              />
               <div className="proposal-basics__date-arrow" aria-hidden="true">
                 →
               </div>
@@ -556,8 +631,15 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
                 label="Fecha fin *"
                 value={values.end_date}
                 onChange={onChangeEndDate}
+                className={fieldError === 'end_date' ? 'is-error' : ''}
+                fieldRef={registerField('end_date')}
               />
-              <div className="proposal-basics__field proposal-basics__field--pax">
+              <div
+                className={`proposal-basics__field proposal-basics__field--pax ${
+                  fieldError === 'pax_total' ? 'is-error' : ''
+                }`.trim()}
+                ref={registerField('pax_total')}
+              >
                 <TextControl
                   label="Pax *"
                   type="number"
@@ -566,7 +648,12 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
                   onChange={set('pax_total')}
                 />
               </div>
-              <div className="proposal-basics__field proposal-basics__field--pax">
+              <div
+                className={`proposal-basics__field proposal-basics__field--pax ${
+                  fieldError === 'players_count' ? 'is-error' : ''
+                }`.trim()}
+                ref={registerField('players_count')}
+              >
                 <TextControl
                   label="Jugadores"
                   type="number"
@@ -582,7 +669,10 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
           <div className="proposal-basics__section">
             <div className="proposal-basics__section-title">Preferencias</div>
             <div className="proposal-basics__grid">
-              <div className="proposal-basics__field">
+              <div
+                className={`proposal-basics__field ${fieldError === 'customer_language' ? 'is-error' : ''}`.trim()}
+                ref={registerField('customer_language')}
+              >
                 <SelectControl
                   label="Idioma"
                   value={values.customer_language}
@@ -591,7 +681,10 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
                 />
               </div>
 
-              <div className="proposal-basics__field">
+              <div
+                className={`proposal-basics__field ${fieldError === 'customer_country' ? 'is-error' : ''}`.trim()}
+                ref={registerField('customer_country')}
+              >
                 <ComboboxControl
                   label="País"
                   value={values.customer_country}
@@ -602,7 +695,10 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
                 />
               </div>
 
-              <div className="proposal-basics__field">
+              <div
+                className={`proposal-basics__field ${fieldError === 'currency' ? 'is-error' : ''}`.trim()}
+                ref={registerField('currency')}
+              >
                 <SelectControl
                   label="Moneda"
                   value={values.currency}
@@ -614,9 +710,9 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
           </div>
         </div>
 
-        <div style={{ marginTop: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div className="proposal-basics__actions">
           <Button variant="primary" onClick={onSubmit} disabled={loading}>
-            Continuar
+            {error ? 'Revisa los campos marcados' : 'Continuar'}
           </Button>
           {loading && <Spinner />}
         </div>

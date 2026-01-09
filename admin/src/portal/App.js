@@ -1,43 +1,60 @@
-import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
+import { HashRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom';
 import ProposalsList from './pages/ProposalsList';
 import ProposalDetail from './pages/ProposalDetail';
-
-const getBasePath = (pageBase) => {
-  if ( ! pageBase ) {
-    return '/gestion-reservas';
-  }
-
-  try {
-    const url = new URL( pageBase, window.location.origin );
-    return url.pathname.replace( /\/$/, '' ) || '/';
-  } catch ( error ) {
-    return pageBase.replace( /\/$/, '' ) || '/';
-  }
-};
+import ProposalWizardPage from './pages/ProposalWizardPage';
 
 const PortalLayout = ( { children, config } ) => (
   <div className="casanova-portal">
     <header className="casanova-portal__header">
-      <div>
-        <p className="casanova-portal__eyebrow">Portal de propuestas</p>
-        <h1>Gestión de reservas</h1>
-        <p>Monitorea versiones, revisa estados y sincroniza con GIAV.</p>
+      <div className="casanova-portal__header-main">
+        <div>
+          <p className="casanova-portal__eyebrow">Portal de propuestas</p>
+          <h1>Gestión de reservas</h1>
+        </div>
+        <div className="casanova-portal__user">
+          <div className="casanova-portal__user-meta">
+            <span>{config.currentUser?.displayName || 'Administrador'}</span>
+            <small>{config.currentUser?.email || ''}</small>
+          </div>
+          {config.logoutUrl ? (
+            <div className="casanova-portal__user-actions">
+              <a className="casanova-portal__logout" href={config.logoutUrl}>
+                Cerrar sesión
+              </a>
+            </div>
+          ) : null}
+        </div>
       </div>
-      <div className="casanova-portal__user">
-        <span>{config.currentUser?.displayName || 'Administrador'}</span>
-        <small>{config.currentUser?.email || ''}</small>
-      </div>
+      <p className="casanova-portal__subtitle">
+        Monitorea versiones, revisa estados y sincroniza con GIAV.
+      </p>
     </header>
     <div className="casanova-portal__body">
       <aside className="casanova-portal__sidebar">
-        <nav>
-          <Link to="/">Listado de propuestas</Link>
+        <div className="casanova-portal__branding">
+          <span className="casanova-portal__branding-icon">CG</span>
+          <div>
+            <strong>Casanova</strong>
+            <small>Gestión premium</small>
+          </div>
+        </div>
+        <nav className="casanova-portal__nav">
+          <NavLink
+            to="/proposals"
+            className={ ( { isActive } ) =>
+              `casanova-portal__nav-link ${
+                isActive ? 'casanova-portal__nav-link--active' : ''
+              }`
+            }
+          >
+            Listado de propuestas
+          </NavLink>
         </nav>
         <div className="casanova-portal__status">
           <span>Base de datos</span>
           <strong
             className={
-              config.flags?.dbHealthy ? 'status-green' : 'status-warning'
+              config.flags?.dbHealthy ? 'status-chip--ok' : 'status-chip--warning'
             }
           >
             {config.flags?.dbHealthy ? 'OK' : 'Revisar'}
@@ -53,24 +70,26 @@ const App = () => {
   const config = window.CASANOVA_GESTION_RESERVAS;
 
   if ( ! config ) {
-    return <div className="casanova-portal__loading">Cargando configuración...</div>;
+    return (
+      <div className="casanova-portal__loading">Cargando configuración...</div>
+    );
   }
 
-  const basename = getBasePath( config.pageBase );
-
   return (
-    <BrowserRouter basename={basename}>
+    <HashRouter>
       <PortalLayout config={config}>
         <Routes>
-          <Route path="/" element={<ProposalsList />} />
-          <Route
-            path="/propuesta/:proposalId"
-            element={<ProposalDetail />}
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/" element={ <Navigate to="/proposals" replace /> } />
+          <Route path="/proposals" element={<ProposalsList />} />
+          <Route path="/nueva" element={<ProposalWizardPage mode="create" />} />
+          <Route path="/propuesta/:proposalId" element={<ProposalDetail />} />
+          <Route path="/propuesta/:proposalId/editar" element={<ProposalWizardPage mode="edit" />} />
+          <Route path="/proposals/:proposalId" element={<ProposalDetail />} />
+          <Route path="/proposals/:proposalId/edit" element={<ProposalWizardPage mode="edit" />} />
+          <Route path="*" element={ <Navigate to="/proposals" replace /> } />
         </Routes>
       </PortalLayout>
-    </BrowserRouter>
+    </HashRouter>
   );
 };
 
