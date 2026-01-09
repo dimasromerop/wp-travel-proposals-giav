@@ -28,7 +28,7 @@ export default function CatalogSelect({ label, type, valueTitle, onPick }) {
   }, [q, open, type]);
 
   return (
-    <div style={{ position: 'relative', minWidth: 320 }}>
+    <div style={{ position: 'relative', width: '100%', maxWidth: 320, minWidth: 0 }}>
       <TextControl
         label={label}
         value={q}
