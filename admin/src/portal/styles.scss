@@ -639,8 +639,8 @@
 
   .components-select-control__input:focus,
   select:focus {
-    border-color: var(--casanova-primary) !important;
-    box-shadow: 0 0 0 2px rgba(10, 54, 44, 0.18) !important;
+    outline: none !important;
+    box-shadow: none !important;
     outline: none !important;
   }
 
@@ -665,9 +665,8 @@
 
   .components-combobox-control .components-combobox-control__input:focus,
   .components-combobox-control input[type="text"]:focus {
-    border-color: var(--casanova-primary) !important;
-    box-shadow: 0 0 0 2px rgba(10, 54, 44, 0.18) !important;
     outline: none !important;
+    box-shadow: none !important;
   }
 
   /* Token-field wrapper used by ComboboxControl */
@@ -676,11 +675,39 @@
     padding: 0 12px !important;
     align-items: center;
     border-radius: 10px;
+    border: 1px solid var(--casanova-border) !important;
+    background: #fff !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
+  /* En ComboboxControl (País), el valor seleccionado es un "token" con borde.
+     Queremos el input con borde, pero el token sin borde para que no parezca un campo dentro de otro. */
+  .components-combobox-control .components-form-token-field__token {
+    border: 0 !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 6px 0 0 !important;
+  }
+
+  .components-combobox-control .components-form-token-field__token-text {
+    padding: 0 !important;
+  }
+
+  .components-combobox-control .components-form-token-field__remove-token {
+    border: 0 !important;
+    box-shadow: none !important;
   }
 
   .components-combobox-control .components-form-token-field__input-container:focus-within {
-    border-color: var(--casanova-primary) !important;
-    box-shadow: 0 0 0 2px rgba(10, 54, 44, 0.18) !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
+  .components-combobox-control .components-form-token-field__input-container:focus,
+  .components-combobox-control .components-form-token-field__input:focus {
+    outline: none !important;
+    box-shadow: none !important;
   }
 
     .components-combobox-control__input {
@@ -700,8 +727,8 @@
   .components-input-control__container input:focus,
   .components-combobox-control__input:focus {
     outline: none;
-    border-color: rgba(6, 95, 70, 0.55) !important;
-    box-shadow: 0 0 0 4px rgba(6, 95, 70, 0.12) !important;
+    /*border-color: rgba(6, 95, 70, 0.55) !important;
+    box-shadow: 0 0 0 4px rgba(6, 95, 70, 0.12) !important;*/
   }
 }
 
@@ -922,7 +949,8 @@
 
 .casanova-portal .components-card__header {
   padding: 16px 18px;
-  border-bottom: 1px solid var(--casanova-border);
+  border: 1px solid var(--casanova-border);
+  background: #f5f5f5;
 }
 
 .casanova-portal .components-card__body {
@@ -967,7 +995,12 @@
 
 .proposal-basics__grid--dates {
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  align-items: end;
+  /*
+    UX: no alinear al "end".
+    Si un campo (p.ej. JUGADORES) tiene texto de ayuda, el grid crece y
+    "end" desalineaba los inputs (uno más arriba, otro más abajo).
+  */
+  align-items: start;
 }
 
 .proposal-basics__field--full {
@@ -999,6 +1032,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* Mantener la flecha alineada con los inputs cuando el grid ya no usa align-items:end */
+  align-self: start;
+  margin-top: 26px; /* align with inputs */
   font-size: 14px;
   color: var(--casanova-muted);
 }
