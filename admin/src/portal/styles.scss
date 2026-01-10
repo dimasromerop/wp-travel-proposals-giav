@@ -615,11 +615,73 @@
     background: #ffffff;
   }
 
+     
   /* ComboboxControl needs a tiny nudge so the value sits vertically centered */
   .components-combobox-control {
     .components-base-control__field {
       align-items: center;
     }
+
+  /* ---------- Form controls (Select / Combobox) ---------- */
+  /* WP components sometimes ship their own borders. We override to match Casanova. */
+  .components-select-control__input,
+  select.components-select-control__input,
+  select {
+    border: none !important;
+    border-radius: 10px !important;
+    min-height: 44px;
+    height: 44px;
+    padding: 0 14px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    line-height: 1.2;
+  }
+
+  .components-select-control__input:focus,
+  select:focus {
+    border-color: var(--casanova-primary) !important;
+    box-shadow: 0 0 0 2px rgba(10, 54, 44, 0.18) !important;
+    outline: none !important;
+  }
+
+  /* ComboboxControl (Country selector, etc.) */
+  .components-combobox-control .components-base-control__field {
+    margin-bottom: 0; /* stop the weird vertical drift in tight grids */
+  }
+
+  .components-combobox-control .components-combobox-control__input,
+  .components-combobox-control input[type="text"] {
+    border: 1px solid var(--casanova-border) !important;
+    border-radius: 10px !important;
+    min-height: 44px;
+    height: 44px;
+    padding: 0 14px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+  }
+
+  .components-combobox-control .components-combobox-control__input:focus,
+  .components-combobox-control input[type="text"]:focus {
+    border-color: var(--casanova-primary) !important;
+    box-shadow: 0 0 0 2px rgba(10, 54, 44, 0.18) !important;
+    outline: none !important;
+  }
+
+  /* Token-field wrapper used by ComboboxControl */
+  .components-combobox-control .components-form-token-field__input-container {
+    min-height: 44px;
+    padding: 0 12px !important;
+    align-items: center;
+    border-radius: 10px;
+  }
+
+  .components-combobox-control .components-form-token-field__input-container:focus-within {
+    border-color: var(--casanova-primary) !important;
+    box-shadow: 0 0 0 2px rgba(10, 54, 44, 0.18) !important;
+  }
 
     .components-combobox-control__input {
       line-height: 1.4;
@@ -878,7 +940,7 @@
 .casanova-portal .components-combobox-control__input {
   border-radius: 10px;
   border: 1px solid var(--casanova-border);
-  background: #fff;
+  background: none !important;
 }
 
 .proposal-basics {
@@ -1273,11 +1335,11 @@ details[open] > .service-card__section-summary::after {
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  background: #fff;
+  background: #fff7ed;
   border-radius: 16px;
-  border: 1px solid var(--casanova-border);
+  border: 1px solid #fed7aa;
   padding: 16px;
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+  /*box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);*/
 }
 
 .services-summary__label {

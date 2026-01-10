@@ -645,6 +645,87 @@
 }
 
 /*
+  WP Components (SelectControl, ComboboxControl, etc.) rendered outside
+  service cards (e.g. StepBasics). WP admin injects its own borders,
+  so we force our rounded style across the whole wizard.
+*/
+.wp-travel-giav-app .components-select-control__input,
+.wp-travel-giav-app .components-combobox-control__input,
+.wp-travel-giav-app .components-text-control__input,
+.wp-travel-giav-app .components-textarea-control__input {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  padding: 10px 12px !important;
+  box-shadow: none !important;
+  min-height: 40px;
+  line-height: 20px;
+  background: #fff;
+}
+
+.wp-travel-giav-app .components-select-control__input:focus,
+.wp-travel-giav-app .components-combobox-control__input:focus,
+.wp-travel-giav-app .components-text-control__input:focus,
+.wp-travel-giav-app .components-textarea-control__input:focus {
+  border-color: #94a3b8 !important;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.4) !important;
+}
+
+.wp-travel-giav-app .components-base-control__field {
+  margin-bottom: 0;
+}
+
+.wp-travel-giav-app .components-select-control {
+  max-width: 100%;
+}
+
+/*
+  WP Components (SelectControl, ComboboxControl, etc.) rendered outside
+  service cards (e.g. StepBasics) should match our design system too.
+*/
+.wp-travel-giav-app .components-select-control__input,
+.wp-travel-giav-app .components-combobox-control__input,
+.wp-travel-giav-app .components-text-control__input,
+.wp-travel-giav-app .components-textarea-control__input {
+  height: 40px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #0f172a;
+  box-shadow: none;
+  outline: none;
+}
+
+.wp-travel-giav-app .components-select-control__input:focus,
+.wp-travel-giav-app .components-combobox-control__input:focus,
+.wp-travel-giav-app .components-text-control__input:focus,
+.wp-travel-giav-app .components-textarea-control__input:focus {
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.4);
+}
+
+/* Country control (ComboboxControl) alignment fix */
+.wp-travel-giav-app .components-combobox-control__suggestions-container {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.wp-travel-giav-app .components-form-token-field__input-container {
+  padding: 4px 8px;
+  min-height: 40px;
+  align-items: center;
+}
+
+.wp-travel-giav-app .components-form-token-field__input {
+  line-height: 1.2;
+  margin: 0;
+}
+
+.wp-travel-giav-app .components-form-token-field__token-text {
+  line-height: 1.2;
+}
+
+/*
   Some selects in the wizard are plain <select> elements (not WP components).
   WP admin styles bleed through and create an inconsistent border.
 */
@@ -796,8 +877,9 @@ details[open] > .service-card__section-summary::after {
   margin-top: 16px;
   padding: 16px;
   border-radius: 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #fffbeb;
+  border: 1px solid #facc15;
+  box-shadow: none;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
