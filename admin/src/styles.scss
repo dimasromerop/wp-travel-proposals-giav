@@ -644,6 +644,40 @@
   box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.4);
 }
 
+/*
+  Some selects in the wizard are plain <select> elements (not WP components).
+  WP admin styles bleed through and create an inconsistent border.
+*/
+.wp-travel-giav-app select,
+.wp-travel-giav-wizard select,
+.service-card select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  background-color: #fff !important;
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 20px;
+  padding: 10px 38px 10px 12px !important;
+  box-shadow: none !important;
+  outline: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #64748b 50%),
+    linear-gradient(135deg, #64748b 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+.wp-travel-giav-app select:focus,
+.wp-travel-giav-wizard select:focus,
+.service-card select:focus {
+  border-color: #94a3b8 !important;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.4) !important;
+}
+
 .service-card__field {
   display: flex;
   flex-direction: column;
@@ -838,7 +872,8 @@ details[open] > .service-card__section-summary::after {
   bottom: 0;
   background: #ffffff;
   border-top: 1px solid #e5e7eb;
-  box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.08);
+  /* Keep the footer readable without making it feel like a floating modal. */
+  box-shadow: none;
   padding: 12px 16px;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -859,6 +894,11 @@ details[open] > .service-card__section-summary::after {
   align-items: center;
   font-size: 12px;
   color: #64748b;
+  /* Highlight the travel total (replaces the old GIAV yellow emphasis). */
+  background: #fffbeb;
+  border: 1px solid #facc15;
+  border-radius: 12px;
+  padding: 8px 14px;
 }
 
 .services-footer__summary strong {
@@ -1096,8 +1136,16 @@ details[open] > .service-card__section-summary::after {
 }
 
 .proposal-basics__field .components-combobox-control__input {
-  padding: 0 12px;
-  line-height: 40px;
+  /* Force true vertical centering (WP sometimes injects padding/line-height). */
+  padding: 10px 12px !important;
+  line-height: 20px !important;
+  margin: 0 !important;
+  box-sizing: border-box;
+}
+
+.proposal-basics__field .components-combobox-control__control {
+  min-height: 40px;
+  align-items: center;
 }
 
 .proposal-basics__field .components-combobox-control__clear-button {

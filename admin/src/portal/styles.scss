@@ -596,6 +596,53 @@
   gap: 16px;
 }
 
+/*
+ * Normalize WP components styling inside the wizard.
+ * Without this, some native <select> elements fall back to darker browser
+ * borders and ComboboxControl vertical alignment gets weird.
+ */
+.proposal-wizard {
+  .components-text-control__input,
+  .components-select-control__input,
+  .components-textarea-control__input,
+  .components-input-control__container input,
+  .components-combobox-control__input {
+    border: 1px solid var(--casanova-border) !important;
+    border-radius: 10px;
+    padding: 10px 12px;
+    min-height: 44px;
+    box-shadow: none !important;
+    background: #ffffff;
+  }
+
+  /* ComboboxControl needs a tiny nudge so the value sits vertically centered */
+  .components-combobox-control {
+    .components-base-control__field {
+      align-items: center;
+    }
+
+    .components-combobox-control__input {
+      line-height: 1.4;
+    }
+
+    /* Clear (x) button should also align */
+    .components-button {
+      height: 44px;
+    }
+  }
+
+  /* Focus treatment consistent with the rest of the UI */
+  .components-text-control__input:focus,
+  .components-select-control__input:focus,
+  .components-textarea-control__input:focus,
+  .components-input-control__container input:focus,
+  .components-combobox-control__input:focus {
+    outline: none;
+    border-color: rgba(6, 95, 70, 0.55) !important;
+    box-shadow: 0 0 0 4px rgba(6, 95, 70, 0.12) !important;
+  }
+}
+
 .proposal-wizard__stepper {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1211,8 +1258,10 @@ details[open] > .service-card__section-summary::after {
 }
 
 .service-card__subcard--giav {
-  background: #fff7ed;
-  border-color: #fed7aa;
+  /* Internal control: keep it readable, but less visually dominant */
+  background: #ffffff;
+  border-color: #e2e8f0;
+  border-left: 4px solid #cbd5e1;
 }
 
 .services-add {
@@ -1228,6 +1277,7 @@ details[open] > .service-card__section-summary::after {
   border-radius: 16px;
   border: 1px solid var(--casanova-border);
   padding: 16px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
 }
 
 .services-summary__label {
@@ -1236,7 +1286,7 @@ details[open] > .service-card__section-summary::after {
 }
 
 .services-summary__value {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--casanova-ink);
 }
