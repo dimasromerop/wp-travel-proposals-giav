@@ -209,6 +209,15 @@
   gap: 10px;
 }
 
+.casanova-portal-table__actions .button-secondary,
+.casanova-portal-table__actions .button-primary {
+  white-space: nowrap;
+}
+
+.casanova-portal-table__actions .button-secondary {
+  min-width: 118px;
+}
+
 .cg-row-actions-inline {
   display: inline-flex;
   align-items: center;
@@ -227,6 +236,13 @@
   cursor: pointer;
   font-size: 18px;
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.14s ease;
+}
+
+.cg-row-actions-inline__svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  color: #0f172a;
 }
 
 .cg-row-actions-inline__icon:hover:not(:disabled) {
