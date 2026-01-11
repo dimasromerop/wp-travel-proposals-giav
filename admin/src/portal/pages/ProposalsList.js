@@ -26,6 +26,7 @@ const sortableColumns = [
   { key: 'id', label: 'ID' },
   { key: 'proposal_title', label: 'Título' },
   { key: 'customer_name', label: 'Cliente' },
+  { key: 'author_name', label: 'Autor' },
   { key: 'status', label: 'Estado' },
   { key: 'updated_at', label: 'Última actualización' },
   { key: 'totals_sell_price', label: 'Total' },
@@ -262,6 +263,7 @@ const ProposalsList = () => {
               <span>#{proposal.id}</span>
               <span>{proposal.display_title || proposal.proposal_title || 'Propuesta sin título'}</span>
               <span>{proposal.customer_name || proposal.customer_email || '—'}</span>
+              <span>{proposal.author_name || '—'}</span>
               <span>
                 <span
                   className={`status-chip status-chip--${
@@ -272,7 +274,12 @@ const ProposalsList = () => {
                 </span>
               </span>
               <span>{formatDate(proposal.updated_at)}</span>
-              <span>{formatCurrency(proposal.totals_sell_price, proposal.currency)}</span>
+              <span>
+                {formatCurrency(
+                  proposal.current_version_total ?? proposal.totals_sell_price,
+                  proposal.currency
+                )}
+              </span>
               <span className="casanova-portal-table__actions">
                 <Link
                   className="button-secondary casanova-portal-table__action"
