@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from '@wordpress/element';
 import { Link, useSearchParams } from 'react-router-dom';
 import API from '../api';
+import RowActionsMenu from '../components/RowActionsMenu';
 
 const STATUS_LABELS = {
   draft: 'Borrador',
@@ -272,13 +273,14 @@ const ProposalsList = () => {
               </span>
               <span>{formatDate(proposal.updated_at)}</span>
               <span>{formatCurrency(proposal.totals_sell_price, proposal.currency)}</span>
-              <span>
+              <span className="casanova-portal-table__actions">
                 <Link
                   className="button-secondary casanova-portal-table__action"
                   to={`/propuesta/${proposal.id}`}
                 >
                   Ver detalle
                 </Link>
+                <RowActionsMenu proposal={proposal} />
               </span>
             </div>
           ))}

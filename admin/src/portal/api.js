@@ -1,3 +1,5 @@
+import apiFetch from '@wordpress/api-fetch';
+
 const config = window.CASANOVA_GESTION_RESERVAS || {};
 const baseRestUrl =
   (config.restUrl || `${window.location.origin}/wp-json/travel/v1`).replace(
@@ -25,6 +27,33 @@ const handleResponse = async (response) => {
   throw error;
 };
 
+const configureApiFetch = (() => {
+  let configured = false;
+  return () => {
+    if (configured) {
+      return;
+    }
+    const resolveRoot = () => {
+      if (config.restUrl) {
+        return config.restUrl.replace(/\/travel\/v1\/?$/, '/');
+      }
+      if (config.apiUrl) {
+        return config.apiUrl.replace(/\/travel\/v1\/?$/, '/');
+      }
+      return `${window.location.origin}/wp-json/`;
+    };
+
+    const root = resolveRoot();
+    if (root) {
+      apiFetch.use(apiFetch.createRootURLMiddleware(root));
+    }
+    if (config.nonce) {
+      apiFetch.use(apiFetch.createNonceMiddleware(config.nonce));
+    }
+    configured = true;
+  };
+})();
+
 export const fetchJSON = async (endpoint, options = {}) => {
   const headers = {
     'X-WP-Nonce': config.nonce || '',
@@ -43,6 +72,49 @@ export const fetchJSON = async (endpoint, options = {}) => {
 
   const response = await fetch(buildUrl(endpoint), init);
   return handleResponse(response);
+};
+
+export const acceptProposal = async (proposalId, versionId) => {
+  if (!proposalId) {
+    return Promise.reject(new Error('ID de propuesta inválido'));
+  }
+  if (!versionId) {
+    return Promise.reject(new Error('Selecciona una versión a aceptar'));
+  }
+
+  configureApiFetch();
+
+  return apiFetch({
+    path: `/travel/v1/proposals/${proposalId}/accept`,
+    method: 'POST',
+    data: { version_id: versionId },
+  });
+};
+
+export const giavPreflight = async (versionId) => {
+  if (!versionId) {
+    return Promise.reject(new Error('Versión inválida'));
+  }
+
+  configureApiFetch();
+
+  return apiFetch({
+    path: `/travel/v1/versions/${versionId}/giav-preflight`,
+    method: 'GET',
+  });
+};
+
+export const retryGiavSync = async (proposalId) => {
+  if (!proposalId) {
+    return Promise.reject(new Error('ID de propuesta inválido'));
+  }
+
+  configureApiFetch();
+
+  return apiFetch({
+    path: `/travel/v1/proposals/${proposalId}/giav-retry`,
+    method: 'POST',
+  });
 };
 
 const listEndpoint = (params = {}) => {
@@ -78,6 +150,9 @@ const API = {
   getProposalDetail: (proposalId) => {
     return fetchJSON(`proposals/${proposalId}/detail`);
   },
+
+  giavPreflight,
+  retryGiavSync,
 };
 
 export default API;
