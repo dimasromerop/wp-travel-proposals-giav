@@ -350,7 +350,11 @@ function DateField({ id, label, value, onChange, className = '', fieldRef }) {
             setAnchorEl(null);
           }}
         >
-          <DatePicker currentDate={value || todayISO()} onChange={handleSelect} />
+          <DatePicker
+            currentDate={value || todayISO()}
+            onChange={handleSelect}
+            minDate={todayISO()}
+          />
         </Popover>
       )}
     </div>

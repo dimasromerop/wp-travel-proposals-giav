@@ -16,6 +16,7 @@ import SupplierSearchSelect from '../SupplierSearchSelect';
 
 const DEFAULT_SUPPLIER_ID = '1734698';
 const DEFAULT_SUPPLIER_NAME = 'Proveedores varios';
+const TODAY_ISO = new Date().toISOString().slice(0, 10);
 
 
 const SERVICE_TYPES = [
@@ -1517,14 +1518,16 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
                   )}
                 </div>
                 <div className="service-card__grid service-card__grid--dates">
-                  <div className="service-card__field">
-                    <TextControl
-                      label="Fecha inicio"
-                      type="date"
-                      value={it.start_date}
-                      onChange={(v) => onChangeServiceStartDate(idx, v)}
-                    />
-                  </div>
+                    <div className="service-card__field">
+                      <TextControl
+                        label="Fecha inicio"
+                        type="date"
+                        value={it.start_date}
+                        onChange={(v) => onChangeServiceStartDate(idx, v)}
+                        min={TODAY_ISO}
+                        className="service-card__date-start"
+                      />
+                    </div>
 
                   <div className="service-card__field">
                     <TextControl

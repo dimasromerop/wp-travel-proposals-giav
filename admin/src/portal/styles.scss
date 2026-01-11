@@ -1225,6 +1225,15 @@
   color: var(--casanova-muted);
 }
 
+.proposal-basics__date-popover {
+  .components-datepicker__table button.is-disabled {
+    opacity: 0.4;
+    color: rgba(15, 23, 42, 0.4);
+    cursor: not-allowed;
+    background: transparent;
+  }
+}
+
 .proposal-basics__actions {
   margin-top: 16px;
   display: flex;
@@ -1737,6 +1746,19 @@ details[open] > .service-card__section-summary::after {
 
 .service-card__date-reset {
   font-size: 11px;
+}
+
+.service-card__date-start .components-text-control__input {
+  background: #f4f5f7;
+  color: rgba(15, 23, 42, 0.65);
+  border-color: var(--casanova-border);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.service-card__date-start .components-text-control__input:focus {
+  background: #ffffff;
+  color: var(--casanova-ink);
+  border-color: var(--casanova-green);
 }
 
 .service-card__golf-summary {
