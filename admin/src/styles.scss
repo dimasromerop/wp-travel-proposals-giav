@@ -1616,3 +1616,15 @@ details[open] > .service-card__section-summary::after {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
 }
+.services-intention-banner {
+  border-radius: 14px;
+  border: 1px dashed #93c5fd;
+  background: #eff6ff;
+  padding: 14px 18px;
+  color: #0f172a;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}

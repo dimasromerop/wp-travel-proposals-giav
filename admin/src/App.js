@@ -12,6 +12,7 @@ import {
 } from '@wordpress/components';
 import ProposalWizard from './components/ProposalWizard';
 import GiavMappingAdmin from './components/GiavMappingAdmin';
+import RequestsMappingAdmin from './components/RequestsMappingAdmin';
 import ProposalDetail from './components/ProposalDetail';
 import API from './api';
 
@@ -58,6 +59,10 @@ export default function App() {
   const page = params.get('page') || '';
   const proposalIdParam = params.get('proposal_id');
   const action = params.get('action');
+
+  if (page === 'wp-travel-giav-requests') {
+    return <RequestsMappingAdmin />;
+  }
 
   if (page === 'wp-travel-giav-mapping') {
     return <GiavMappingAdmin />;

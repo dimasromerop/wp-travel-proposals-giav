@@ -3,7 +3,7 @@
  * Plugin Name: WP Travel Proposals & GIAV Connector
  * Plugin URI:  https://example.com
  * Description: Sistema interno para creación de propuestas de viaje, versionado y sincronización con GIAV.
- * Version:     0.1.0
+ * Version:     0.2.0
  * Author:      Casanova Golf
  * Author URI:  https://www.casanova.golf
  * License:     GPLv2 or later
@@ -19,8 +19,8 @@ global $wpdb;
 /**
  * Plugin constants
  */
-define( 'WP_TRAVEL_GIAV_VERSION', '0.1.0' );
-define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.7.0' );
+define( 'WP_TRAVEL_GIAV_VERSION', '0.2.0' );
+define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.8.0' );
 define( 'WP_TRAVEL_GIAV_PLUGIN_FILE', __FILE__ );
 define( 'WP_TRAVEL_GIAV_TABLE_PROPOSALS', $wpdb->prefix . 'travel_proposals' );
 define( 'WP_TRAVEL_GIAV_TABLE_VERSIONS', $wpdb->prefix . 'travel_proposal_versions' );
@@ -29,6 +29,7 @@ define( 'WP_TRAVEL_GIAV_TABLE_MAPPING', $wpdb->prefix . 'giav_mapping' );
 define( 'WP_TRAVEL_GIAV_TABLE_AUDIT', $wpdb->prefix . 'travel_audit_log' );
 define( 'WP_TRAVEL_GIAV_TABLE_SYNC_LOG', $wpdb->prefix . 'travel_giav_sync_log' );
 define( 'WP_TRAVEL_GIAV_TABLE_RESERVAS', $wpdb->prefix . 'travel_giav_reservas' );
+define( 'WP_TRAVEL_GIAV_TABLE_REQUESTS', $wpdb->prefix . 'travel_giav_requests' );
 
 // Default supplier fallback in GIAV ("Proveedores varios").
 // Used when a service requires a supplier but no explicit mapping exists yet.
@@ -48,6 +49,19 @@ define( 'WP_TRAVEL_GIAV_PROPOSAL_STATUSES', [
     'revoked',
     'lost',
 ] );
+
+define( 'WP_TRAVEL_GIAV_REQUEST_STATUSES', [
+    'new',
+    'contacted',
+    'quoting',
+    'proposal_sent',
+    'won',
+    'lost',
+    'archived',
+] );
+
+define( 'WP_TRAVEL_GIAV_GF_FORMS_OPTION', 'wp_travel_giav_gf_forms' );
+define( 'WP_TRAVEL_GIAV_GF_MAP_OPTION_PREFIX', 'wp_travel_giav_gf_map_' );
 
 /**
  * Build the public proposal URL for admin listings and detail views.
@@ -100,6 +114,28 @@ function wp_travel_giav_get_items_schema( $charset_collate ) {
     ";
 }
 
+function wp_travel_giav_get_requests_schema( $charset_collate ) {
+    return "
+    CREATE TABLE " . WP_TRAVEL_GIAV_TABLE_REQUESTS . " (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        form_id INT(11) NOT NULL,
+        entry_id INT(11) NOT NULL,
+        lang VARCHAR(5) NOT NULL,
+        status VARCHAR(30) NOT NULL DEFAULT 'new',
+        proposal_id BIGINT(20) UNSIGNED NULL,
+        assigned_to BIGINT(20) UNSIGNED NULL,
+        notes TEXT NULL,
+        meta_json LONGTEXT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY idx_form_entry (form_id, entry_id),
+        KEY idx_status (status),
+        KEY idx_proposal (proposal_id)
+    ) $charset_collate;
+    ";
+}
+
 /**
  * Core includes (DB + repositories).
  *
@@ -113,12 +149,14 @@ require_once __DIR__ . '/includes/helpers/class-proposal-notifications.php';
 require_once __DIR__ . '/includes/helpers/class-giav-proposal-sync.php';
 require_once __DIR__ . '/includes/integrations/class-giav-soap-client.php';
 require_once __DIR__ . '/includes/helpers/class-db-migrator.php';
+require_once __DIR__ . '/includes/helpers/class-gf-requests.php';
 
 require_once __DIR__ . '/includes/repositories/class-proposal-repository.php';
 require_once __DIR__ . '/includes/repositories/class-proposal-version-repository.php';
 require_once __DIR__ . '/includes/repositories/class-proposal-item-repository.php';
 require_once __DIR__ . '/includes/repositories/class-proposal-giav-reserva-repository.php';
 require_once __DIR__ . '/includes/repositories/class-giav-mapping-repository.php';
+require_once __DIR__ . '/includes/repositories/class-request-repository.php';
 require_once __DIR__ . '/includes/repositories/class-audit-log-repository.php';
 require_once __DIR__ . '/includes/class-proposal-viewer.php';
 
@@ -171,6 +209,11 @@ function wp_travel_giav_activate() {
         giav_sync_status ENUM('none','pending','ok','error') DEFAULT 'none',
         giav_sync_error LONGTEXT NULL,
         giav_sync_updated_at DATETIME NULL,
+        source_type VARCHAR(50) NULL,
+        source_form_id INT(11) UNSIGNED NULL,
+        source_entry_id INT(11) UNSIGNED NULL,
+        source_request_id BIGINT(20) UNSIGNED NULL,
+        source_meta_json LONGTEXT NULL,
         created_by BIGINT(20) UNSIGNED NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -296,6 +339,11 @@ function wp_travel_giav_activate() {
     ) $charset_collate;
     ";
 
+    /**
+     * 8. Solicitudes (Gravity Forms)
+     */
+    $sql_requests = wp_travel_giav_get_requests_schema( $charset_collate );
+
     dbDelta( $sql_proposals );
     dbDelta( $sql_versions );
     dbDelta( $sql_items );
@@ -303,6 +351,7 @@ function wp_travel_giav_activate() {
     dbDelta( $sql_audit );
     dbDelta( $sql_sync_log );
     dbDelta( $sql_reservas );
+    dbDelta( $sql_requests );
 
     if ( class_exists( 'WP_Travel_Proposal_Viewer' ) ) {
         WP_Travel_Proposal_Viewer::flush_rewrite_rules();
@@ -346,6 +395,10 @@ function wp_travel_giav_maybe_upgrade_schema() {
 
     if ( version_compare( $current ?: '0.0.0', '0.7.0', '<' ) ) {
         wp_travel_giav_upgrade_proposals_to_0_7_0();
+    }
+
+    if ( version_compare( $current ?: '0.0.0', '0.8.0', '<' ) ) {
+        wp_travel_giav_upgrade_requests_to_0_8_0();
     }
 
     update_option( 'wp_travel_giav_db_version', WP_TRAVEL_GIAV_DB_VERSION );
@@ -491,6 +544,30 @@ function wp_travel_giav_upgrade_proposals_to_0_7_0() {
     dbDelta( $sql_reservas );
 }
 
+function wp_travel_giav_upgrade_requests_to_0_8_0() {
+    global $wpdb;
+
+    $charset_collate = $wpdb->get_charset_collate();
+    $sql_requests = wp_travel_giav_get_requests_schema( $charset_collate );
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql_requests );
+
+    $table = WP_TRAVEL_GIAV_TABLE_PROPOSALS;
+    $columns = [
+        'source_type'       => "ALTER TABLE {$table} ADD COLUMN source_type VARCHAR(50) NULL",
+        'source_form_id'    => "ALTER TABLE {$table} ADD COLUMN source_form_id INT(11) UNSIGNED NULL",
+        'source_entry_id'   => "ALTER TABLE {$table} ADD COLUMN source_entry_id INT(11) UNSIGNED NULL",
+        'source_request_id' => "ALTER TABLE {$table} ADD COLUMN source_request_id BIGINT(20) UNSIGNED NULL",
+        'source_meta_json'  => "ALTER TABLE {$table} ADD COLUMN source_meta_json LONGTEXT NULL",
+    ];
+
+    foreach ( $columns as $column => $sql ) {
+        if ( ! wp_travel_giav_table_has_column( $table, $column ) ) {
+            $wpdb->query( $sql );
+        }
+    }
+}
+
 function wp_travel_giav_table_has_column( $table, $column ) {
     global $wpdb;
 
@@ -568,11 +645,13 @@ function wp_travel_giav_register_api() {
     require_once __DIR__ . '/includes/api/class-versions-controller.php';
     require_once __DIR__ . '/includes/api/class-items-controller.php';
     require_once __DIR__ . '/includes/api/class-actions-controller.php';
+    require_once __DIR__ . '/includes/api/class-requests-controller.php';
 
     ( new WP_Travel_Proposals_Controller() )->register_routes();
     ( new WP_Travel_Proposal_Versions_Controller() )->register_routes();
     ( new WP_Travel_Proposal_Items_Controller() )->register_routes();
     ( new WP_Travel_Proposal_Actions_Controller() )->register_routes();
+    ( new WP_Travel_Requests_Controller() )->register_routes();
 
     // DB health endpoint (public read)
     register_rest_route( 'travel/v1', '/health/db', [
@@ -647,6 +726,15 @@ function wp_travel_giav_admin_menu() {
 
     add_submenu_page(
         'travel_proposals',
+        'Solicitudes recibidas',
+        'Solicitudes recibidas',
+        'manage_options',
+        'wp-travel-giav-requests',
+        'wp_travel_giav_render_requests'
+    );
+
+    add_submenu_page(
+        'travel_proposals',
         'Configuración',
         'Configuración',
         'manage_options',
@@ -657,6 +745,10 @@ function wp_travel_giav_admin_menu() {
 
 function wp_travel_giav_render_app() {
     echo '<div id="wp-travel-giav-admin"></div>';
+}
+
+function wp_travel_giav_render_requests() {
+    echo '<div id="wp-travel-giav-requests"></div>';
 }
 
 function wp_travel_giav_render_settings() {
@@ -718,7 +810,7 @@ function wp_travel_giav_render_settings() {
 function wp_travel_giav_admin_assets( $hook ) {
 
     // Allow assets for main page + mapping submenu page.
-    if ( ! in_array( $hook, [ 'toplevel_page_travel_proposals', 'travel_proposals_page_wp-travel-giav-mapping' ], true ) ) {
+    if ( ! in_array( $hook, [ 'toplevel_page_travel_proposals', 'travel_proposals_page_wp-travel-giav-mapping', 'travel_proposals_page_wp-travel-giav-requests' ], true ) ) {
         return;
     }
 
@@ -932,6 +1024,10 @@ function wp_travel_giav_enqueue_portal_assets() {
                 'proposals' => rest_url( 'travel/v1/proposals' ),
                 'detail'    => rest_url( 'travel/v1/proposals/%d' ),
                 'versions'  => rest_url( 'travel/v1/proposals/%d/versions' ),
+                'requests' => rest_url( 'travel/v1/requests' ),
+                'request_detail' => rest_url( 'travel/v1/requests/%d' ),
+                'request_status' => rest_url( 'travel/v1/requests/%d/status' ),
+                'request_convert' => rest_url( 'travel/v1/requests/%d/convert' ),
             ],
         ]
     );
@@ -984,13 +1080,14 @@ function wp_travel_giav_db_check() {
     global $wpdb;
 
     $required = [
-        WP_TRAVEL_GIAV_TABLE_PROPOSALS => [ 'id', 'proposal_token' ],
+        WP_TRAVEL_GIAV_TABLE_PROPOSALS => [ 'id', 'proposal_token', 'source_type' ],
         WP_TRAVEL_GIAV_TABLE_VERSIONS  => [ 'id', 'public_token' ],
         WP_TRAVEL_GIAV_TABLE_ITEMS     => [ 'id', 'version_id' ],
         WP_TRAVEL_GIAV_TABLE_MAPPING   => [ 'id' ],
         WP_TRAVEL_GIAV_TABLE_AUDIT     => [ 'id' ],
         WP_TRAVEL_GIAV_TABLE_SYNC_LOG  => [ 'id' ],
         WP_TRAVEL_GIAV_TABLE_RESERVAS  => [ 'id' ],
+        WP_TRAVEL_GIAV_TABLE_REQUESTS  => [ 'id', 'form_id', 'entry_id', 'status' ],
     ];
 
     $missing = [];

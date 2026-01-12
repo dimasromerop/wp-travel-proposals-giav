@@ -135,6 +135,24 @@ const listEndpoint = (params = {}) => {
   return `proposals?${searchParams.toString()}`;
 };
 
+const buildRequestsEndpoint = (params = {}) => {
+  const searchParams = new URLSearchParams();
+  const setParam = (key, value) => {
+    if (value !== undefined && value !== null && value !== '') {
+      searchParams.set(key, String(value));
+    }
+  };
+
+  setParam('q', params.search);
+  setParam('status', params.status);
+  setParam('lang', params.lang);
+  setParam('form', params.form);
+  setParam('page', params.page ?? 1);
+  setParam('per_page', params.perPage ?? 20);
+
+  return `requests?${searchParams.toString()}`;
+};
+
 const API = {
   listProposals: async (options = {}) => {
     const result = await fetchJSON(listEndpoint(options));
@@ -153,6 +171,30 @@ const API = {
 
   giavPreflight,
   retryGiavSync,
+
+  listRequests: async (options = {}) => {
+    const result = await fetchJSON(buildRequestsEndpoint(options));
+    return {
+      items: Array.isArray(result?.items) ? result.items : [],
+      total: typeof result?.total === 'number' ? result.total : 0,
+      page: result?.page ?? 1,
+      per_page: result?.per_page ?? 20,
+      total_pages: result?.total_pages ?? 0,
+    };
+  },
+
+  getRequest: (requestId) => fetchJSON(`requests/${requestId}`),
+
+  updateRequestStatus: (requestId, payload) =>
+    fetchJSON(`requests/${requestId}/status`, {
+      method: 'POST',
+      body: payload,
+    }),
+
+  convertRequest: (requestId) =>
+    fetchJSON(`requests/${requestId}/convert`, {
+      method: 'POST',
+    }),
 };
 
 export default API;

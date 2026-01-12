@@ -44,6 +44,8 @@ class WP_Travel_GIAV_DB_Migrator {
             // Always ensure items schema is up-to-date first (idempotent)
             dbDelta( wp_travel_giav_get_items_schema( $charset_collate ) );
             self::log( 'dbDelta_items', 'success', 'dbDelta ran for items schema' );
+            dbDelta( wp_travel_giav_get_requests_schema( $charset_collate ) );
+            self::log( 'dbDelta_requests', 'success', 'dbDelta ran for requests schema' );
 
             $steps = [
                 [ 'version' => '0.3.0', 'call' => 'wp_travel_giav_upgrade_proposals_to_0_3_0' ],
@@ -51,6 +53,7 @@ class WP_Travel_GIAV_DB_Migrator {
                 [ 'version' => '0.5.0', 'call' => 'wp_travel_giav_upgrade_proposals_to_0_5_0' ],
                 [ 'version' => '0.6.0', 'call' => 'wp_travel_giav_upgrade_proposals_to_0_6_0' ],
                 [ 'version' => '0.7.0', 'call' => 'wp_travel_giav_upgrade_proposals_to_0_7_0' ],
+                [ 'version' => '0.8.0', 'call' => 'wp_travel_giav_upgrade_requests_to_0_8_0' ],
             ];
 
             foreach ( $steps as $step ) {

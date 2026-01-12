@@ -198,6 +198,32 @@ const API = {
       path: `/travel/v1/versions/${versionId}/confirm`,
       method: 'POST',
     }),
+
+  getRequestMappingConfig: () =>
+    apiFetch({
+      path: `/travel/v1/requests/mapping`,
+      method: 'GET',
+    }),
+
+  saveRequestFormsMapping: (data) =>
+    apiFetch({
+      path: `/travel/v1/requests/mapping`,
+      method: 'POST',
+      data,
+    }),
+
+  getRequestFormMapping: (formId) =>
+    apiFetch({
+      path: `/travel/v1/requests/mapping/${formId}`,
+      method: 'GET',
+    }),
+
+  saveRequestFormMapping: (formId, mapping) =>
+    apiFetch({
+      path: `/travel/v1/requests/mapping/${formId}`,
+      method: 'POST',
+      data: mapping,
+    }),
 };
 
 export default API;

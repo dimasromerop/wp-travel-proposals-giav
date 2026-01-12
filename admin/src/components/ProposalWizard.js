@@ -126,6 +126,21 @@ export default function ProposalWizard({
 
   const [basics, setBasics] = useState(initialBasics);
 
+  const requestIntentions = useMemo(() => {
+    const sourceMeta = initialProposal?.source_meta_json;
+    if (sourceMeta) {
+      try {
+        const decoded = JSON.parse(sourceMeta);
+        if (decoded?.intentions) {
+          return decoded.intentions;
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
+    return initialSnapshot?.intentions || null;
+  }, [initialProposal?.source_meta_json, initialSnapshot?.intentions]);
+
   const [items, setItems] = useState(initialSnapshot?.items || []);
   const [totals, setTotals] = useState(initialSnapshot?.totals || null);
 
@@ -155,22 +170,23 @@ export default function ProposalWizard({
       />
     );
   } else if (step === 2) {
-    content = (
-      <StepServices
-        basics={basics}
-        initialItems={items}
-        onDraftChange={({ items: it, totals: t }) => {
-          setItems(it);
-          setTotals(t);
-        }}
-        onBack={() => setStep(1)}
-        onNext={({ items: it, totals: t }) => {
-          setItems(it);
-          setTotals(t);
-          setStep(3);
-        }}
-      />
-    );
+        content = (
+          <StepServices
+            basics={basics}
+            initialItems={items}
+            onDraftChange={({ items: it, totals: t }) => {
+              setItems(it);
+              setTotals(t);
+            }}
+            onBack={() => setStep(1)}
+            onNext={({ items: it, totals: t }) => {
+              setItems(it);
+              setTotals(t);
+              setStep(3);
+            }}
+            requestIntentions={requestIntentions}
+          />
+        );
   } else if (step === 3) {
     content = (
       <StepPreview

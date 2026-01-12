@@ -721,7 +721,7 @@ export function syncServiceDatesFromBasics(services = [], basics = {}) {
   return changed ? synced : services;
 }
 
-export default function StepServices({ basics, initialItems = [], onBack, onNext, onDraftChange }) {
+export default function StepServices({ basics, initialItems = [], onBack, onNext, onDraftChange, requestIntentions = null }) {
   const currency = basics?.currency || 'EUR';
   const pax = Math.max(1, toInt(basics?.pax_total ?? 1, 1));
   const playersCount = Math.max(0, toInt(basics?.players_count ?? 0, 0));
@@ -1208,6 +1208,26 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
       </CardHeader>
 
       <CardBody ref={topRef}>
+
+        {requestIntentions && (
+          <div className="services-intention-banner">
+            <strong>Intenciones detectadas</strong>
+            {requestIntentions.golf?.requested && (
+              <span>
+                Solicitud indica {requestIntentions.golf.green_fees_per_player || '—'} green-fees por jugador.
+              </span>
+            )}
+            {requestIntentions.flights?.requested && (
+              <span>
+                Requiere vuelos desde {requestIntentions.flights.departure_airport || '—'}.
+              </span>
+            )}
+            {requestIntentions.package && <span>Paquete sugerido: {requestIntentions.package}</span>}
+            {requestIntentions.more_info && (
+              <span>Más info: {requestIntentions.more_info}</span>
+            )}
+          </div>
+        )}
 
         {/* Global markup bar */}
         <div className="services-toolbar">

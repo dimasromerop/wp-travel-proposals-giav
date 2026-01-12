@@ -2,6 +2,8 @@ import { HashRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom';
 import ProposalsList from './pages/ProposalsList';
 import ProposalDetail from './pages/ProposalDetail';
 import ProposalWizardPage from './pages/ProposalWizardPage';
+import RequestsList from './pages/RequestsList';
+import RequestDetail from './pages/RequestDetail';
 
 const PortalLayout = ( { children, config } ) => (
   <div className="casanova-portal">
@@ -49,6 +51,16 @@ const PortalLayout = ( { children, config } ) => (
           >
             Listado de propuestas
           </NavLink>
+          <NavLink
+            to="/requests"
+            className={ ( { isActive } ) =>
+              `casanova-portal__nav-link ${
+                isActive ? 'casanova-portal__nav-link--active' : ''
+              }`
+            }
+          >
+            Solicitudes recibidas
+          </NavLink>
         </nav>
         <div className="casanova-portal__status">
           <span>Base de datos</span>
@@ -78,16 +90,18 @@ const App = () => {
   return (
     <HashRouter>
       <PortalLayout config={config}>
-        <Routes>
-          <Route path="/" element={ <Navigate to="/proposals" replace /> } />
-          <Route path="/proposals" element={<ProposalsList />} />
-          <Route path="/nueva" element={<ProposalWizardPage mode="create" />} />
-          <Route path="/propuesta/:proposalId" element={<ProposalDetail />} />
-          <Route path="/propuesta/:proposalId/editar" element={<ProposalWizardPage mode="edit" />} />
-          <Route path="/proposals/:proposalId" element={<ProposalDetail />} />
-          <Route path="/proposals/:proposalId/edit" element={<ProposalWizardPage mode="edit" />} />
-          <Route path="*" element={ <Navigate to="/proposals" replace /> } />
-        </Routes>
+          <Routes>
+            <Route path="/" element={ <Navigate to="/proposals" replace /> } />
+            <Route path="/proposals" element={<ProposalsList />} />
+            <Route path="/requests" element={<RequestsList />} />
+            <Route path="/requests/:requestId" element={<RequestDetail />} />
+            <Route path="/nueva" element={<ProposalWizardPage mode="create" />} />
+            <Route path="/propuesta/:proposalId" element={<ProposalDetail />} />
+            <Route path="/propuesta/:proposalId/editar" element={<ProposalWizardPage mode="edit" />} />
+            <Route path="/proposals/:proposalId" element={<ProposalDetail />} />
+            <Route path="/proposals/:proposalId/edit" element={<ProposalWizardPage mode="edit" />} />
+            <Route path="*" element={ <Navigate to="/proposals" replace /> } />
+          </Routes>
       </PortalLayout>
     </HashRouter>
   );
