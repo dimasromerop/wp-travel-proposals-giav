@@ -384,7 +384,7 @@
   background: transparent;
   border: none;
   color: inherit;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
@@ -1180,7 +1180,7 @@
 }
 
 .proposal-basics__grid--dates {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   /*
     UX: no alinear al "end".
     Si un campo (p.ej. JUGADORES) tiene texto de ayuda, el grid crece y
@@ -1219,9 +1219,9 @@
   align-items: center;
   justify-content: center;
   /* Mantener la flecha alineada con los inputs cuando el grid ya no usa align-items:end */
-  align-self: start;
-  margin-top: 26px; /* align with inputs */
-  font-size: 14px;
+  align-self: center;
+ /* margin-top: 26px; /* align with inputs */
+   font-size: 14px;
   color: var(--casanova-muted);
 }
 
@@ -1493,7 +1493,7 @@
 
 .service-card__grid--dates {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  align-items: end;
+  align-items: start;
 }
 
 .service-card__pricing {
