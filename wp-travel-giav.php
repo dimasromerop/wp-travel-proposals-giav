@@ -168,6 +168,18 @@ register_activation_hook( __FILE__, 'wp_travel_giav_activate' );
 add_action( 'plugins_loaded', 'wp_travel_giav_maybe_upgrade_schema' );
 
 function wp_travel_giav_activate() {
+
+// Ensure admins can access the portal/admin screens even if we later use a custom capability.
+$admin_role = get_role( 'administrator' );
+if ( $admin_role && ! $admin_role->has_cap( WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESERVAS ) ) {
+    $admin_role->add_cap( WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESERVAS );
+}
+// Optional: also allow shop_manager if it exists (common in WP setups).
+$shop_role = get_role( 'shop_manager' );
+if ( $shop_role && ! $shop_role->has_cap( WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESERVAS ) ) {
+    $shop_role->add_cap( WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESERVAS );
+}
+
     global $wpdb;
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -707,7 +719,7 @@ function wp_travel_giav_admin_menu() {
     add_menu_page(
         'Propuestas',
         'Propuestas',
-        'manage_options',
+        WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESERVAS,
         'travel_proposals',
         'wp_travel_giav_render_app',
         'dashicons-portfolio',
@@ -719,7 +731,7 @@ function wp_travel_giav_admin_menu() {
         'travel_proposals',
         'GIAV Mapping',
         'GIAV Mapping',
-        'manage_options',
+        WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESERVAS,
         'wp-travel-giav-mapping',
         'wp_travel_giav_render_app'
     );
@@ -728,7 +740,7 @@ function wp_travel_giav_admin_menu() {
         'travel_proposals',
         'Solicitudes recibidas',
         'Solicitudes recibidas',
-        'manage_options',
+        WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESERVAS,
         'wp-travel-giav-requests',
         'wp_travel_giav_render_requests'
     );
@@ -737,22 +749,28 @@ function wp_travel_giav_admin_menu() {
         'travel_proposals',
         'Configuración',
         'Configuración',
-        'manage_options',
+        WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESERVAS,
         'travel_proposals_settings',
         'wp_travel_giav_render_settings'
     );
 }
 
 function wp_travel_giav_render_app() {
+    if ( ! wp_travel_giav_can_manage_proposals() ) {
+        wp_die( 'No tienes permisos suficientes para ver esta página.' );
+    }
     echo '<div id="wp-travel-giav-admin"></div>';
 }
 
 function wp_travel_giav_render_requests() {
+    if ( ! wp_travel_giav_can_manage_proposals() ) {
+        wp_die( 'No tienes permisos suficientes para ver esta página.' );
+    }
     echo '<div id="wp-travel-giav-requests"></div>';
 }
 
 function wp_travel_giav_render_settings() {
-    if ( ! current_user_can( 'manage_options' ) ) {
+    if ( ! wp_travel_giav_can_manage_proposals() ) {
         wp_die( 'No tienes permisos suficientes para ver esta página.' );
     }
 
