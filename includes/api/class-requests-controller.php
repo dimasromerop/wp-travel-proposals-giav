@@ -163,9 +163,12 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
             }
         }
 
+        $linked_proposals = $this->build_linked_proposals( (int) $item['id'] );
+
         return $this->response( [
-            'request'  => $item,
-            'proposal' => $proposal_data,
+            'request'           => $item,
+            'proposal'          => $proposal_data,
+            'linked_proposals'  => $linked_proposals,
         ] );
     }
 
@@ -256,11 +259,13 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
         $proposal_repo->set_current_version( $proposal_id, $version_id );
         $repo->assign_proposal( $item['id'], $proposal_id );
 
-        $redirect = $this->build_wizard_url( $proposal_id );
+        $portal_url = $this->build_wizard_url( $proposal_id );
+        $admin_url = $this->build_admin_edit_url( $proposal_id );
 
         return $this->response( [
-            'proposal_id' => $proposal_id,
-            'redirect_url' => $redirect,
+            'proposal_id'    => $proposal_id,
+            'edit_url'       => $portal_url,
+            'admin_edit_url' => $admin_url,
         ], 201 );
     }
 
@@ -346,6 +351,30 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
             'form_id' => $form_id,
             'mapping' => $mapping,
         ] );
+    }
+
+    private function build_linked_proposals( int $request_id ): array {
+        $proposal_repo = new WP_Travel_Proposal_Repository();
+        $rows = $proposal_repo->get_by_request_id( $request_id );
+
+        $mapped = [];
+        foreach ( $rows as $proposal ) {
+            $mapped[] = [
+                'id'            => (int) $proposal['id'],
+                'status'        => $proposal['status'] ?? 'draft',
+                'proposal_title'=> $proposal['proposal_title'] ?? '',
+                'updated_at'    => $proposal['updated_at'],
+                'created_at'    => $proposal['created_at'],
+                'public_url'    => ! empty( $proposal['proposal_token'] )
+                    ? wp_travel_giav_get_public_proposal_url( $proposal['proposal_token'] )
+                    : '',
+                'first_name'    => $proposal['first_name'] ?? '',
+                'last_name'     => $proposal['last_name'] ?? '',
+                'client_name'   => $proposal['customer_name'] ?? '',
+            ];
+        }
+
+        return $mapped;
     }
 
     private function get_target_form_ids( ?string $form_param ): array {
@@ -438,5 +467,9 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
         $base = site_url( '/' . WP_TRAVEL_GIAV_PORTAL_SLUG );
         $slug = rtrim( $base, '/' ) . '#/propuesta/' . $proposal_id . '/editar';
         return $slug;
+    }
+
+    private function build_admin_edit_url( int $proposal_id ): string {
+        return admin_url( 'admin.php?page=travel_proposals&proposal_id=' . absint( $proposal_id ) . '&action=edit' );
     }
 }

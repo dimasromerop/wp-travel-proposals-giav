@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
 // Inline SVG icons (no external deps). Using currentColor keeps them consistent with the theme.
@@ -49,32 +49,51 @@ function IconCopyLink(props) {
   );
 }
 
-/**
- * Inline row actions for the portal proposals list.
- * Actions:
- * - Editar
- * - Vista pública (si existe URL)
- * - Copiar enlace (si existe URL y el navegador lo permite)
- */
-export default function RowActionsMenu({ proposal }) {
+function IconTrash(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M9 4h6l1 2H8l1-2z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6 7h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M10 11v6" stroke="currentColor" strokeLinecap="round" />
+      <path d="M14 11v6" stroke="currentColor" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export default function RowActionsMenu({ proposal, onDelete }) {
   const publicUrl = proposal?.public_url || '';
   const editTo = useMemo(() => `/propuesta/${proposal?.id}/editar`, [proposal?.id]);
 
   const canCopy = typeof navigator !== 'undefined' && !!navigator.clipboard;
   const copyDisabled = !publicUrl || !canCopy;
   const copyTitle = !publicUrl
-    ? 'No hay enlace público disponible'
+    ? 'No hay enlace pública disponible'
     : !canCopy
       ? 'Tu navegador no permite copiar al portapapeles'
       : 'Copiar enlace';
 
   const handleCopy = async () => {
     if (!publicUrl || !canCopy) return;
-
     try {
       await navigator.clipboard.writeText(publicUrl);
     } catch (_) {
-      // Si falla el portapapeles, simplemente no hacemos nada adicional.
+      // Si falla el portapapeles, no hacemos nada.
+    }
+  };
+
+  const handleDelete = () => {
+    if (typeof onDelete === 'function') {
+      onDelete(proposal);
     }
   };
 
@@ -122,6 +141,18 @@ export default function RowActionsMenu({ proposal }) {
       >
         <IconCopyLink className="cg-row-actions-inline__svg" />
       </button>
+
+      {typeof onDelete === 'function' ? (
+        <button
+          type="button"
+          className="cg-row-actions-inline__icon cg-row-actions-inline__icon--destructive"
+          title="Eliminar propuesta"
+          aria-label="Eliminar propuesta"
+          onClick={handleDelete}
+        >
+          <IconTrash className="cg-row-actions-inline__svg" />
+        </button>
+      ) : null}
     </div>
   );
 }

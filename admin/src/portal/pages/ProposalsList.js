@@ -88,6 +88,7 @@ const ProposalsList = () => {
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
 
   const loadProposals = useCallback(async () => {
     setLoading(true);
@@ -100,6 +101,9 @@ const ProposalsList = () => {
         order,
       });
       setProposals(result.items);
+      setSelectedIds((prev) =>
+        prev.filter((id) => result.items.some((proposal) => proposal.id === id))
+      );
     } catch (err) {
       setError(err.message || 'No se pudo cargar el listado.');
     } finally {
@@ -139,6 +143,64 @@ const ProposalsList = () => {
     }
     setSortBy(column);
     setOrder('desc');
+  };
+
+  const toggleSelected = (proposalId) => {
+    setSelectedIds((prev) =>
+      prev.includes(proposalId)
+        ? prev.filter((id) => id !== proposalId)
+        : [...prev, proposalId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === proposals.length) {
+      setSelectedIds([]);
+      return;
+    }
+    setSelectedIds(proposals.map((proposal) => proposal.id));
+  };
+
+  const handleDelete = async (proposal) => {
+    if (!proposal?.id) {
+      return;
+    }
+    const confirmed = window.confirm(
+      `¿Seguro que quieres eliminar la propuesta #${proposal.id}?`
+    );
+    if (!confirmed) return;
+    setLoading(true);
+    setError('');
+    try {
+      await API.deleteProposal(proposal.id);
+      setSelectedIds((prev) => prev.filter((id) => id !== proposal.id));
+      await loadProposals();
+    } catch (err) {
+      setError(err.message || 'No se pudo eliminar la propuesta.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) {
+      return;
+    }
+    const confirmed = window.confirm(
+      `¿Seguro que quieres eliminar ${selectedIds.length} propuestas?`
+    );
+    if (!confirmed) return;
+    setLoading(true);
+    setError('');
+    try {
+      await API.bulkDeleteProposals(selectedIds);
+      setSelectedIds([]);
+      await loadProposals();
+    } catch (err) {
+      setError(err.message || 'No se pudieron eliminar las propuestas.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -217,6 +279,13 @@ const ProposalsList = () => {
           >
             Limpiar filtros
           </button>
+          <button
+            className="button-danger"
+            onClick={handleBulkDelete}
+            disabled={loading || selectedIds.length === 0}
+          >
+            Eliminar seleccionadas ({selectedIds.length})
+          </button>
         </div>
       </div>
 
@@ -228,6 +297,15 @@ const ProposalsList = () => {
 
       <div className="casanova-portal-table">
         <div className="casanova-portal-table__row casanova-portal-table__row--header">
+          <span className="casanova-portal-table__select">
+            <input
+              type="checkbox"
+              checked={proposals.length > 0 && selectedIds.length === proposals.length}
+              onChange={toggleSelectAll}
+              disabled={loading || proposals.length === 0}
+              aria-label="Seleccionar todas las propuestas"
+            />
+          </span>
           {sortableColumns.map((column) => (
             <span key={column.key}>
               <button
@@ -261,6 +339,15 @@ const ProposalsList = () => {
               key={proposal.id}
               className="casanova-portal-table__row casanova-portal-table__row--item"
             >
+              <span className="casanova-portal-table__select">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(proposal.id)}
+                  onChange={() => toggleSelected(proposal.id)}
+                  disabled={loading}
+                  aria-label={`Seleccionar propuesta #${proposal.id}`}
+                />
+              </span>
               <span>#{proposal.id}</span>
               <span>{proposal.display_title || proposal.proposal_title || 'Propuesta sin título'}</span>
               <span>
@@ -294,7 +381,7 @@ const ProposalsList = () => {
                 >
                   Ver detalle
                 </Link>
-                <RowActionsMenu proposal={proposal} />
+                <RowActionsMenu proposal={proposal} onDelete={handleDelete} />
               </span>
             </div>
           ))}

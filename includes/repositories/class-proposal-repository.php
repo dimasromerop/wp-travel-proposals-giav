@@ -64,6 +64,14 @@ class WP_Travel_Proposal_Repository extends WP_Travel_GIAV_DB {
         return $this->get_row( 'id = %d', [ $proposal_id ] );
     }
 
+    public function get_by_request_id( int $request_id ): array {
+        $request_id = absint( $request_id );
+        if ( $request_id <= 0 ) {
+            return [];
+        }
+        return $this->get_results( 'source_request_id = %d ORDER BY created_at DESC', [ $request_id ] );
+    }
+
     public function get_by_ids( array $proposal_ids ) {
         $ids = array_filter( array_map( 'absint', array_unique( $proposal_ids ) ) );
         if ( empty( $ids ) ) {

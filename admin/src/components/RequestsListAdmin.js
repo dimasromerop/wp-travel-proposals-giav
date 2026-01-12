@@ -176,13 +176,18 @@ const RequestsListAdmin = () => {
     setNotice(null);
     try {
       const res = await API.convertRequest(requestId);
+      if (res?.admin_edit_url) {
+        window.location.assign(res.admin_edit_url);
+        return;
+      }
+      if (res?.edit_url) {
+        window.location.assign(res.edit_url);
+        return;
+      }
       setNotice({
         status: 'success',
-        message: 'Propuesta creada. Abriendo el wizard...',
+        message: 'Propuesta creada correctamente.',
       });
-      if (res?.redirect_url) {
-        window.open(res.redirect_url, '_blank', 'noopener,noreferrer');
-      }
       loadRequests();
     } catch (err) {
       setNotice({
@@ -336,20 +341,20 @@ const RequestsListAdmin = () => {
                         <small>{request.lang?.toUpperCase() || 'ES'}</small>
                       </span>
                       <span className="requests-list-admin__actions">
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleConvert(request.id)}
+                        disabled={convertingId === request.id}
+                        isBusy={convertingId === request.id}
+                      >
+                        Convertir
+                      </Button>
+                      {request.proposal_id && (
                         <Button
-                          variant="secondary"
-                          onClick={() => handleConvert(request.id)}
-                          disabled={convertingId === request.id}
-                          isBusy={convertingId === request.id}
+                          variant="tertiary"
+                          onClick={() => window.location.assign(buildProposalUrl(request.proposal_id))}
                         >
-                          {request.proposal_id ? 'Actualizar propuesta' : 'Crear propuesta'}
-                        </Button>
-                        {request.proposal_id && (
-                          <Button
-                            variant="tertiary"
-                            onClick={() => window.open(buildProposalUrl(request.proposal_id), '_blank', 'noopener')}
-                          >
-                            Abrir propuesta
+                          Abrir propuesta
                           </Button>
                         )}
                       </span>

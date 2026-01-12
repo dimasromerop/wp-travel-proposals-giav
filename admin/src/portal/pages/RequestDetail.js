@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from '@wordpress/element';
 import { useNavigate, useParams } from 'react-router-dom';
 import API from '../api';
+import ActionIconButton from '../components/ActionIconButton';
 
 const STATUS_LABELS = {
   new: 'Nueva',
@@ -16,6 +17,19 @@ const statusOptions = [
   { value: '', label: 'Selecciona un estado' },
   ...Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })),
 ];
+
+const PROPOSAL_STATUS_LABELS = {
+  draft: 'Borrador',
+  sent: 'Enviada',
+  accepted: 'Aceptada',
+  queued: 'En cola',
+  synced: 'Sincronizada',
+  error: 'Error',
+  revoked: 'Revocada',
+  lost: 'Perdida',
+};
+
+const EDITABLE_PROPOSAL_STATUSES = ['draft', 'sent'];
 
 const formatDate = (value) => {
   if (!value) return '—';
@@ -38,7 +52,6 @@ const getCustomerFullName = (mapped = {}) => {
   return 'Sin nombre';
 };
 
-
 export default function RequestDetail() {
   const { requestId } = useParams();
   const navigate = useNavigate();
@@ -52,7 +65,7 @@ export default function RequestDetail() {
   const [converting, setConverting] = useState(false);
 
   const loadRequest = async () => {
-    if ( ! requestId ) {
+    if (!requestId) {
       setError('Solicitud inválida.');
       return;
     }
@@ -101,10 +114,15 @@ export default function RequestDetail() {
     setActionMessage(null);
     try {
       const response = await API.convertRequest(requestId);
-      setActionMessage({ type: 'success', text: 'Propuesta creada. Abriendo wizard...' });
-      if (response?.redirect_url) {
-        window.open(response.redirect_url, '_blank', 'noopener');
+      if (response?.edit_url) {
+        window.location.assign(response.edit_url);
+        return;
       }
+      if (response?.redirect_url) {
+        window.location.assign(response.redirect_url);
+        return;
+      }
+      setActionMessage({ type: 'success', text: 'Propuesta creada correctamente.' });
       await loadRequest();
     } catch (err) {
       setActionMessage({ type: 'error', text: err.message || 'No se pudo convertir.' });
@@ -115,31 +133,27 @@ export default function RequestDetail() {
 
   const intentions = useMemo(() => {
     const data = request?.intentions;
-    if ( ! data ) {
+    if (!data) {
       return null;
     }
     const parts = [];
-    if ( data.golf?.requested ) {
-      parts.push(
-        `Green-fees por jugador: ${data.golf.green_fees_per_player || '—'}.`
-      );
+    if (data.golf?.requested) {
+      parts.push(`Green-fees por jugador: ${data.golf.green_fees_per_player || '—'}.`);
     }
-    if ( data.flights?.requested ) {
-      parts.push(
-        `Requiere vuelos desde ${data.flights.departure_airport || '–'}.`
-      );
+    if (data.flights?.requested) {
+      parts.push(`Requiere vuelos desde ${data.flights.departure_airport || '—'}.`);
     }
-    if ( parts.length === 0 && data.package ) {
+    if (parts.length === 0 && data.package) {
       parts.push(`Paquete: ${data.package}.`);
     }
     return parts;
   }, [request?.intentions]);
 
-  if ( loading ) {
+  if (loading) {
     return <div className="casanova-portal-section">Cargando solicitud…</div>;
   }
 
-  if ( error ) {
+  if (error) {
     return (
       <div className="casanova-portal-section">
         <div className="casanova-portal-section__notice casanova-portal-section__notice--error">
@@ -149,7 +163,7 @@ export default function RequestDetail() {
     );
   }
 
-  if ( ! request ) {
+  if (!request) {
     return null;
   }
 
@@ -160,7 +174,7 @@ export default function RequestDetail() {
           <p className="casanova-portal__eyebrow">Solicitud #{request.entry_id}</p>
           <h2>{getCustomerFullName(request.mapped)}</h2>
           <p>
-            {request.mapped?.email || '—'} • {request.mapped?.telefono || '—'}
+            {request.mapped?.email || '—'} · {request.mapped?.telefono || '—'}
           </p>
         </div>
         <div className="casanova-portal-detail__actions">
@@ -199,11 +213,13 @@ export default function RequestDetail() {
       <div className="casanova-portal-requests-detail">
         <div className="casanova-portal-card">
           <h3>Resumen</h3>
-          <p>Fechas: {request.mapped?.fecha_llegada || '—'} – {request.mapped?.fecha_regreso || '—'}</p>
+          <p>
+            Fechas: {request.mapped?.fecha_llegada || '—'} – {request.mapped?.fecha_regreso || '—'}
+          </p>
           <p>Jugadores: {request.mapped?.jugadores || 0}</p>
           <p>No jugadores: {request.mapped?.no_jugadores || 0}</p>
           <p>Green-fees por jugador: {request.mapped?.green_fees_per_player || '—'}</p>
-          <p>Solicita vuelos: {request.intentions?.flights?.requested ? 'S�' : 'No'}</p>
+          <p>Solicita vuelos: {request.intentions?.flights?.requested ? 'Sí' : 'No'}</p>
           <p>Más info: {request.mapped?.more_info || '—'}</p>
         </div>
 
@@ -211,11 +227,7 @@ export default function RequestDetail() {
           <h3>Estado CRM</h3>
           <label htmlFor="request-status" className="casanova-portal-filter">
             <span>Estado</span>
-            <select
-              id="request-status"
-              value={status}
-              onChange={(event) => setStatus(event.target.value)}
-            >
+            <select id="request-status" value={status} onChange={(event) => setStatus(event.target.value)}>
               {statusOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -247,16 +259,51 @@ export default function RequestDetail() {
             >
               {updating ? 'Guardando…' : 'Actualizar estado'}
             </button>
-            <button
-              type="button"
-              className="button-primary"
-              onClick={handleConvert}
-              disabled={converting}
-            >
+            <button type="button" className="button-primary" onClick={handleConvert} disabled={converting}>
               {converting ? 'Convirtiendo…' : 'Crear propuesta'}
             </button>
           </div>
         </div>
+
+        {request.linked_proposals?.length > 0 && (
+          <div className="casanova-portal-card">
+            <h3>Propuestas generadas</h3>
+            <div className="casanova-portal-requests-detail__proposals">
+              {request.linked_proposals.map((proposal) => {
+                const statusLabel =
+                  PROPOSAL_STATUS_LABELS[proposal.status] || proposal.status || 'Sin estado';
+                const updatedAt = proposal.updated_at || proposal.created_at;
+                const canEdit = EDITABLE_PROPOSAL_STATUSES.includes(proposal.status);
+                return (
+                  <div key={proposal.id} className="casanova-portal-requests-detail__proposal-row">
+                    <div className="casanova-portal-requests-detail__proposal-info">
+                      <strong>#{proposal.id}</strong>
+                      <span>{proposal.proposal_title || proposal.client_name || 'Propuesta'}</span>
+                      <small className="casanova-portal-requests-detail__proposal-meta">
+                        {statusLabel} · {formatDate(updatedAt)}
+                      </small>
+                    </div>
+                    <div className="casanova-action-icons">
+                      <ActionIconButton
+                        icon="document"
+                        label="Ver propuesta"
+                        tooltip="Ver propuesta"
+                        onClick={() => navigate(`/propuesta/${proposal.id}`)}
+                      />
+                      <ActionIconButton
+                        icon="pencil"
+                        label="Editar propuesta"
+                        tooltip="Editar propuesta"
+                        onClick={() => navigate(`/propuesta/${proposal.id}/editar`)}
+                        disabled={!canEdit}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -165,6 +165,17 @@ const API = {
     };
   },
 
+  deleteProposal: (proposalId) => {
+    return fetchJSON(`proposals/${proposalId}`, { method: 'DELETE' });
+  },
+
+  bulkDeleteProposals: (ids = []) => {
+    return fetchJSON('proposals/bulk-delete', {
+      method: 'POST',
+      body: { ids },
+    });
+  },
+
   getProposalDetail: (proposalId) => {
     return fetchJSON(`proposals/${proposalId}/detail`);
   },

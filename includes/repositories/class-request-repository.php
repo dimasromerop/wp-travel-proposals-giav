@@ -172,6 +172,8 @@ class WP_Travel_Request_Repository extends WP_Travel_GIAV_DB {
             'mapped'      => $meta['mapped'] ?? [],
             'intentions'  => $meta['intentions'] ?? [],
             'raw'         => $meta['raw'] ?? [],
+            'can_convert' => true,
+            'can_view_linked_proposals' => ! empty( $row['proposal_id'] ),
         ];
     }
 }
