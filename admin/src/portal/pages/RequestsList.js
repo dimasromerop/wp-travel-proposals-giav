@@ -153,7 +153,7 @@ export default function RequestsList() {
           <span>
             {gf ? `${gf} GF/jug` : '—'}
             {flights?.requested ? (
-              <div style={{ font Size: 11, color: '#6b7280' }}>
+              <div style={{ fontSize: 11, color: '#6b7280' }}>
                 Vuelos desde {flights.departure_airport || '—'}
               </div>
             ) : null}
