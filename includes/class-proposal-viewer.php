@@ -873,6 +873,52 @@ class WP_Travel_Proposal_Viewer {
                                             <?php endif; ?>
                                         </div>
                                     <?php endif; ?>
+
+                                    <?php
+                                    $hotel_pricing_mode = isset( $item['hotel_pricing_mode'] ) ? (string) $item['hotel_pricing_mode'] : '';
+                                    if ( $hotel_pricing_mode === '' && isset( $item['pricing_mode'] ) ) {
+                                        $hotel_pricing_mode = (string) $item['pricing_mode'];
+                                    }
+                                    $nightly_rates = [];
+                                    if ( isset( $item['nightly_rates'] ) && is_array( $item['nightly_rates'] ) ) {
+                                        $nightly_rates = $item['nightly_rates'];
+                                    } elseif ( isset( $item['hotel_nightly_rates'] ) && is_array( $item['hotel_nightly_rates'] ) ) {
+                                        $nightly_rates = $item['hotel_nightly_rates'];
+                                    }
+                                    ?>
+                                    <?php if ( $hotel_pricing_mode === 'per_night' && ! empty( $nightly_rates ) ) : ?>
+                                        <details class="service-card__details" style="margin-top:10px;">
+                                            <summary><?php echo esc_html__( 'Precio variable por noche', 'wp-travel-giav' ); ?></summary>
+                                            <div style="overflow:auto; margin-top:8px;">
+                                                <table style="width:100%; border-collapse:collapse;">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style="text-align:left; padding:6px 8px; border-bottom:1px solid #e5e7eb;"><?php echo esc_html__( 'Fecha', 'wp-travel-giav' ); ?></th>
+                                                            <th style="text-align:right; padding:6px 8px; border-bottom:1px solid #e5e7eb;"><?php echo esc_html__( 'Neto', 'wp-travel-giav' ); ?></th>
+                                                            <th style="text-align:right; padding:6px 8px; border-bottom:1px solid #e5e7eb;"><?php echo esc_html__( 'Margen', 'wp-travel-giav' ); ?></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <?php foreach ( $nightly_rates as $row ) : ?>
+                                                            <?php
+                                                            if ( ! is_array( $row ) ) {
+                                                                continue;
+                                                            }
+                                                            $row_date = self::format_spanish_date( (string) ( $row['date'] ?? '' ) );
+                                                            $net = isset( $row['net_price'] ) ? (float) $row['net_price'] : (float) ( $row['unit_cost_net'] ?? 0 );
+                                                            $margin_pct = isset( $row['margin_pct'] ) ? (float) $row['margin_pct'] : (float) ( $row['margin'] ?? 0 );
+                                                            ?>
+                                                            <tr>
+                                                                <td style="padding:6px 8px; border-bottom:1px solid #f1f5f9;"><?php echo esc_html( $row_date ?: (string) ( $row['date'] ?? '' ) ); ?></td>
+                                                                <td style="padding:6px 8px; text-align:right; border-bottom:1px solid #f1f5f9;"><?php echo esc_html( $currency_label ); ?> <?php echo esc_html( number_format( $net, 2 ) ); ?></td>
+                                                                <td style="padding:6px 8px; text-align:right; border-bottom:1px solid #f1f5f9;"><?php echo esc_html( number_format( $margin_pct, 2 ) ); ?>%</td>
+                                                            </tr>
+                                                        <?php endforeach; ?>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </details>
+                                    <?php endif; ?>
                                     <?php if ( $notes ) : ?>
                                         <div class="service-card__note"><?php echo esc_html( $notes ); ?></div>
                                     <?php endif; ?>
