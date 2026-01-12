@@ -156,6 +156,124 @@
   justify-content: center;
 }
 
+.requests-list-admin {
+  margin: 32px auto;
+  max-width: 1200px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.requests-list-admin__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.requests-list-admin__filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.requests-list-admin__table {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.requests-list-admin__row {
+  display: grid;
+  grid-template-columns: 150px 1.1fr 200px 190px 90px 150px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+.requests-list-admin__row--header {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+}
+
+.requests-list-admin__row--loading {
+  justify-content: center;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.requests-list-admin__empty {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px dashed #cbd5f5;
+  text-align: center;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.requests-list-admin__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.requests-list-admin__status--proposal_sent {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.requests-list-admin__status--won {
+  background: #ecfdf3;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.requests-list-admin__status--lost,
+.requests-list-admin__status--archived {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.requests-list-admin__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.requests-list-admin__loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+}
+
+.requests-list-admin__pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+}
+
 .proposal-list__actions-menu .components-button {
   border-radius: 999px;
 }

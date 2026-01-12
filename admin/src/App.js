@@ -13,8 +13,10 @@ import {
 import ProposalWizard from './components/ProposalWizard';
 import GiavMappingAdmin from './components/GiavMappingAdmin';
 import RequestsMappingAdmin from './components/RequestsMappingAdmin';
+import RequestsListAdmin from './components/RequestsListAdmin';
 import ProposalDetail from './components/ProposalDetail';
 import API from './api';
+import { buildCustomerFullName } from './utils/customer';
 
 const STATUS_LABELS = {
   draft: 'Borrador',
@@ -54,13 +56,18 @@ const buildAdminUrl = (params = {}) => {
   return url.toString();
 };
 
-export default function App() {
+export default function App({ page: forcedPage = '' } = {}) {
   const params = new URLSearchParams(window.location.search || '');
-  const page = params.get('page') || '';
+  const urlPage = params.get('page') || '';
+  const page = forcedPage || urlPage;
   const proposalIdParam = params.get('proposal_id');
   const action = params.get('action');
 
   if (page === 'wp-travel-giav-requests') {
+    return <RequestsListAdmin />;
+  }
+
+  if (page === 'wp-travel-giav-requests-settings') {
     return <RequestsMappingAdmin />;
   }
 
@@ -358,7 +365,13 @@ export default function App() {
                     <div className="proposal-list__id">#{proposal.id}</div>
                     <div className="proposal-list__title">{displayTitle}</div>
                     <div className="proposal-list__customer">
-                      <div className="proposal-list__customer-name">{proposal.customer_name || '—'}</div>
+                      <div className="proposal-list__customer-name">
+                        {buildCustomerFullName(
+                          proposal.first_name,
+                          proposal.last_name,
+                          proposal.customer_name
+                        ) || '—'}
+                      </div>
                       <div className="proposal-list__customer-meta">
                         {proposal.start_date || '—'} - {proposal.end_date || '—'}
                       </div>

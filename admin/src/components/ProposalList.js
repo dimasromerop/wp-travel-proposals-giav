@@ -11,6 +11,7 @@ import {
   TextControl,
 } from '@wordpress/components';
 import API from '../api';
+import { buildCustomerFullName } from '../utils/customer';
 
 function formatDate(value) {
   if (!value) return '-';
@@ -157,7 +158,13 @@ export default function ProposalList({ onCreate }) {
                       <tr key={proposal.id}>
                         <td>{proposal.id}</td>
                         <td>
-                          <div style={{ fontWeight: 600 }}>{proposal.customer_name}</div>
+                          <div style={{ fontWeight: 600 }}>
+                            {buildCustomerFullName(
+                              proposal.first_name,
+                              proposal.last_name,
+                              proposal.customer_name
+                            ) || '—'}
+                          </div>
                           <div style={{ fontSize: 12, color: '#6b7280' }}>{proposal.customer_email}</div>
                         </td>
                         <td>

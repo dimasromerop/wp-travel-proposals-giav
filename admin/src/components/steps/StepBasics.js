@@ -13,6 +13,7 @@ import {
   SelectControl,
 } from '@wordpress/components';
 import API from '../../api';
+import { buildCustomerFullName, splitCustomerFullName } from '../../utils/customer';
 
 const LANG_OPTIONS = [
   { label: 'Español', value: 'es' },
@@ -362,22 +363,33 @@ function DateField({ id, label, value, onChange, className = '', fieldRef }) {
 }
 
 export default function StepBasics({ initialValues = {}, onCreated, onNext, proposalId }) {
-  const defaults = useMemo(
-    () => ({
-      proposal_title: '',
-      customer_name: '',
-      customer_email: '',
-      customer_country: '', // ISO2 opcional
-      customer_language: 'es',
-      start_date: todayISO(),
-      end_date: todayISO(),
-      pax_total: 1,
-      players_count: initialValues.players_count ?? initialValues.pax_total ?? 1,
-      currency: 'EUR',
-      ...initialValues,
-    }),
-    [initialValues]
-  );
+const defaults = useMemo(() => {
+  const base = {
+    proposal_title: '',
+    customer_name: initialValues.customer_name || '',
+    customer_email: '',
+    customer_country: '', // ISO2 opcional
+    customer_language: 'es',
+    start_date: todayISO(),
+    end_date: todayISO(),
+    pax_total: 1,
+    players_count: initialValues.players_count ?? initialValues.pax_total ?? 1,
+    currency: 'EUR',
+    first_name: initialValues.first_name ?? '',
+    last_name: initialValues.last_name ?? '',
+    ...initialValues,
+  };
+
+  const fallbackName = base.customer_name || initialValues.customer_name || '';
+  const split = splitCustomerFullName(fallbackName);
+  const firstName = base.first_name || split.firstName;
+  const lastName = base.last_name || split.lastName;
+  base.first_name = firstName;
+  base.last_name = lastName;
+  base.customer_name = buildCustomerFullName(firstName, lastName, fallbackName);
+
+  return base;
+}, [initialValues]);
 
   const [values, setValues] = useState(defaults);
   const [loading, setLoading] = useState(false);
@@ -388,24 +400,37 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
 
   // ✅ FIX: al volver atrás, rehidratar el formulario con initialValues
   useEffect(() => {
-    setValues((prev) => ({
-      ...prev,
-      ...defaults,
-    }));
+    setValues((prev) => {
+      const next = { ...prev, ...defaults };
+      next.customer_name = buildCustomerFullName(
+        next.first_name,
+        next.last_name,
+        defaults.customer_name
+      );
+      return next;
+    });
   }, [defaults]);
 
   useEffect(() => {
     window.fillProposalBasics = (data = {}) => {
-      setValues((prev) => ({
-        ...prev,
-        proposal_title: typeof data.title === 'string' ? data.title : prev.proposal_title,
-        customer_name: typeof data.name === 'string' ? data.name : prev.customer_name,
-        customer_email: typeof data.email === 'string' ? data.email : prev.customer_email,
-        customer_country:
-          typeof data.country === 'string' ? data.country.toUpperCase() : prev.customer_country,
-        customer_language:
-          typeof data.language === 'string' ? data.language : prev.customer_language,
-      }));
+      setValues((prev) => {
+        const nameValue = typeof data.name === 'string' ? data.name : prev.customer_name;
+        const split = splitCustomerFullName(nameValue);
+        const firstName = typeof data.first_name === 'string' ? data.first_name : split.firstName || prev.first_name;
+        const lastName = typeof data.last_name === 'string' ? data.last_name : split.lastName || prev.last_name;
+        return {
+          ...prev,
+          proposal_title: typeof data.title === 'string' ? data.title : prev.proposal_title,
+          first_name: firstName,
+          last_name: lastName,
+          customer_name: buildCustomerFullName(firstName, lastName, nameValue),
+          customer_email: typeof data.email === 'string' ? data.email : prev.customer_email,
+          customer_country:
+            typeof data.country === 'string' ? data.country.toUpperCase() : prev.customer_country,
+          customer_language:
+            typeof data.language === 'string' ? data.language : prev.customer_language,
+        };
+      });
     };
 
     return () => {
@@ -414,7 +439,15 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
   }, []);
 
   const set = (key) => (val) => {
-    setValues((v) => ({ ...v, [key]: val }));
+    setValues((v) => {
+      const next = { ...v, [key]: val };
+      if (key === 'first_name' || key === 'last_name') {
+        const first = key === 'first_name' ? val : v.first_name;
+        const last = key === 'last_name' ? val : v.last_name;
+        next.customer_name = buildCustomerFullName(first, last, v.customer_name);
+      }
+      return next;
+    });
     setFieldError((prev) => (prev === key ? '' : prev));
   };
 
@@ -466,8 +499,8 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
   };
 
   const validate = () => {
-    if (!values.customer_name?.trim()) {
-      return { message: 'El nombre del cliente es obligatorio.', field: 'customer_name' };
+    if (!values.first_name?.trim()) {
+      return { message: 'El nombre del cliente es obligatorio.', field: 'first_name' };
     }
     if (!values.start_date) {
       return { message: 'La fecha de inicio es obligatoria.', field: 'start_date' };
@@ -511,8 +544,15 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
     setError('');
 
     // ✅ payload definido SIEMPRE (antes del try)
+    const computedCustomerName = buildCustomerFullName(
+      values.first_name,
+      values.last_name,
+      values.customer_name
+    );
+
     const payload = {
       ...values,
+      customer_name: computedCustomerName,
       pax_total: parseInt(values.pax_total, 10),
       players_count: Math.max(0, parseInt(values.players_count, 10)),
       customer_country: values.customer_country ? values.customer_country.toUpperCase() : '',
@@ -592,14 +632,25 @@ export default function StepBasics({ initialValues = {}, onCreated, onNext, prop
               </div>
 
               <div
-                className={`proposal-basics__field ${fieldError === 'customer_name' ? 'is-error' : ''}`.trim()}
-                ref={registerField('customer_name')}
+                className={`proposal-basics__field ${fieldError === 'first_name' ? 'is-error' : ''}`.trim()}
+                ref={registerField('first_name')}
               >
                 <TextControl
-                  label="Nombre del cliente *"
-                  value={values.customer_name}
-                  onChange={set('customer_name')}
-                  placeholder="John Smith"
+                  label="Nombre *"
+                  value={values.first_name}
+                  onChange={set('first_name')}
+                  placeholder="John"
+                />
+              </div>
+              <div
+                className="proposal-basics__field"
+                ref={registerField('last_name')}
+              >
+                <TextControl
+                  label="Apellidos"
+                  value={values.last_name}
+                  onChange={set('last_name')}
+                  placeholder="Doe"
                 />
               </div>
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from '@wordpress/element';
 import { useNavigate, useParams } from 'react-router-dom';
 import API, { acceptProposal } from '../api';
+import { buildCustomerFullName } from '../../utils/customer';
 
 const ACCEPTED_BY_LABELS = {
   admin: 'Admin',
@@ -116,6 +117,13 @@ export default function ProposalDetail() {
 
   const proposal = detail?.proposal;
   const versions = detail?.versions || [];
+  const displayName = proposal
+    ? buildCustomerFullName(
+        proposal.first_name,
+        proposal.last_name,
+        proposal.customer_name
+      ) || 'Sin nombre'
+    : 'Sin nombre';
 
   useEffect(() => {
     if (!proposal) {
@@ -253,7 +261,7 @@ export default function ProposalDetail() {
           <p className="casanova-portal__eyebrow">Propuesta #{proposal.id}</p>
           <h2>{proposal.proposal_title || 'Nueva propuesta'}</h2>
           <p>
-            {proposal.customer_name} · {proposal.customer_email}
+            {displayName} · {proposal.customer_email}
           </p>
         </div>
         <div className="casanova-portal-detail__actions">

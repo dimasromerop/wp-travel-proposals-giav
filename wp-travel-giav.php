@@ -20,7 +20,7 @@ global $wpdb;
  * Plugin constants
  */
 define( 'WP_TRAVEL_GIAV_VERSION', '0.2.0' );
-define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.8.0' );
+define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.9.0' );
 define( 'WP_TRAVEL_GIAV_PLUGIN_FILE', __FILE__ );
 define( 'WP_TRAVEL_GIAV_TABLE_PROPOSALS', $wpdb->prefix . 'travel_proposals' );
 define( 'WP_TRAVEL_GIAV_TABLE_VERSIONS', $wpdb->prefix . 'travel_proposal_versions' );
@@ -194,6 +194,8 @@ if ( $shop_role && ! $shop_role->has_cap( WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESER
         id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         crm_customer_id VARCHAR(50) NULL,
         customer_name VARCHAR(255) NOT NULL,
+        first_name VARCHAR(150) NULL,
+        last_name VARCHAR(150) NULL,
         proposal_title VARCHAR(255) NULL,
         customer_email VARCHAR(255) NULL,
         customer_country CHAR(2) NULL,
@@ -413,6 +415,10 @@ function wp_travel_giav_maybe_upgrade_schema() {
         wp_travel_giav_upgrade_requests_to_0_8_0();
     }
 
+    if ( version_compare( $current ?: '0.0.0', '0.9.0', '<' ) ) {
+        wp_travel_giav_upgrade_proposals_to_0_9_0();
+    }
+
     update_option( 'wp_travel_giav_db_version', WP_TRAVEL_GIAV_DB_VERSION );
 }
 
@@ -571,6 +577,22 @@ function wp_travel_giav_upgrade_requests_to_0_8_0() {
         'source_entry_id'   => "ALTER TABLE {$table} ADD COLUMN source_entry_id INT(11) UNSIGNED NULL",
         'source_request_id' => "ALTER TABLE {$table} ADD COLUMN source_request_id BIGINT(20) UNSIGNED NULL",
         'source_meta_json'  => "ALTER TABLE {$table} ADD COLUMN source_meta_json LONGTEXT NULL",
+    ];
+
+    foreach ( $columns as $column => $sql ) {
+        if ( ! wp_travel_giav_table_has_column( $table, $column ) ) {
+            $wpdb->query( $sql );
+        }
+    }
+}
+
+function wp_travel_giav_upgrade_proposals_to_0_9_0() {
+    global $wpdb;
+
+    $table = WP_TRAVEL_GIAV_TABLE_PROPOSALS;
+    $columns = [
+        'first_name' => "ALTER TABLE {$table} ADD COLUMN first_name VARCHAR(150) NULL",
+        'last_name'  => "ALTER TABLE {$table} ADD COLUMN last_name VARCHAR(150) NULL",
     ];
 
     foreach ( $columns as $column => $sql ) {
@@ -747,6 +769,15 @@ function wp_travel_giav_admin_menu() {
 
     add_submenu_page(
         'travel_proposals',
+        'Mapping Gravity Forms',
+        'Mapping Gravity Forms',
+        WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESERVAS,
+        'wp-travel-giav-requests-settings',
+        'wp_travel_giav_render_requests_settings'
+    );
+
+    add_submenu_page(
+        'travel_proposals',
         'Configuración',
         'Configuración',
         WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESERVAS,
@@ -767,6 +798,13 @@ function wp_travel_giav_render_requests() {
         wp_die( 'No tienes permisos suficientes para ver esta página.' );
     }
     echo '<div id="wp-travel-giav-requests"></div>';
+}
+
+function wp_travel_giav_render_requests_settings() {
+    if ( ! wp_travel_giav_can_manage_proposals() ) {
+        wp_die( 'No tienes permisos suficientes para ver esta página.' );
+    }
+    echo '<div id="wp-travel-giav-requests-settings"></div>';
 }
 
 function wp_travel_giav_render_settings() {
@@ -828,7 +866,16 @@ function wp_travel_giav_render_settings() {
 function wp_travel_giav_admin_assets( $hook ) {
 
     // Allow assets for main page + mapping submenu page.
-    if ( ! in_array( $hook, [ 'toplevel_page_travel_proposals', 'travel_proposals_page_wp-travel-giav-mapping', 'travel_proposals_page_wp-travel-giav-requests' ], true ) ) {
+    $page = sanitize_text_field( $_GET['page'] ?? '' );
+    $load_by_page = $page !== '' && strpos( $page, 'wp-travel-giav-' ) === 0;
+    $allowed_hooks = [
+        'toplevel_page_travel_proposals',
+        'travel_proposals_page_wp-travel-giav-mapping',
+        'travel_proposals_page_wp-travel-giav-requests',
+        'travel_proposals_page_wp-travel-giav-requests-settings',
+    ];
+
+    if ( ! $load_by_page && ! in_array( $hook, $allowed_hooks, true ) ) {
         return;
     }
 
@@ -866,7 +913,8 @@ function wp_travel_giav_admin_assets( $hook ) {
             'apiUrl' => rest_url( 'travel/v1' ),
             'nonce'  => wp_create_nonce( 'wp_rest' ),
             'dbHealthy' => wp_travel_giav_db_is_healthy(),
-            'dbIssues' => wp_travel_giav_db_check(),
+              'dbIssues' => wp_travel_giav_db_check(),
+              'requestStatuses' => WP_TRAVEL_GIAV_REQUEST_STATUSES,
         ]
     );
 }
@@ -1098,7 +1146,7 @@ function wp_travel_giav_db_check() {
     global $wpdb;
 
     $required = [
-        WP_TRAVEL_GIAV_TABLE_PROPOSALS => [ 'id', 'proposal_token', 'source_type' ],
+        WP_TRAVEL_GIAV_TABLE_PROPOSALS => [ 'id', 'proposal_token', 'source_type', 'first_name', 'last_name' ],
         WP_TRAVEL_GIAV_TABLE_VERSIONS  => [ 'id', 'public_token' ],
         WP_TRAVEL_GIAV_TABLE_ITEMS     => [ 'id', 'version_id' ],
         WP_TRAVEL_GIAV_TABLE_MAPPING   => [ 'id' ],

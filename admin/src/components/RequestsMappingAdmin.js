@@ -12,10 +12,10 @@ import API from '../api';
 
 const FIELD_LABELS = [
   { key: 'package', label: 'Paquete' },
-  { key: 'nombre', label: 'Nombre' },
-  { key: 'apellido', label: 'Apellido' },
+  { key: 'first_name', label: 'Nombre' },
+  { key: 'last_name', label: 'Apellido' },
   { key: 'email', label: 'Email' },
-  { key: 'telefono', label: 'TelÃ©fono' },
+  { key: 'telefono', label: 'Teléfono' },
   { key: 'fecha_llegada', label: 'Fecha llegada' },
   { key: 'fecha_regreso', label: 'Fecha regreso' },
   { key: 'green_fees_per_player', label: 'Green-fees por jugador' },
@@ -23,8 +23,9 @@ const FIELD_LABELS = [
   { key: 'no_jugadores', label: 'No jugadores' },
   { key: 'vuelos_checkbox', label: 'Checkbox vuelos' },
   { key: 'aeropuerto_salida', label: 'Aeropuerto salida' },
-  { key: 'mas_info', label: 'MÃ¡s info' },
+  { key: 'mas_info', label: 'Más info' },
 ];
+
 
 export default function RequestsMappingAdmin() {
   const [forms, setForms] = useState({ es_form_id: '', en_form_id: '' });

@@ -89,7 +89,33 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
             'per_page' => max( 1, min( 100, (int) $request->get_param( 'per_page' ) ?: 20 ) ),
         ] );
 
+        $proposal_map = [];
+        $proposal_ids = array_values(
+            array_filter(
+                array_map(
+                    static fn( $item ) => $item['proposal_id'] ?? 0,
+                    $response['items'] ?? []
+                )
+            )
+        );
+        if ( $proposal_ids ) {
+            $proposal_repo = new WP_Travel_Proposal_Repository();
+            $proposals = $proposal_repo->get_by_ids( $proposal_ids );
+            foreach ( $proposals as $proposal ) {
+                $proposal_map[ (int) $proposal['id'] ] = $this->build_request_proposal_summary( $proposal );
+            }
+        }
+
         $total_pages = (int) ceil( $response['total'] / max( 1, $response['per_page'] ) );
+
+        foreach ( $response['items'] as &$item ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase
+            if ( ! empty( $item['proposal_id'] ) && isset( $proposal_map[ (int) $item['proposal_id'] ] ) ) {
+                $item['proposal'] = $proposal_map[ (int) $item['proposal_id'] ];
+            } else {
+                $item['proposal'] = null;
+            }
+        }
+        unset( $item );
 
         return $this->response( [
             'items'       => $response['items'],
@@ -178,14 +204,6 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
             return $this->error( 'Solicitud no encontrada.', 404 );
         }
 
-        if ( $item['proposal_id'] ) {
-            $redirect = $this->build_wizard_url( $item['proposal_id'] );
-            return $this->response( [
-                'proposal_id' => $item['proposal_id'],
-                'redirect_url' => $redirect,
-            ] );
-        }
-
         $meta = $item['meta'];
         if ( empty( $meta ) ) {
             $meta = wp_travel_giav_gf_refresh_request_meta( $item );
@@ -210,6 +228,8 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
             'header' => [
                 'proposal_title'     => $proposal_data['proposal_title'],
                 'customer_name'      => $proposal_data['customer_name'],
+                'first_name'         => $proposal_data['first_name'] ?? '',
+                'last_name'          => $proposal_data['last_name'] ?? '',
                 'customer_email'     => $proposal_data['customer_email'],
                 'customer_language'  => $proposal_data['customer_language'],
                 'start_date'         => $proposal_data['start_date'],
@@ -353,10 +373,29 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
         return array_values( array_unique( array_filter( $ids ) ) );
     }
 
+    private function build_request_proposal_summary( array $proposal ): array {
+        $public_url = '';
+        if ( ! empty( $proposal['proposal_token'] ) ) {
+            $public_url = wp_travel_giav_get_public_proposal_url( $proposal['proposal_token'] );
+        }
+
+        return [
+            'id'            => (int) $proposal['id'],
+            'status'        => $proposal['status'] ?? '',
+            'proposal_title'=> $proposal['proposal_title'] ?? '',
+            'first_name'    => $proposal['first_name'] ?? '',
+            'last_name'     => $proposal['last_name'] ?? '',
+            'customer_name' => $proposal['customer_name'] ?? '',
+            'public_url'    => $public_url,
+        ];
+    }
+
     private function build_proposal_payload( array $request, array $meta ): array {
         $mapped = $meta['mapped'] ?? [];
         $intentions = $meta['intentions'] ?? [];
-        $name = trim( ( $mapped['nombre'] ?? '' ) . ' ' . ( $mapped['apellido'] ?? '' ) );
+        $first_name = sanitize_text_field( $mapped['first_name'] ?? '' );
+        $last_name = sanitize_text_field( $mapped['last_name'] ?? '' );
+        $name = trim( $first_name . ' ' . $last_name );
         if ( $name === '' ) {
             $name = sprintf( 'Solicitud #%d', $request['entry_id'] );
         }
@@ -372,6 +411,8 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
         }
 
         return [
+            'first_name'       => $first_name,
+            'last_name'        => $last_name,
             'customer_name'    => $name,
             'customer_email'   => sanitize_email( $mapped['email'] ?? '' ),
             'customer_country' => '',

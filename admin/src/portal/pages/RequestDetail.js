@@ -29,6 +29,16 @@ const formatDate = (value) => {
   });
 };
 
+const getCustomerFullName = (mapped = {}) => {
+  const first = mapped.first_name || mapped.nombre || '';
+  const last = mapped.last_name || mapped.apellido || '';
+  const full = [first, last].filter(Boolean).join(' ');
+  if (full) return full;
+  if (mapped.customer_name) return mapped.customer_name;
+  return 'Sin nombre';
+};
+
+
 export default function RequestDetail() {
   const { requestId } = useParams();
   const navigate = useNavigate();
@@ -148,7 +158,7 @@ export default function RequestDetail() {
       <header className="casanova-portal-detail__header">
         <div>
           <p className="casanova-portal__eyebrow">Solicitud #{request.entry_id}</p>
-          <h2>{(request.mapped?.nombre || 'Sin nombre') + ' ' + (request.mapped?.apellido || '')}</h2>
+          <h2>{getCustomerFullName(request.mapped)}</h2>
           <p>
             {request.mapped?.email || '—'} • {request.mapped?.telefono || '—'}
           </p>
@@ -193,7 +203,7 @@ export default function RequestDetail() {
           <p>Jugadores: {request.mapped?.jugadores || 0}</p>
           <p>No jugadores: {request.mapped?.no_jugadores || 0}</p>
           <p>Green-fees por jugador: {request.mapped?.green_fees_per_player || '—'}</p>
-          <p>Solicita vuelos: {request.intentions?.flights?.requested ? 'Sí' : 'No'}</p>
+          <p>Solicita vuelos: {request.intentions?.flights?.requested ? 'S�' : 'No'}</p>
           <p>Más info: {request.mapped?.more_info || '—'}</p>
         </div>
 

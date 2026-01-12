@@ -1,6 +1,7 @@
 import { useMemo, useState } from '@wordpress/element';
 import { Button, Card, CardBody, CardHeader, Notice, Spinner } from '@wordpress/components';
 import API from '../../api';
+import { buildCustomerFullName } from '../../utils/customer';
 
 function round2(n) {
   const x = parseFloat(n);
@@ -39,7 +40,13 @@ export default function StepPreview({
   const snapshot = useMemo(() => {
     const header = {
       crm_customer_id: null,
-      customer_name: basics.customer_name,
+      first_name: basics.first_name,
+      last_name: basics.last_name,
+      customer_name: buildCustomerFullName(
+        basics.first_name,
+        basics.last_name,
+        basics.customer_name
+      ),
       customer_email: basics.customer_email,
       customer_country: basics.customer_country,
       customer_language: basics.customer_language,
@@ -140,6 +147,11 @@ export default function StepPreview({
 
   // Snapshot = fuente de verdad (sin recalcular ni consultar backends en este paso).
   const snapshotHeader = snapshot?.header || {};
+  const snapshotCustomerName = buildCustomerFullName(
+    snapshotHeader.first_name,
+    snapshotHeader.last_name,
+    snapshotHeader.customer_name
+  );
   const snapshotTotals = snapshot?.totals || {};
   const snapshotItems = Array.isArray(snapshot?.items) ? snapshot.items : [];
 
@@ -338,7 +350,7 @@ export default function StepPreview({
 
         <div className="proposal-preview">
           <div className="proposal-preview__header">
-            <div className="proposal-preview__name">{snapshotHeader.customer_name}</div>
+            <div className="proposal-preview__name">{snapshotCustomerName || '—'}</div>
             <div className="proposal-preview__meta">
               {snapshotHeader.start_date} - {snapshotHeader.end_date} | Pax: {snapshotHeader.pax_total} | Moneda: {snapshotHeader.currency}
             </div>

@@ -26,8 +26,8 @@ function wp_travel_giav_gf_update_forms_config( array $config ) {
 function wp_travel_giav_gf_get_canonical_fields() {
     return [
         'package',
-        'nombre',
-        'apellido',
+        'first_name',
+        'last_name',
         'email',
         'telefono',
         'fecha_llegada',
@@ -41,13 +41,43 @@ function wp_travel_giav_gf_get_canonical_fields() {
     ];
 }
 
+function wp_travel_giav_gf_normalize_mapping_keys( array $mapping ) {
+    if ( ! is_array( $mapping ) ) {
+        return [];
+    }
+
+    $fallbacks = [
+        'first_name' => [ 'nombre' ],
+        'last_name'  => [ 'apellido' ],
+    ];
+
+    $normalized = [];
+    foreach ( wp_travel_giav_gf_get_canonical_fields() as $field ) {
+        if ( isset( $mapping[ $field ] ) ) {
+            $normalized[ $field ] = absint( $mapping[ $field ] );
+            continue;
+        }
+
+        if ( isset( $fallbacks[ $field ] ) ) {
+            foreach ( $fallbacks[ $field ] as $fallback ) {
+                if ( isset( $mapping[ $fallback ] ) ) {
+                    $normalized[ $field ] = absint( $mapping[ $fallback ] );
+                    break;
+                }
+            }
+        }
+    }
+
+    return $normalized;
+}
+
 function wp_travel_giav_gf_get_mapping_for_form( $form_id ) {
     $form_id = absint( $form_id );
     if ( $form_id <= 0 ) {
         return [];
     }
     $mapping = get_option( WP_TRAVEL_GIAV_GF_MAP_OPTION_PREFIX . $form_id, [] );
-    return is_array( $mapping ) ? $mapping : [];
+    return wp_travel_giav_gf_normalize_mapping_keys( $mapping );
 }
 
 function wp_travel_giav_gf_update_mapping_for_form( $form_id, array $mapping ) {
@@ -126,8 +156,8 @@ function wp_travel_giav_gf_map_entry_fields( $entry, $form_id ) {
         return is_array( $value ) ? implode( ', ', $value ) : $value;
     };
 
-    $nombre = sanitize_text_field( $get( 'nombre' ) );
-    $apellido = sanitize_text_field( $get( 'apellido' ) );
+    $first_name = sanitize_text_field( $get( 'first_name' ) );
+    $last_name = sanitize_text_field( $get( 'last_name' ) );
     $email = sanitize_email( $get( 'email' ) );
     $telefono = sanitize_text_field( $get( 'telefono' ) );
     $package = sanitize_text_field( $get( 'package' ) );
@@ -143,8 +173,10 @@ function wp_travel_giav_gf_map_entry_fields( $entry, $form_id ) {
 
     $mapped = [
         'package'                => $package,
-        'nombre'                 => $nombre,
-        'apellido'               => $apellido,
+        'first_name'             => $first_name,
+        'last_name'              => $last_name,
+        'nombre'                 => $first_name,
+        'apellido'               => $last_name,
         'email'                  => $email,
         'telefono'               => $telefono,
         'fecha_llegada'          => $arrival,
@@ -181,12 +213,14 @@ function wp_travel_giav_gf_map_entry_fields( $entry, $form_id ) {
         ],
     ];
 
+    $customer_name = trim( $first_name . ' ' . $last_name );
+
     return [
         'lang'       => $lang,
         'mapped'     => $mapped,
         'intentions' => $intentions,
         'meta'       => $meta,
-        'customer_name' => trim( $nombre . ' ' . $apellido ),
+        'customer_name' => $customer_name,
     ];
 }
 

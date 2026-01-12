@@ -3,6 +3,7 @@ import { Notice, Button, Card, CardBody, CardHeader } from '@wordpress/component
 import StepBasics from './steps/StepBasics';
 import StepServices, { syncServiceDatesFromBasics } from './steps/StepServices';
 import StepPreview from './steps/StepPreview';
+import { buildCustomerFullName, splitCustomerFullName } from '../utils/customer';
 
 const STATUS_LABELS = {
   draft: 'Borrador',
@@ -111,9 +112,30 @@ export default function ProposalWizard({
       return null;
     }
     const header = initialSnapshot?.header || {};
+    const headerName = header.customer_name || '';
+    const fallbackProposalName = initialProposal?.customer_name || '';
+    const headerSplit = splitCustomerFullName(headerName);
+    const proposalSplit = splitCustomerFullName(fallbackProposalName);
+    const firstFromHeader = header.first_name || headerSplit.firstName;
+    const lastFromHeader = header.last_name || headerSplit.lastName;
+    const firstName =
+      header.first_name ||
+      initialProposal?.first_name ||
+      headerSplit.firstName ||
+      proposalSplit.firstName ||
+      '';
+    const lastName =
+      header.last_name ||
+      initialProposal?.last_name ||
+      headerSplit.lastName ||
+      proposalSplit.lastName ||
+      '';
+
     return {
       proposal_title: header.proposal_title || initialProposal?.proposal_title || '',
-      customer_name: header.customer_name || initialProposal?.customer_name || '',
+      first_name: firstName,
+      last_name: lastName,
+      customer_name: buildCustomerFullName(firstName, lastName, header.customer_name || initialProposal?.customer_name || ''),
       customer_email: header.customer_email || initialProposal?.customer_email || '',
       customer_country: header.customer_country || initialProposal?.customer_country || '',
       customer_language: header.customer_language || initialProposal?.customer_language || 'en',

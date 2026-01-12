@@ -23,14 +23,56 @@ const languageOptions = [
   { value: 'en', label: 'English' },
 ];
 
+const PROPOSAL_STATUS_LABELS = {
+  draft: 'Borrador',
+  sent: 'Enviada',
+  accepted: 'Aceptada',
+  queued: 'En cola',
+  synced: 'Sincronizada',
+  error: 'Error',
+  revoked: 'Revocada',
+  lost: 'Perdida',
+};
+
+const PORTAL_BASE_URL = (() => {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  const base = window.CASANOVA_GESTION_RESERVAS?.pageBase || '';
+  return base.replace(/\/$/, '');
+})();
+
+const buildPortalProposalUrl = (proposalId, edit = false) => {
+  if (!PORTAL_BASE_URL || !proposalId) {
+    return '';
+  }
+  const suffix = edit ? '/editar' : '';
+  return `${PORTAL_BASE_URL}#/propuesta/${proposalId}${suffix}`;
+};
+
+
+
+
+
+
 const formatDate = (value) => {
-  if (!value) return '—';
+  if (!value) return 'â';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;
   }
   return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
 };
+
+const getCustomerFullName = (mapped = {}) => {
+  const first = mapped.first_name || mapped.nombre || '';
+  const last = mapped.last_name || mapped.apellido || '';
+  const full = [first, last].filter(Boolean).join(' ');
+  if (full) return full;
+  if (mapped.customer_name) return mapped.customer_name;
+  return 'Sin nombre';
+};
+
 
 export default function RequestsList() {
   const [requests, setRequests] = useState([]);
@@ -111,10 +153,19 @@ export default function RequestsList() {
     return requests.map((req) => {
       const mapped = req.mapped || {};
       const intentions = req.intentions || {};
-      const name =
-        [mapped.nombre, mapped.apellido].filter(Boolean).join(' ') || mapped.customer_name || 'Sin nombre';
+      const name = getCustomerFullName(mapped);
       const gf = intentions.golf?.green_fees_per_player;
       const flights = intentions.flights;
+      const pax = mapped.pax_total || ((mapped.jugadores || 0) + (mapped.no_jugadores || 0));
+      const proposal = req.proposal;
+      const hasProposal = Boolean(proposal?.id);
+      const showProposalActions = hasProposal && Boolean(PORTAL_BASE_URL);
+      const proposalStatusLabel = hasProposal
+        ? PROPOSAL_STATUS_LABELS[proposal.status] || proposal.status || '—'
+        : 'Sin propuesta';
+      const proposalViewUrl = hasProposal ? buildPortalProposalUrl(proposal.id) : '';
+      const proposalEditUrl = hasProposal ? buildPortalProposalUrl(proposal.id, true) : '';
+      const convertLabel = hasProposal ? 'Actualizar propuesta' : 'Convertir';
       return (
         <div key={req.id} className="casanova-portal-table__row casanova-portal-table__row--item" data-idx={req.id}>
           <span>{formatDate(req.created_at)}</span>
@@ -123,7 +174,7 @@ export default function RequestsList() {
           <span>
             {mapped.fecha_llegada || '—'} – {mapped.fecha_regreso || '—'}
           </span>
-          <span>{(mapped.jugadores || 0) + (mapped.no_jugadores || 0)}</span>
+          <span>{pax}</span>
           <span>
             <span
               className={`status-chip status-chip--${
@@ -132,6 +183,11 @@ export default function RequestsList() {
             >
               {STATUS_LABELS[req.status] || req.status || 'Nueva'}
             </span>
+            {hasProposal ? (
+              <div style={{ fontSize: 11, color: '#6b7280' }}>
+                Propuesta: {proposalStatusLabel}
+              </div>
+            ) : null}
           </span>
           <span>
             {gf ? `${gf} GF/jug` : '—'}
@@ -145,13 +201,31 @@ export default function RequestsList() {
             <Link className="button-secondary casanova-portal-table__action" to={`/requests/${req.id}`}>
               Ver
             </Link>
+            {showProposalActions && (
+              <>
+                <button
+                  type="button"
+                  className="button-secondary casanova-portal-table__action"
+                  onClick={() => window.open(proposalViewUrl, '_blank', 'noopener')}
+                >
+                  Ver propuesta
+                </button>
+                <button
+                  type="button"
+                  className="button-secondary casanova-portal-table__action"
+                  onClick={() => window.open(proposalEditUrl, '_blank', 'noopener')}
+                >
+                  Editar propuesta
+                </button>
+              </>
+            )}
             <button
               type="button"
               className="button-primary casanova-portal-table__action"
               onClick={() => handleConvert(req.id)}
               disabled={converting === req.id}
             >
-              {converting === req.id ? 'Convertiendo...' : 'Convertir'}
+              {converting === req.id ? 'Convertiendo...' : convertLabel}
             </button>
           </span>
         </div>
@@ -234,7 +308,7 @@ export default function RequestsList() {
         </div>
         {loading ? (
           <div className="casanova-portal-table__row casanova-portal-table__row--loading">
-            Cargando solicitudes…
+            Cargando solicitudesâ¦
           </div>
         ) : null}
         {!loading && !rows.length && (
@@ -254,7 +328,7 @@ export default function RequestsList() {
           Anterior
         </button>
         <span style={{ alignSelf: 'center' }}>
-          Página {filters.page} de {pagination.total_pages || 1}
+          PÃ¡gina {filters.page} de {pagination.total_pages || 1}
         </span>
         <button
           className="button-secondary"

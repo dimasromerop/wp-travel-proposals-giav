@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from '@wordpress/element';
 import { Link, useSearchParams } from 'react-router-dom';
 import API from '../api';
 import RowActionsMenu from '../components/RowActionsMenu';
+import { buildCustomerFullName } from '../../utils/customer';
 
 const STATUS_LABELS = {
   draft: 'Borrador',
@@ -262,7 +263,13 @@ const ProposalsList = () => {
             >
               <span>#{proposal.id}</span>
               <span>{proposal.display_title || proposal.proposal_title || 'Propuesta sin título'}</span>
-              <span>{proposal.customer_name || proposal.customer_email || '—'}</span>
+              <span>
+                {(buildCustomerFullName(
+                  proposal.first_name,
+                  proposal.last_name,
+                  proposal.customer_name
+                ) || proposal.customer_email || '—')}
+              </span>
               <span>{proposal.author_name || '—'}</span>
               <span>
                 <span

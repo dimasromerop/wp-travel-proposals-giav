@@ -10,6 +10,7 @@ import {
   SelectControl,
 } from '@wordpress/components';
 import API from '../api';
+import { buildCustomerFullName } from '../utils/customer';
 
 function formatDate(value) {
   if (!value) return '-';
@@ -183,6 +184,12 @@ export default function ProposalDetail({ proposalId }) {
     { label: 'ID reserva PQ', value: proposal.giav_pq_reserva_id },
   ].filter((item) => item.value);
 
+  const displayName = buildCustomerFullName(
+    proposal.first_name,
+    proposal.last_name,
+    proposal.customer_name
+  ) || '-';
+
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       {error && (
@@ -237,7 +244,7 @@ export default function ProposalDetail({ proposalId }) {
           <div className="proposal-detail__summary">
             <div className="proposal-detail__summary-item">
               <div className="proposal-detail__label">Cliente</div>
-              <div className="proposal-detail__value">{proposal.customer_name || '-'}</div>
+              <div className="proposal-detail__value">{displayName}</div>
             </div>
             <div className="proposal-detail__summary-item">
               <div className="proposal-detail__label">Email</div>

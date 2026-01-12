@@ -127,8 +127,18 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
     public function create_proposal( WP_REST_Request $request ) {
         $repo = new WP_Travel_Proposal_Repository();
 
+        $first_name = sanitize_text_field( (string) $request->get_param( 'first_name' ) );
+        $last_name = sanitize_text_field( (string) $request->get_param( 'last_name' ) );
+        $customer_name = $this->normalize_customer_name(
+            $first_name,
+            $last_name,
+            $request->get_param( 'customer_name' )
+        );
+
         $data = [
-            'customer_name'     => $request->get_param( 'customer_name' ),
+            'first_name'        => $first_name,
+            'last_name'         => $last_name,
+            'customer_name'     => $customer_name,
             'customer_email'    => $request->get_param( 'customer_email' ),
             'customer_country'  => $request->get_param( 'customer_country' ),
             'customer_language' => $request->get_param( 'customer_language' ),
@@ -140,7 +150,7 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
             'proposal_title'    => sanitize_text_field( (string) $request->get_param( 'proposal_title' ) ),
         ];
 
-        if ( empty( $data['customer_name'] ) || empty( $data['start_date'] ) ) {
+        if ( $customer_name === '' || empty( $data['start_date'] ) ) {
             return $this->error( 'Missing required fields' );
         }
 
@@ -163,6 +173,8 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
         $data = [];
         $text_fields = [
             'customer_name',
+            'first_name',
+            'last_name',
             'customer_email',
             'customer_country',
             'customer_language',
@@ -187,6 +199,19 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
 
         if ( empty( $data ) ) {
             return $this->error( 'No fields to update', 400 );
+        }
+
+        if (
+            isset( $data['first_name'] ) ||
+            isset( $data['last_name'] )
+        ) {
+            $first_name = $data['first_name'] ?? $proposal['first_name'] ?? '';
+            $last_name  = $data['last_name'] ?? $proposal['last_name'] ?? '';
+            $data['customer_name'] = $this->normalize_customer_name(
+                $first_name,
+                $last_name,
+                $proposal['customer_name'] ?? ''
+            );
         }
 
         $repo->update_basics( $proposal_id, $data );
@@ -414,5 +439,18 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
             'current_version_id' => $version_id,
             'public_url'         => wp_travel_giav_get_public_proposal_url( $proposal['proposal_token'] ),
         ] );
+    }
+
+    private function normalize_customer_name( string $first = '', string $last = '', ?string $fallback = '' ): string {
+        $parts = array_filter( [
+            trim( $first ),
+            trim( $last ),
+        ] );
+
+        if ( ! empty( $parts ) ) {
+            return trim( implode( ' ', $parts ) );
+        }
+
+        return trim( (string) $fallback );
     }
 }

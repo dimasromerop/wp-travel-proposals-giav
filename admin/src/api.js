@@ -167,6 +167,35 @@ const API = {
       data: { wp_object_type, giav_supplier_id, items, status, match_type },
     }),
 
+  listRequests: ({ status, lang, form, q, page = 1, per_page = 20 } = {}) => {
+    const params = new URLSearchParams();
+    if (status) {
+      params.set('status', status);
+    }
+    if (lang) {
+      params.set('lang', lang);
+    }
+    if (form) {
+      params.set('form', form);
+    }
+    if (q) {
+      params.set('q', q);
+    }
+    params.set('page', page);
+    params.set('per_page', per_page);
+
+    return apiFetch({
+      path: `/travel/v1/requests?${params.toString()}`,
+      method: 'GET',
+    });
+  },
+
+  convertRequest: (requestId) =>
+    apiFetch({
+      path: `/travel/v1/requests/${requestId}/convert`,
+      method: 'POST',
+    }),
+
   searchGiavProviders: async ({ q, pageSize = 20, pageIndex = 0, includeDisabled = false }) => {
     const res = await apiFetch({
       path: `/travel/v1/giav/providers/search?q=${encodeURIComponent(q)}&pageSize=${encodeURIComponent(

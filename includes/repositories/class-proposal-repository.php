@@ -64,6 +64,17 @@ class WP_Travel_Proposal_Repository extends WP_Travel_GIAV_DB {
         return $this->get_row( 'id = %d', [ $proposal_id ] );
     }
 
+    public function get_by_ids( array $proposal_ids ) {
+        $ids = array_filter( array_map( 'absint', array_unique( $proposal_ids ) ) );
+        if ( empty( $ids ) ) {
+            return [];
+        }
+
+        $placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+        $sql = "SELECT * FROM {$this->table} WHERE id IN ( {$placeholders} )";
+        return $this->wpdb->get_results( $this->wpdb->prepare( $sql, $ids ), ARRAY_A );
+    }
+
     public function update_basics( int $proposal_id, array $data ) {
         if ( empty( $data ) ) {
             return 0;
@@ -85,6 +96,8 @@ class WP_Travel_Proposal_Repository extends WP_Travel_GIAV_DB {
         $data = [];
         $fields = [
             'customer_name'     => 'customer_name',
+            'first_name'        => 'first_name',
+            'last_name'         => 'last_name',
             'customer_email'    => 'customer_email',
             'customer_country'  => 'customer_country',
             'customer_language' => 'customer_language',
