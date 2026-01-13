@@ -53,8 +53,12 @@ function round2(n) {
 }
 function daysDiff(startISO, endISO) {
   if (!startISO || !endISO) return 0;
-  const s = new Date(`${startISO}T00:00:00`);
-  const e = new Date(`${endISO}T00:00:00`);
+  // Use UTC dates to avoid timezone shifting (e.g. local midnight -> previous day in ISO).
+  const [sy, sm, sd] = String(startISO).split('-').map((x) => parseInt(x, 10));
+  const [ey, em, ed] = String(endISO).split('-').map((x) => parseInt(x, 10));
+  if (![sy, sm, sd, ey, em, ed].every((n) => Number.isFinite(n))) return 0;
+  const s = Date.UTC(sy, sm - 1, sd);
+  const e = Date.UTC(ey, em - 1, ed);
   const ms = e - s;
   if (!Number.isFinite(ms) || ms <= 0) return 0;
   return Math.round(ms / (1000 * 60 * 60 * 24));
@@ -62,10 +66,78 @@ function daysDiff(startISO, endISO) {
 
 function addDaysISO(startISO, days) {
   if (!startISO) return '';
-  const date = new Date(`${startISO}T00:00:00`);
-  if (!Number.isFinite(date.getTime())) return '';
-  date.setDate(date.getDate() + Math.max(0, days));
+  const [y, m, d] = String(startISO).split('-').map((x) => parseInt(x, 10));
+  if (![y, m, d].every((n) => Number.isFinite(n))) return '';
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() + Math.max(0, days));
   return date.toISOString().slice(0, 10);
+}
+
+function buildNightlyRateRows(startISO, endISO, defaultNet = '', defaultMargin = 0) {
+  const nights = daysDiff(startISO, endISO);
+  if (nights <= 0) return [];
+  const rows = [];
+  for (let i = 0; i < nights; i++) {
+    rows.push({
+      date: addDaysISO(startISO, i),
+      net_price: defaultNet,
+      margin_pct: defaultMargin,
+    });
+  }
+  return rows;
+}
+
+function normalizeNightlyRates(rates, startISO, endISO, fallbackNet = '', fallbackMargin = 0) {
+  const expected = buildNightlyRateRows(startISO, endISO, fallbackNet, fallbackMargin);
+  if (!expected.length) return [];
+  const map = new Map();
+  (Array.isArray(rates) ? rates : []).forEach((r) => {
+    const d = r?.date;
+    if (!d) return;
+    if (!map.has(d)) {
+      map.set(d, {
+        date: d,
+        net_price: r.net_price ?? r.net ?? r.net_price_per_night ?? fallbackNet,
+        margin_pct: r.margin_pct ?? r.margin ?? fallbackMargin,
+      });
+    }
+  });
+  return expected.map((base) => {
+    const existing = map.get(base.date);
+    return existing ? { ...base, ...existing } : base;
+  });
+}
+
+function computeNightlySums(rates = [], freeNights = 0, discountPct = 0) {
+  const rows = (Array.isArray(rates) ? rates : []).map((r) => ({
+    date: r?.date,
+    net: Math.max(0, toNumber(r?.net_price ?? r?.net ?? 0)),
+    margin: Math.max(0, toNumber(r?.margin_pct ?? r?.margin ?? 0)),
+  }));
+  const valid = rows.filter((r) => !!r.date);
+  if (!valid.length) return { netSum: 0, pvpSum: 0 };
+
+  // Remove free nights by taking the cheapest net nights (client-friendly and deterministic).
+  const freebies = Math.max(0, toInt(freeNights, 0));
+  const sortedIdx = valid
+    .map((r, idx) => ({ idx, net: r.net }))
+    .sort((a, b) => a.net - b.net)
+    .slice(0, freebies)
+    .map((x) => x.idx);
+  const freeSet = new Set(sortedIdx);
+
+  const discount = clampNumber(toNumber(discountPct), 0, 50) / 100;
+
+  let netSum = 0;
+  let pvpSum = 0;
+  valid.forEach((r, idx) => {
+    if (freeSet.has(idx)) return;
+    const discountedNet = r.net * (1 - discount);
+    netSum += discountedNet;
+    pvpSum += discountedNet * (1 + r.margin / 100);
+  });
+
+  return { netSum: round2(netSum), pvpSum: round2(pvpSum) };
 }
 
 function computeNights(item, basics) {
@@ -151,6 +223,10 @@ function computeHotelPricing(item, basics, defaultMarkupPct) {
   const nights = computeNights(item, basics);
   const fallbackRooms = Math.max(0, toInt(item.hotel_rooms ?? 0, 0));
 
+  const pricingMode = item.hotel_pricing_mode === 'per_night' ? 'per_night' : 'simple';
+  const startISO = item.start_date || basics?.start_date || '';
+  const endISO = item.end_date || basics?.end_date || '';
+
   const discounts = normalizeDiscounts(item.discounts);
   const { freeNights, nightsPayable } = computeFreeNights(
     nights,
@@ -215,6 +291,21 @@ function computeHotelPricing(item, basics, defaultMarkupPct) {
     single: buildMode('single', singleFallback),
   };
 
+  // Per-night mode: normalize nightly rows to match the date range.
+  // Defaults: try to reuse current double net per night, or fallback to unit_cost_net.
+  const nightlyRates = pricingMode === 'per_night'
+    ? normalizeNightlyRates(
+        item.nightly_rates || item.hotel_nightly_rates || [],
+        startISO,
+        endISO,
+        roomPricing.double?.net_price_per_night ?? item.unit_cost_net ?? '',
+        item.markup_pct ?? defaultMarkupPct ?? 0
+      )
+    : [];
+  const nightlySums = pricingMode === 'per_night'
+    ? computeNightlySums(nightlyRates, freeNights, discounts.discount_pct)
+    : null;
+
   const totalsByMode = ['double', 'single'].map((modeKey) => {
     const mode = roomPricing[modeKey];
     if (!mode.enabled) {
@@ -224,11 +315,15 @@ function computeHotelPricing(item, basics, defaultMarkupPct) {
     const rooms = Math.max(0, toInt(mode.rooms ?? 0, 0));
     const pricingBasis = modeKey === 'double' ? (mode.pricing_basis || 'per_room') : 'per_room';
     const units = pricingBasis === 'per_person' ? rooms * 2 : rooms;
-    const netBase = Math.max(0, mode.net_price_per_night) * nightsPayable * units;
-    const netAfterDiscount = netBase * (1 - discounts.discount_pct / 100);
+    const netAfterDiscount = pricingMode === 'per_night'
+      ? Math.max(0, nightlySums?.netSum ?? 0) * units
+      : (Math.max(0, mode.net_price_per_night) * nightsPayable * units) * (1 - discounts.discount_pct / 100);
+
     const totalPvp = mode.pvp_manual_enabled
       ? Math.max(0, mode.pvp_price_per_night) * nightsPayable * units
-      : netAfterDiscount * (1 + Math.max(0, mode.margin_pct) / 100);
+      : pricingMode === 'per_night'
+        ? Math.max(0, nightlySums?.pvpSum ?? 0) * units
+        : netAfterDiscount * (1 + Math.max(0, mode.margin_pct) / 100);
 
     roomPricing[modeKey] = {
       ...mode,
@@ -265,6 +360,8 @@ function computeHotelPricing(item, basics, defaultMarkupPct) {
   return {
     discounts,
     roomPricing,
+    nightlyRates: pricingMode === 'per_night' ? nightlyRates : null,
+    pricingMode,
     giavPricing,
     totals: {
       nights,
@@ -324,6 +421,8 @@ function defaultItem(basics, defaultMarkupPct = 0) {
     hotel_rooms: 0,
     hotel_rate_basis: null,
     hotel_regimen: '',
+    hotel_pricing_mode: 'simple',
+    nightly_rates: [],
 
     // Generic quantity for non-hotel
     quantity: 1,
@@ -411,6 +510,12 @@ function computeLine(item, basics, globalMarkupPct) {
     it.discounts = pricing.discounts;
     it.giav_pricing = pricing.giavPricing;
 
+    // Per-night optional payload (kept even when toggled off, but only affects totals when pricing_mode=per_night).
+    it.hotel_pricing_mode = pricing.pricingMode;
+    if (pricing.pricingMode === 'per_night') {
+      it.nightly_rates = Array.isArray(pricing.nightlyRates) ? pricing.nightlyRates : [];
+    }
+
     it.line_cost_net = pricing.totals.totalNet;
     it.line_sell_price = pricing.giavPricing.giav_total_pvp;
 
@@ -484,6 +589,38 @@ function HotelPricingPanel({ item, idx, updateItem, currency, pax, basics, globa
   const discountSummary = buildDiscountSummary(item.discounts);
   const notesSummary = (item.notes_public || item.notes_internal) ? 'Ver notas' : 'Sin notas';
 
+  const pricingMode = item.hotel_pricing_mode === 'per_night' ? 'per_night' : 'simple';
+  const isPerNight = pricingMode === 'per_night';
+  const startISO = item.start_date || basics?.start_date || '';
+  const endISO = item.end_date || basics?.end_date || '';
+
+  const ensureNightlyRates = (opts = {}) => {
+    const first = Array.isArray(item.nightly_rates) && item.nightly_rates.length ? item.nightly_rates[0] : null;
+    const fallbackNet =
+      opts.fallbackNet ??
+      first?.net_price ??
+      getMode('double').net_price_per_night ??
+      (item.unit_cost_net && nights > 0 ? round2(toNumber(item.unit_cost_net) / nights) : '') ??
+      '';
+    const fallbackMargin = opts.fallbackMargin ?? first?.margin_pct ?? (item.markup_pct ?? globalMarkupPct ?? 0);
+    return normalizeNightlyRates(item.nightly_rates, startISO, endISO, fallbackNet, fallbackMargin);
+  };
+
+  const togglePerNight = () => {
+    if (!isPerNight) {
+      const nextRates = ensureNightlyRates();
+      updateItem(idx, { hotel_pricing_mode: 'per_night', nightly_rates: nextRates });
+      return;
+    }
+    updateItem(idx, { hotel_pricing_mode: 'simple' });
+  };
+
+  const patchNightRow = (rowIndex, patch) => {
+    const current = ensureNightlyRates();
+    const next = current.map((r, i) => (i === rowIndex ? { ...r, ...patch } : r));
+    updateItem(idx, { nightly_rates: next });
+  };
+
   // Helper functions for updating state inside the map
   const applyRoomPatch = (modeKey, patch) => {
     const prevPricing = item.room_pricing || {};
@@ -510,6 +647,56 @@ function HotelPricingPanel({ item, idx, updateItem, currency, pax, basics, globa
 
   return (
     <div className="service-card__hotel-panel">
+      <div className="service-card__subcard service-card__subcard--nightly">
+        <div className="service-card__hotel-nightly-toggle">
+          <ToggleControl
+            label="Precio variable por noche"
+            checked={isPerNight}
+            onChange={togglePerNight}
+          />
+          {isPerNight && (
+            <div className="service-card__hotel-nightly-hint">
+              El neto y margen se definen por fecha. Los campos "Neto por noche" y "Margen" del modo de habitación se ignoran (salvo PVP manual).
+            </div>
+          )}
+        </div>
+
+        {isPerNight && (
+          <details className="service-card__hotel-nightly" open>
+            <summary className="service-card__section-summary">
+              <span className="service-card__section-summary-title">Desglose por noche</span>
+              <span className="service-card__section-summary-meta">
+                {daysDiff(startISO, endISO)} noches
+              </span>
+            </summary>
+            <div className="service-card__hotel-nightly-table">
+              <div className="service-card__hotel-nightly-row service-card__hotel-nightly-row--head">
+                <div>Fecha</div>
+                <div>Neto</div>
+                <div>Margen (%)</div>
+              </div>
+              {ensureNightlyRates().map((row, i) => (
+                <div key={row.date || i} className="service-card__hotel-nightly-row">
+                  <div className="service-card__hotel-nightly-date">{row.date}</div>
+                  <TextControl
+                    value={String(row.net_price ?? '')}
+                    onChange={(v) => patchNightRow(i, { net_price: v })}
+                    placeholder="120"
+                  />
+                  <TextControl
+                    type="number"
+                    min={0}
+                    value={String(row.margin_pct ?? '')}
+                    onChange={(v) => patchNightRow(i, { margin_pct: v })}
+                    placeholder="20"
+                  />
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+
       <div className="service-card__hotel-occupancy">
         {['double', 'single'].map((modeKey) => {
           const label = modeKey === 'double' ? 'Doble' : 'Individual';
@@ -552,6 +739,7 @@ function HotelPricingPanel({ item, idx, updateItem, currency, pax, basics, globa
                     value={String(mode.net_price_per_night ?? '')}
                     onChange={(v) => applyRoomPatch(modeKey, { net_price_per_night: v })}
                     placeholder="120"
+                    disabled={isPerNight}
                   />
 
                   <details className="service-card__hotel-mode-details">
@@ -575,11 +763,12 @@ function HotelPricingPanel({ item, idx, updateItem, currency, pax, basics, globa
                         />
                       ) : (
                         <TextControl
-                          label="Margen (%)"
+                          label={isPerNight ? 'Margen (%) (se ignora)' : 'Margen (%)'}
                           type="number"
                           min={0}
                           value={String(mode.margin_pct ?? globalMarkupPct)}
                           onChange={(v) => applyRoomPatch(modeKey, { margin_pct: v })}
+                          disabled={isPerNight}
                         />
                       )}
                     </div>
@@ -711,12 +900,23 @@ export function syncServiceDatesFromBasics(services = [], basics = {}) {
     if (!service || !service.dates_inherited) return service;
     if (service.start_date === start && service.end_date === end) return service;
     changed = true;
-    return {
+    const next = {
       ...service,
       start_date: start,
       end_date: end,
       dates_inherited: true,
     };
+
+    // If hotel is in per-night mode, keep nightly rows aligned with the new date range.
+    if (next.service_type === 'hotel' && next.hotel_pricing_mode === 'per_night') {
+      // Use first existing row (if any) as defaults.
+      const first = Array.isArray(next.nightly_rates) && next.nightly_rates.length ? next.nightly_rates[0] : null;
+      const fallbackNet = first?.net_price ?? '';
+      const fallbackMargin = first?.margin_pct ?? (next.markup_pct ?? 0);
+      next.nightly_rates = normalizeNightlyRates(next.nightly_rates, start, end, fallbackNet, fallbackMargin);
+    }
+
+    return next;
   });
   return changed ? synced : services;
 }
@@ -943,6 +1143,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
 
     if (it.service_type === 'hotel') {
       const pricing = it.room_pricing || {};
+      const isPerNight = it.hotel_pricing_mode === 'per_night';
       const doubleEnabled = !!pricing.double?.enabled;
       const singleEnabled = !!pricing.single?.enabled;
       if (!doubleEnabled && !singleEnabled) {
@@ -956,7 +1157,7 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
         if (toInt(mode.rooms ?? 0, 0) < 1) {
           return `Habitaciones ${label} < 1`;
         }
-        if (toNumber(mode.net_price_per_night) <= 0) {
+        if (!isPerNight && toNumber(mode.net_price_per_night) <= 0) {
           return `Neto ${label} faltante`;
         }
         if (mode.pvp_manual_enabled && toNumber(mode.pvp_price_per_night) <= 0) {
@@ -964,6 +1165,26 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
         }
         return '';
       };
+
+      if (isPerNight) {
+        const startISO = it.start_date || basics?.start_date || '';
+        const endISO = it.end_date || basics?.end_date || '';
+        const expectedNights = daysDiff(startISO, endISO);
+        const rates = normalizeNightlyRates(it.nightly_rates || [], startISO, endISO, '', it.markup_pct ?? globalMarkupPct ?? 0);
+        if (expectedNights <= 0) {
+          issues.push('Fechas hotel inválidas');
+          fieldErrors.pricing = 'Revisa fechas de hotel.';
+        } else if (!rates.length || rates.length !== expectedNights) {
+          issues.push('Faltan noches');
+          fieldErrors.pricing = 'Completa el desglose por noche.';
+        } else {
+          const hasZero = rates.some((r) => toNumber(r.net_price) <= 0);
+          if (hasZero) {
+            issues.push('Neto por noche faltante');
+            fieldErrors.pricing = 'Completa neto en todas las noches.';
+          }
+        }
+      }
 
       const doubleError = validateMode('double', 'doble');
       const singleError = validateMode('single', 'individual');

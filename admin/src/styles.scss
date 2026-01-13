@@ -868,6 +868,7 @@
   background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%;
   background-size: 6px 6px, 6px 6px;
   background-repeat: no-repeat;
+  min-height: 40px !important;
 }
 
 .wp-travel-giav-app select:focus,
@@ -1525,6 +1526,74 @@ details[open] > .service-card__section-summary::after {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
+}
+
+.service-card__hotel-nightly-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.service-card__hotel-nightly-hint {
+  font-size: 12px;
+  color: #475569;
+  max-width: 520px;
+}
+
+.service-card__hotel-nightly {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+  margin-top: 8px;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.service-card__hotel-nightly-table {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  overflow-x: auto;
+}
+
+.service-card__hotel-nightly-row {
+  display: grid;
+  grid-template-columns: 140px minmax(120px, 1fr) minmax(110px, 160px);
+  gap: 10px;
+  align-items: end;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.service-card__hotel-nightly-row--head {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.service-card__hotel-nightly-date {
+  font-size: 13px;
+  color: #0f172a;
+  padding-bottom: 4px;
+}
+
+@media (max-width: 640px) {
+  .service-card__hotel-nightly-row {
+    grid-template-columns: 1fr;
+  }
+  .service-card__hotel-nightly-row--head {
+    display: none;
+  }
+  .service-card__hotel-nightly-date {
+    font-weight: 700;
+    padding-bottom: 0;
+  }
 }
 
 .service-card__hotel-occupancy-card {

@@ -92,6 +92,13 @@ export default function StepPreview({
       hotel_rooms: it.hotel_rooms ?? null,
       hotel_room_type: it.hotel_room_type ?? '',
       hotel_regimen: it.hotel_regimen ?? '',
+      // Per-night (optional, backward compatible)
+      hotel_pricing_mode: it.hotel_pricing_mode ?? it.hotel_rate_mode ?? 'simple',
+      nightly_rates: Array.isArray(it.nightly_rates)
+        ? it.nightly_rates
+        : Array.isArray(it.hotel_nightly_rates)
+        ? it.hotel_nightly_rates
+        : null,
       room_pricing: it.room_pricing ?? null,
       discounts: it.discounts ?? null,
       giav_pricing: it.giav_pricing ?? null,
