@@ -506,7 +506,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                 
 .proposal-hero {
     position: relative;
-                    min-height: 190px;
+                    min-height: 160px;
     border-radius: 22px;
     overflow: hidden;
     background: #0b1220;
@@ -528,9 +528,52 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
 }
 .proposal-hero__content {
     position: relative;
-    padding: 22px 22px 18px;
+    padding: 20px 22px 18px;
     display: grid;
     gap: 10px;
+    text-align: center;
+}
+.proposal-hero__topline--center {
+    display: flex;
+    justify-content: center;
+}
+.proposal-logo--center {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+.proposal-hero__version {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    backdrop-filter: blur(8px);
+}
+.proposal-hero__pillrow--meta {
+    justify-content: center;
+    gap: 10px;
+}
+.meta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.26);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    color: rgba(248, 250, 252, 0.92);
+    font-size: 13px;
+    line-height: 1;
+    letter-spacing: 0.01em;
+}
+.meta-pill svg {
+    width: 16px;
+    height: 16px;
+    color: rgba(248, 250, 252, 0.86);
+}
+.proposal-hero__view {
+    margin-top: 8px;
+    font-size: 12px;
+    color: rgba(226, 232, 240, 0.78);
 }
 .proposal-hero__topline {
     display: flex;
@@ -836,6 +879,20 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
                     gap: 16px;
                 }
+                .totals-grid--pair {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+                @media (max-width: 720px) {
+                    .totals-grid--pair {
+                        grid-template-columns: 1fr;
+                    }
+                }
+                .totals-card .sub {
+                    margin-top: 8px;
+                    font-size: 12px;
+                    color: #64748b;
+                }
+
                 .totals-grid .totals-card {
                     background: #f8fafc;
                     border-radius: 10px;
@@ -985,17 +1042,15 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
     <?php endif; ?>
     <div class="proposal-hero__overlay" aria-hidden="true"></div>
     <div class="proposal-hero__content">
-        <div class="proposal-hero__topline">
+        <span class="version-pill proposal-hero__version <?php echo $is_current ? 'version-pill--active' : 'version-pill--archive'; ?>">
+            <?php echo $is_current ? 'Versión vigente' : 'Versión anterior'; ?>
+        </span>
+        <div class="proposal-hero__topline proposal-hero__topline--center">
             <?php if ( ! empty( $logo_url ) ) : ?>
-                <div class="proposal-logo">
+                <div class="proposal-logo proposal-logo--center">
                     <img src="<?php echo esc_url( $logo_url ); ?>" alt="" />
                 </div>
             <?php endif; ?>
-            <div class="proposal-hero__pillrow">
-                <span class="version-pill <?php echo $is_current ? 'version-pill--active' : 'version-pill--archive'; ?>">
-                    <?php echo $is_current ? 'Versión vigente' : 'Versión anterior'; ?>
-                </span>
-            </div>
         </div>
 
         <h1 class="proposal-hero__title"><?php echo esc_html( $destination ?: ( $header['proposal_title'] ?? 'Propuesta de viaje' ) ); ?></h1>
@@ -1003,13 +1058,21 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
         <div class="proposal-hero__subtitle">
             <div><?php echo esc_html( $header['customer_name'] ?: 'Cliente' ); ?><?php if ( ! empty( $header['customer_email'] ) ) : ?> · <?php echo esc_html( $header['customer_email'] ); ?><?php endif; ?></div>
             <div class="proposal-hero__meta">
-                <?php if ( $dates ) : ?>
-                    <span><?php echo esc_html( 'Fechas: ' . $dates ); ?></span>
-                <?php endif; ?>
-                <?php if ( $meta_line ) : ?>
-                    <span><?php echo esc_html( $meta_line ); ?></span>
-                <?php endif; ?>
-                <span><?php echo esc_html( $view_label ); ?></span>
+                <div class="proposal-hero__pillrow proposal-hero__pillrow--meta">
+                    <?php if ( $dates ) : ?>
+                        <span class="meta-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v2m8-2v2M4 8h16M6 6h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span><?php echo esc_html( $dates ); ?></span></span>
+                    <?php endif; ?>
+                    <?php if ( $pax_total ) : ?>
+                        <span class="meta-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span><?php echo esc_html( sprintf( '%d pax', $pax_total ) ); ?></span></span>
+                    <?php endif; ?>
+                    <?php if ( $players_total ) : ?>
+                        <span class="meta-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 3l8 4-8 4V3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M6 22h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span><?php echo esc_html( sprintf( '%d jugadores', $players_total ) ); ?></span></span>
+                    <?php endif; ?>
+                    <?php if ( $currency ) : ?>
+                        <span class="meta-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5H9.5a4.5 4.5 0 0 0 0 9H15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 14h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 10h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span><?php echo esc_html( $currency ); ?></span></span>
+                    <?php endif; ?>
+                </div>
+                <div class="proposal-hero__view"><?php echo esc_html( $view_label ); ?></div>
             </div>
         </div>
 
@@ -1021,46 +1084,9 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
             </div>
         <?php endif; ?>
     </div>
-</div>
+	</div>
 
-            <?php if ( $accepted_message || $can_accept ) : ?>
-                <div class="proposal-section proposal-accept" id="proposal-accept">
-                    <?php if ( $accepted_message ) : ?>
-                        <div class="proposal-accept__message" id="proposal-accept-message">
-                            <?php echo esc_html( $accepted_message ); ?>
-                            <?php if ( $accepted_version_message ) : ?>
-                                <div><?php echo esc_html( $accepted_version_message ); ?></div>
-                            <?php endif; ?>
-                        </div>
-                    <?php elseif ( $can_accept ) : ?>
-                        <div class="proposal-accept__note">¿Todo correcto? Puedes confirmar la propuesta desde aquí.</div>
-                        <button type="button" class="proposal-accept__button" id="proposal-accept-button">
-                            Aceptar propuesta
-                        </button>
-                        <form class="proposal-accept__form" id="proposal-accept-form" style="display:none;">
-                            <div class="proposal-accept__field">
-                                <label for="proposal-full-name">Nombre completo *</label>
-                                <input type="text" id="proposal-full-name" name="full_name" required minlength="3" />
-                            </div>
-                            <div class="proposal-accept__field">
-                                <label for="proposal-dni">DNI *</label>
-                                <input type="text" id="proposal-dni" name="dni" required minlength="6" />
-                            </div>
-                            <div class="proposal-accept__actions">
-                                <button type="submit" class="proposal-accept__button" id="proposal-accept-submit">
-                                    Confirmar aceptación
-                                </button>
-                                <button type="button" class="proposal-accept__button proposal-accept__button--secondary" id="proposal-accept-close">
-                                    Cerrar
-                                </button>
-                                
-                            </div>
-                            <div class="proposal-accept__note proposal-accept__note--small">No necesitas registro para confirmar.</div>
-                        </form>
-                        <div class="proposal-accept__note" id="proposal-accept-feedback" style="display:none;"></div>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
+	<div class="proposal-container">
 
             <div class="proposal-section">
                 <h2>Programa de viaje</h2>
@@ -1131,101 +1157,86 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                                 }
                                 $meta_line = implode( ' · ', $meta_parts );
                                 ?>
-                                <div class="service-card">
-    <div class="service-card__media">
-        <?php if ( $hotel_image_url ) : ?>
-            <div class="service-card__thumb">
-                <img src="<?php echo esc_url( $hotel_image_url ); ?>" alt="<?php echo esc_attr( $hotel_image_alt ?: $display_name ); ?>" loading="lazy" />
-            </div>
-        <?php endif; ?>
-        <div class="service-card__body">
-            <div class="service-card__title"><?php echo $display_name; ?></div>
-            <?php if ( $meta_line ) : ?>
-                <div class="service-card__meta"><?php echo esc_html( $meta_line ); ?></div>
-            <?php endif; ?>
-            <?php if ( $room_type || $regimen_label ) : ?>
-                <div class="service-card__details">
-                    <?php if ( $room_type ) : ?>
-                        <div>Tipo de habitación: <?php echo esc_html( $room_type ); ?></div>
-                    <?php endif; ?>
-                    <?php if ( $regimen_label ) : ?>
-                        <div>Régimen: <?php echo esc_html( $regimen_label ); ?></div>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-            <?php if ( $double_enabled || $single_enabled ) : ?>
-                <div class="service-card__details">
-                    <?php if ( $double_enabled ) : ?>
-                        <?php
-                        $double_rooms = absint( $room_pricing['double']['rooms'] ?? 0 );
-                        $double_label = $double_rooms > 0
-                            ? sprintf( 'Habitaciones dobles (%d hab.)', $double_rooms )
-                            : 'Habitaciones dobles';
-                        ?>
-                        <div><?php echo esc_html( $double_label ); ?></div>
-                    <?php endif; ?>
-                    <?php if ( $single_enabled ) : ?>
-                        <?php
-                        $single_rooms = absint( $room_pricing['single']['rooms'] ?? 0 );
-                        $single_label = $single_rooms > 0
-                            ? sprintf( 'Habitaciones individuales (%d hab.)', $single_rooms )
-                            : 'Habitaciones individuales';
-                        ?>
-                        <div><?php echo esc_html( $single_label ); ?></div>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-<?php
-                                    $hotel_pricing_mode = isset( $item['hotel_pricing_mode'] ) ? (string) $item['hotel_pricing_mode'] : '';
-                                    if ( $hotel_pricing_mode === '' && isset( $item['pricing_mode'] ) ) {
-                                        $hotel_pricing_mode = (string) $item['pricing_mode'];
-                                    }
-                                    $nightly_rates = [];
-                                    if ( isset( $item['nightly_rates'] ) && is_array( $item['nightly_rates'] ) ) {
-                                        $nightly_rates = $item['nightly_rates'];
-                                    } elseif ( isset( $item['hotel_nightly_rates'] ) && is_array( $item['hotel_nightly_rates'] ) ) {
-                                        $nightly_rates = $item['hotel_nightly_rates'];
-                                    }
-                                    ?>
-                                    <?php if ( $hotel_pricing_mode === 'per_night' && ! empty( $nightly_rates ) ) : ?>
-                                        <details class="service-card__details" style="margin-top:10px;">
-                                            <summary><?php echo esc_html__( 'Precio variable por noche', 'wp-travel-giav' ); ?></summary>
-                                            <div style="overflow:auto; margin-top:8px;">
-                                                <table style="width:100%; border-collapse:collapse;">
-                                                    <thead>
-                                                        <tr>
-                                                            <th style="text-align:left; padding:6px 8px; border-bottom:1px solid #e5e7eb;"><?php echo esc_html__( 'Fecha', 'wp-travel-giav' ); ?></th>
-                                                            <th style="text-align:right; padding:6px 8px; border-bottom:1px solid #e5e7eb;"><?php echo esc_html__( 'Neto', 'wp-travel-giav' ); ?></th>
-                                                            <th style="text-align:right; padding:6px 8px; border-bottom:1px solid #e5e7eb;"><?php echo esc_html__( 'Margen', 'wp-travel-giav' ); ?></th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        <?php foreach ( $nightly_rates as $row ) : ?>
-                                                            <?php
-                                                            if ( ! is_array( $row ) ) {
-                                                                continue;
-                                                            }
-                                                            $row_date = self::format_spanish_date( (string) ( $row['date'] ?? '' ) );
-                                                            $net = isset( $row['net_price'] ) ? (float) $row['net_price'] : (float) ( $row['unit_cost_net'] ?? 0 );
-                                                            $margin_pct = isset( $row['margin_pct'] ) ? (float) $row['margin_pct'] : (float) ( $row['margin'] ?? 0 );
-                                                            ?>
-                                                            <tr>
-                                                                <td style="padding:6px 8px; border-bottom:1px solid #f1f5f9;"><?php echo esc_html( $row_date ?: (string) ( $row['date'] ?? '' ) ); ?></td>
-                                                                <td style="padding:6px 8px; text-align:right; border-bottom:1px solid #f1f5f9;"><?php echo esc_html( $currency_label ); ?> <?php echo esc_html( number_format( $net, 2 ) ); ?></td>
-                                                                <td style="padding:6px 8px; text-align:right; border-bottom:1px solid #f1f5f9;"><?php echo esc_html( number_format( $margin_pct, 2 ) ); ?>%</td>
-                                                            </tr>
-                                                        <?php endforeach; ?>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </details>
-                                    <?php endif; ?>
-                                    <?php if ( $notes ) : ?>
-                                        <div class="service-card__note"><?php echo esc_html( $notes ); ?></div>
-                                    <?php endif; ?>
+                                <div class="service-card service-card--media">
+                                    <?php if ( $hotel_image_url ) : ?>
+                                        <div class="service-card__thumb">
+                                            <img src="<?php echo esc_url( $hotel_image_url ); ?>" alt="<?php echo esc_attr( $hotel_image_alt ?: $display_name ); ?>" loading="lazy" />
                                         </div>
+                                    <?php endif; ?>
+                                    <div class="service-card__body">
+                                        <div class="service-card__title"><?php echo $display_name; ?></div>
+                                        <?php if ( $meta_line ) : ?>
+                                            <div class="service-card__meta"><?php echo esc_html( $meta_line ); ?></div>
+                                        <?php endif; ?>
+
+                                        <?php if ( $regimen_label ) : ?>
+                                            <div class="service-card__meta"><?php echo esc_html( sprintf( 'Régimen: %s', $regimen_label ) ); ?></div>
+                                        <?php endif; ?>
+
+                                        <?php
+                                        $double_rooms = absint( $room_pricing['double']['rooms'] ?? 0 );
+                                        $single_rooms = absint( $room_pricing['single']['rooms'] ?? 0 );
+
+                                        if ( $double_enabled && $double_rooms > 0 ) {
+                                            $double_label = $double_rooms === 1 ? 'Habitación doble (1 hab.)' : sprintf( 'Habitaciones dobles (%d hab.)', $double_rooms );
+                                            echo '<div class="service-card__meta">' . esc_html( $double_label ) . '</div>';
+                                        }
+                                        if ( $single_enabled && $single_rooms > 0 ) {
+                                            $single_label = $single_rooms === 1 ? 'Habitación individual (1 hab.)' : sprintf( 'Habitaciones individuales (%d hab.)', $single_rooms );
+                                            echo '<div class="service-card__meta">' . esc_html( $single_label ) . '</div>';
+                                        }
+                                        ?>
+
+                                        <?php
+                                        $hotel_pricing_mode = isset( $item['hotel_pricing_mode'] ) ? (string) $item['hotel_pricing_mode'] : '';
+                                        if ( $hotel_pricing_mode === '' && isset( $item['pricing_mode'] ) ) {
+                                            $hotel_pricing_mode = (string) $item['pricing_mode'];
+                                        }
+                                        $nightly_rates = [];
+                                        if ( isset( $item['nightly_rates'] ) && is_array( $item['nightly_rates'] ) ) {
+                                            $nightly_rates = $item['nightly_rates'];
+                                        } elseif ( isset( $item['hotel_nightly_rates'] ) && is_array( $item['hotel_nightly_rates'] ) ) {
+                                            $nightly_rates = $item['hotel_nightly_rates'];
+                                        }
+                                        ?>
+                                        <?php if ( $hotel_pricing_mode === 'per_night' && ! empty( $nightly_rates ) ) : ?>
+                                            <details class="service-card__details" style="margin-top:10px;">
+                                                <summary><?php echo esc_html__( 'Precio variable por noche', 'wp-travel-giav' ); ?></summary>
+                                                <div style="overflow:auto; margin-top:8px;">
+                                                    <table style="width:100%; border-collapse:collapse;">
+                                                        <thead>
+                                                            <tr>
+                                                                <th style="text-align:left; padding:6px 8px; border-bottom:1px solid #e2e8f0;"><?php echo esc_html__( 'Fecha', 'wp-travel-giav' ); ?></th>
+                                                                <th style="text-align:right; padding:6px 8px; border-bottom:1px solid #e2e8f0;"><?php echo esc_html__( 'Neto', 'wp-travel-giav' ); ?></th>
+                                                                <th style="text-align:right; padding:6px 8px; border-bottom:1px solid #e2e8f0;"><?php echo esc_html__( 'Margen', 'wp-travel-giav' ); ?></th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <?php foreach ( $nightly_rates as $row ) : ?>
+                                                                <?php
+                                                                if ( ! is_array( $row ) ) {
+                                                                    continue;
+                                                                }
+                                                                $row_date = self::format_spanish_date( (string) ( $row['date'] ?? '' ) );
+                                                                $net = isset( $row['net_price'] ) ? (float) $row['net_price'] : (float) ( $row['unit_cost_net'] ?? 0 );
+                                                                $margin_pct = isset( $row['margin_pct'] ) ? (float) $row['margin_pct'] : (float) ( $row['margin'] ?? 0 );
+                                                                ?>
+                                                                <tr>
+                                                                    <td style="padding:6px 8px; border-bottom:1px solid #f1f5f9;"><?php echo esc_html( $row_date ?: (string) ( $row['date'] ?? '' ) ); ?></td>
+                                                                    <td style="padding:6px 8px; border-bottom:1px solid #f1f5f9; text-align:right;"><?php echo esc_html( $currency_symbol ); ?> <?php echo esc_html( number_format( $net, 2 ) ); ?></td>
+                                                                    <td style="padding:6px 8px; border-bottom:1px solid #f1f5f9; text-align:right;"><?php echo esc_html( number_format( $margin_pct, 2 ) ); ?>%</td>
+                                                                </tr>
+                                                            <?php endforeach; ?>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </details>
+                                        <?php endif; ?>
+
+                                        <?php if ( $notes ) : ?>
+                                            <div class="service-card__note"><?php echo esc_html( $notes ); ?></div>
+                                        <?php endif; ?>
                                     </div>
-                                </div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -1358,10 +1369,17 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
     ?>
 
     <?php if ( 1 === $price_cards_count ) : ?>
-        <div class="totals-hero">
-            <div class="totals-hero__kicker"><?php echo esc_html( $price_cards[0]['label'] ); ?></div>
-            <div class="totals-hero__value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $price_cards[0]['value'], 2 ); ?></div>
-            <div class="totals-hero__sub">Total estimado del viaje: <?php echo esc_html( $currency ); ?> <?php echo number_format( $pricing['total_trip'], 2 ); ?></div>
+        <div class="totals-grid totals-grid--pair">
+            <div class="totals-card totals-card--primary">
+                <div class="label"><?php echo esc_html( $price_cards[0]['label'] ); ?></div>
+                <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $price_cards[0]['value'], 2 ); ?></div>
+                <div class="sub">Precio por persona en habitación doble.</div>
+            </div>
+            <div class="totals-card">
+                <div class="label">Total del viaje</div>
+                <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $pricing['total_trip'], 2 ); ?></div>
+                <div class="sub">Importe total estimado para el grupo.</div>
+            </div>
         </div>
     <?php else : ?>
         <div class="totals-grid">
@@ -1384,102 +1402,144 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
     </div>
 </div>
 
-<script>
-            window.TRAVEL_PUBLIC = <?php echo wp_json_encode( $public_payload ); ?>;
-        </script>
-        <?php if ( $can_accept && ! $accepted_message ) : ?>
-        <script>
-            (function () {
-                const button = document.getElementById('proposal-accept-button');
-                const form = document.getElementById('proposal-accept-form');
-                const submitButton = document.getElementById('proposal-accept-submit');
-                const fullNameInput = document.getElementById('proposal-full-name');
-                const dniInput = document.getElementById('proposal-dni');
-                if (!button) return;
-                const feedback = document.getElementById('proposal-accept-feedback');
-                button.addEventListener('click', () => {
-                    if (!form) return;
-                const closeButton = document.getElementById('proposal-accept-close');
-                if (closeButton) {
-                    closeButton.addEventListener('click', () => {
-                        form.style.display = 'none';
-                    });
-                }
 
-                    const isOpen = form.style.display === 'grid';
-                    form.style.display = isOpen ? 'none' : 'grid';
-                    if (!isOpen && fullNameInput) {
-                        fullNameInput.focus();
+
+
+
+            <?php if ( $accepted_message || $can_accept ) : ?>
+                <div class="proposal-section proposal-accept" id="proposal-accept">
+                    <?php if ( $accepted_message ) : ?>
+                        <div class="proposal-accept__message" id="proposal-accept-message">
+                            <?php echo esc_html( $accepted_message ); ?>
+                            <?php if ( $accepted_version_message ) : ?>
+                                <div><?php echo esc_html( $accepted_version_message ); ?></div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ( $can_accept && ! $accepted_message ) : ?>
+                        <div class="proposal-accept__note"><?php echo esc_html__( '¿Todo correcto? Puedes confirmar la propuesta desde aquí.', 'wp-travel-giav' ); ?></div>
+                        <button type="button" class="proposal-accept__button" id="proposal-accept-button">
+                            <?php echo esc_html__( 'Aceptar propuesta', 'wp-travel-giav' ); ?>
+                        </button>
+
+                        <form class="proposal-accept__form" id="proposal-accept-form" style="display:none;">
+                            <div class="proposal-accept__field">
+                                <label for="proposal-full-name"><?php echo esc_html__( 'Nombre completo *', 'wp-travel-giav' ); ?></label>
+                                <input type="text" id="proposal-full-name" name="full_name" required minlength="3" />
+                            </div>
+                            <div class="proposal-accept__field">
+                                <label for="proposal-dni"><?php echo esc_html__( 'DNI *', 'wp-travel-giav' ); ?></label>
+                                <input type="text" id="proposal-dni" name="dni" required minlength="6" />
+                            </div>
+
+                            <div class="proposal-accept__actions">
+                                <button type="submit" class="proposal-accept__button" id="proposal-accept-submit">
+                                    <?php echo esc_html__( 'Confirmar aceptación', 'wp-travel-giav' ); ?>
+                                </button>
+                                <button type="button" class="proposal-accept__button proposal-accept__button--secondary" id="proposal-accept-close">
+                                    <?php echo esc_html__( 'Cerrar', 'wp-travel-giav' ); ?>
+                                </button>
+                            </div>
+
+                            <div class="proposal-accept__note proposal-accept__note--small"><?php echo esc_html__( 'No necesitas registro para confirmar.', 'wp-travel-giav' ); ?></div>
+                        </form>
+
+                        <div class="proposal-accept__note" id="proposal-accept-feedback" style="display:none;"></div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+
+	            </div><!-- /.proposal-container -->
+	        </div><!-- /.proposal-page -->
+
+            <script>
+                window.TRAVEL_PUBLIC = <?php echo wp_json_encode( $public_payload ); ?>;
+            </script>
+
+            <?php if ( $can_accept && ! $accepted_message ) : ?>
+            <script>
+                (function () {
+                    const button = document.getElementById('proposal-accept-button');
+                    const form = document.getElementById('proposal-accept-form');
+                    const submitButton = document.getElementById('proposal-accept-submit');
+                    const fullNameInput = document.getElementById('proposal-full-name');
+                    const dniInput = document.getElementById('proposal-dni');
+                    const feedback = document.getElementById('proposal-accept-feedback');
+                    const closeButton = document.getElementById('proposal-accept-close');
+
+                    if (!button || !form) return;
+
+                    const setOpen = (open) => {
+                        form.style.display = open ? 'grid' : 'none';
+                        button.textContent = open ? <?php echo wp_json_encode( __( 'Cerrar', 'wp-travel-giav' ) ); ?> : <?php echo wp_json_encode( __( 'Aceptar propuesta', 'wp-travel-giav' ) ); ?>;
+                        if (open && fullNameInput) fullNameInput.focus();
+                    };
+
+                    button.addEventListener('click', () => {
+                        const isOpen = form.style.display === 'grid';
+                        setOpen(!isOpen);
+                    });
+
+                    if (closeButton) {
+                        closeButton.addEventListener('click', () => setOpen(false));
                     }
-                });
-                if (!form) return;
-                form.addEventListener('submit', async (event) => {
-                    event.preventDefault();
-                    if (submitButton?.disabled) return;
-                    const restNonce = window.TRAVEL_PUBLIC && window.TRAVEL_PUBLIC.restNonce;
-                    if (!restNonce) {
-                        if (feedback) {
-                            feedback.textContent = 'No se pudo validar la solicitud.';
-                            feedback.style.display = 'block';
+
+                    form.addEventListener('submit', async (event) => {
+                        event.preventDefault();
+                        if (submitButton?.disabled) return;
+
+                        const restNonce = window.TRAVEL_PUBLIC && window.TRAVEL_PUBLIC.restNonce;
+                        if (!restNonce) {
+                            if (feedback) {
+                                feedback.textContent = <?php echo wp_json_encode( __( 'No se pudo validar la solicitud.', 'wp-travel-giav' ) ); ?>;
+                                feedback.style.display = 'block';
+                            }
+                            return;
                         }
-                        return;
-                    }
-                    const fullName = fullNameInput ? fullNameInput.value.trim() : '';
-                    let dni = dniInput ? dniInput.value.trim() : '';
-                    dni = dni.toUpperCase().replace(/\s+/g, '');
-                    if (fullName.length < 3) {
-                        if (feedback) {
-                            feedback.textContent = 'Introduce tu nombre completo.';
-                            feedback.style.display = 'block';
+
+                        const fullName = fullNameInput ? fullNameInput.value.trim() : '';
+                        let dni = dniInput ? dniInput.value.trim() : '';
+                        dni = dni.toUpperCase().replace(/\s+/g, '');
+
+                        if (fullName.length < 3) {
+                            if (feedback) { feedback.textContent = <?php echo wp_json_encode( __( 'Introduce tu nombre completo.', 'wp-travel-giav' ) ); ?>; feedback.style.display = 'block'; }
+                            return;
                         }
-                        return;
-                    }
-                    if (dni.length < 6) {
-                        if (feedback) {
-                            feedback.textContent = 'Introduce un DNI válido.';
-                            feedback.style.display = 'block';
+                        if (dni.length < 6) {
+                            if (feedback) { feedback.textContent = <?php echo wp_json_encode( __( 'Introduce un DNI válido.', 'wp-travel-giav' ) ); ?>; feedback.style.display = 'block'; }
+                            return;
                         }
-                        return;
-                    }
-                    if (submitButton) {
-                        submitButton.disabled = true;
-                    }
-                    if (feedback) {
-                        feedback.textContent = 'Procesando aceptación...';
-                        feedback.style.display = 'block';
-                    }
-                    try {
-                        const res = await fetch('<?php echo esc_url_raw( $accept_endpoint ); ?>', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-WP-Nonce': restNonce
-                            },
-                            credentials: 'same-origin',
-                            body: JSON.stringify({ full_name: fullName, dni })
-                        });
-                        const payload = await res.json();
-                        if (!res.ok || !payload?.ok) {
-                            throw new Error(payload?.message || 'No se pudo registrar la aceptación.');
+
+                        if (submitButton) submitButton.disabled = true;
+                        if (feedback) { feedback.textContent = <?php echo wp_json_encode( __( 'Procesando aceptación...', 'wp-travel-giav' ) ); ?>; feedback.style.display = 'block'; }
+
+                        try {
+                            const res = await fetch(<?php echo wp_json_encode( esc_url_raw( $accept_endpoint ) ); ?>, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-WP-Nonce': restNonce
+                                },
+                                credentials: 'same-origin',
+                                body: JSON.stringify({ full_name: fullName, dni })
+                            });
+                            const payload = await res.json();
+                            if (!res.ok || !payload?.ok) {
+                                throw new Error(payload?.message || <?php echo wp_json_encode( __( 'No se pudo registrar la aceptación.', 'wp-travel-giav' ) ); ?>);
+                            }
+                            window.location.reload();
+                        } catch (err) {
+                            if (feedback) {
+                                feedback.textContent = err?.message || <?php echo wp_json_encode( __( 'No se pudo registrar la aceptación.', 'wp-travel-giav' ) ); ?>;
+                                feedback.style.display = 'block';
+                            }
+                            if (submitButton) submitButton.disabled = false;
                         }
-                        if (feedback) {
-                            feedback.textContent = payload?.message || '';
-                            feedback.style.display = payload?.message ? 'block' : 'none';
-                        }
-                        window.location.reload();
-                    } catch (err) {
-                        if (feedback) {
-                            feedback.textContent = err?.message || 'No se pudo registrar la aceptación.';
-                            feedback.style.display = 'block';
-                        }
-                        if (submitButton) {
-                            submitButton.disabled = false;
-                        }
-                    }
-                });
-            })();
-        </script>
-        <?php endif; ?>
+                    });
+                })();
+            </script>
+            <?php endif; ?>
         </body>
         </html>
         <?php

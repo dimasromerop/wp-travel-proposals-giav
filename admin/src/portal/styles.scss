@@ -1621,6 +1621,18 @@
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
+.service-card__section--pricing {
+    background: #fffaf0;
+    border: 1px solid #f1e9d9;
+    width: 80%;
+    margin-left: 10%;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+
+.service-card__pricing .components-text-control__input {
+    background: #fff !important;
+}
 .service-card__notes {
   display: grid;
   gap: 12px;
@@ -1674,6 +1686,19 @@ details[open] > .service-card__section-summary::after {
   background: #ffffff;
   border-color: #e2e8f0;
   border-left: 4px solid #cbd5e1;
+}
+
+.services-intention-banner {
+    background: #eff6ff;
+    border: 1px dashed #93c5fd;
+    border-radius: 14px;
+    color: #0f172a;
+    display: flex;
+    flex-direction: column;
+    font-size: 13px;
+    gap: 4px;
+    margin-bottom: 16px;
+    padding: 14px 18px;
 }
 
 /* Hotel: desglose por noche (precio variable por noche)
