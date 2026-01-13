@@ -282,6 +282,18 @@ class WP_Travel_Proposal_Viewer {
         $hotel_items = array_values( array_filter( $items, function ( $item ) {
             return ( $item['service_type'] ?? '' ) === 'hotel';
         } ) );
+
+        $hero_image_url = '';
+        $hero_image_alt = '';
+        foreach ( $hotel_items as $h_item ) {
+            $candidate = trim( (string) ( $h_item['hotel_image_url'] ?? '' ) );
+            if ( $candidate !== '' ) {
+                $hero_image_url = $candidate;
+                $hero_image_alt = trim( (string) ( $h_item['hotel_image_alt'] ?? '' ) );
+                break;
+            }
+        }
+
         $golf_items = array_values( array_filter( $items, function ( $item ) {
             return ( $item['service_type'] ?? '' ) === 'golf';
         } ) );
@@ -454,6 +466,16 @@ class WP_Travel_Proposal_Viewer {
             $logo_url = (string) CASANOVA_AGENCY_LOGO_URL;
         }
         $logo_url = (string) apply_filters( 'wp_travel_giav_public_logo_url', $logo_url, $proposal, $version, $header );
+
+// Hero image: use first hotel image (if available) for premium header background.
+$hero_image_url = '';
+$hero_image_alt = '';
+if ( ! empty( $hotel_items ) && is_array( $hotel_items ) ) {
+    $first_hotel = $hotel_items[0];
+    $hero_image_url = trim( (string) ( $first_hotel['hotel_image_url'] ?? '' ) );
+    $hero_image_alt = trim( (string) ( $first_hotel['hotel_image_alt'] ?? '' ) );
+}
+$hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (string) ( $header['proposal_title'] ?? '' ) );
         $rest_nonce = wp_create_nonce( 'wp_rest' );
         $accept_endpoint = rest_url( 'travel/v1/proposals/public/' . $proposal['proposal_token'] . '/accept' );
         $public_payload = [
@@ -479,40 +501,83 @@ class WP_Travel_Proposal_Viewer {
                 .proposal-page {
                     max-width: 980px;
                     margin: 0 auto;
-                    padding: 46px 18px 64px;
+                    padding: 28px 18px 64px;
                 }
-                .proposal-header {
-                    text-align: center;
-                    margin-bottom: 32px;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 12px;
-                }
-                .proposal-logo {
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    margin-bottom: 6px;
-                }
-                .proposal-logo img {
-                    max-height: 52px;
-                    width: auto;
-                }
-                .proposal-header h1 {
-                    margin: 0;
-                    font-size: clamp(28px, 4vw, 40px);
-                    letter-spacing: -0.02em;
-                    line-height: 1.08;
-                }
-                .proposal-subtitle {
-                    font-size: 15px;
-                    color: #475569;
-                }
-                .proposal-status__meta {
-                    color: #475569;
-                    font-size: 14px;
-                }
-                .proposal-version {
+                
+.proposal-hero {
+    position: relative;
+                    min-height: 190px;
+    border-radius: 22px;
+    overflow: hidden;
+    background: #0b1220;
+    box-shadow: 0 28px 70px rgba(15, 23, 42, 0.10);
+    margin-bottom: 18px;
+}
+.proposal-hero__bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    filter: saturate(0.95);
+    transform: scale(1.02);
+}
+.proposal-hero__overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(2,6,23,0.55) 0%, rgba(2,6,23,0.68) 60%, rgba(2,6,23,0.78) 100%);
+}
+.proposal-hero__content {
+    position: relative;
+    padding: 22px 22px 18px;
+    display: grid;
+    gap: 10px;
+}
+.proposal-hero__topline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.proposal-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+.proposal-logo img {
+    max-height: 44px;
+    width: auto;
+    filter: drop-shadow(0 6px 12px rgba(2,6,23,0.35));
+}
+.proposal-hero__pillrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.proposal-hero__title {
+    margin: 0;
+    font-size: clamp(26px, 3.4vw, 38px);
+    letter-spacing: -0.02em;
+    line-height: 1.08;
+    color: #f8fafc;
+}
+.proposal-hero__subtitle {
+    font-size: 14px;
+    color: rgba(226, 232, 240, 0.92);
+    display: grid;
+    gap: 6px;
+}
+.proposal-hero__meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    color: rgba(226, 232, 240, 0.82);
+    font-size: 13px;
+}
+.proposal-version {
+
                     display: flex;
                     justify-content: center;
                     gap: 12px;
@@ -661,9 +726,30 @@ class WP_Travel_Proposal_Viewer {
                 }
                 .includes-list {
                     margin: 0;
-                    padding-left: 18px;
+                    padding: 0;
+                    list-style: none;
                     display: grid;
-                    gap: 6px;
+                    gap: 10px;
+                }
+                .includes-list > li {
+                    position: relative;
+                    padding-left: 16px;
+                    line-height: 1.5;
+                }
+                .includes-list > li::before {
+                    content: '•';
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    color: #94a3b8;
+                }
+                .includes-list ul {
+                    margin: 10px 0 0;
+                    padding-left: 16px;
+                }
+                .includes-list ul li {
+                    color: #334155;
+                    margin: 6px 0;
                 }
                 .includes-list ul {
                     margin-top: 8px;
@@ -685,20 +771,43 @@ class WP_Travel_Proposal_Viewer {
                     border-radius: 12px;
                     background: #ffffff;
                 }
-                .service-card__image {
-                    margin: 0 0 12px;
-                    border-radius: 14px;
-                    overflow: hidden;
-                    border: 1px solid rgba(15,23,42,.08);
-                    background: #f8fafc;
-                    box-shadow: 0 16px 36px rgba(15,23,42,.10);
-                }
-                .service-card__image img {
-                    display: block;
-                    width: 100%;
-                    height: clamp(220px, 34vh, 360px);
-                    object-fit: cover;
-                }
+                
+.service-card__media {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+}
+.service-card__thumb {
+    width: 74px;
+    height: 74px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    background: #f8fafc;
+    flex: 0 0 auto;
+}
+.service-card__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.service-card__body {
+    flex: 1;
+    min-width: 0;
+}
+.service-card__image {
+    margin: 0 0 10px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    background: #f8fafc;
+}
+.service-card__image img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
                 .service-card__title {
                     font-weight: 600;
                     margin-bottom: 6px;
@@ -744,6 +853,33 @@ class WP_Travel_Proposal_Viewer {
                     font-weight: 700;
                     color: #0f172a;
                 }
+                
+.totals-hero {
+    display: grid;
+    gap: 10px;
+    padding: 18px;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    text-align: center;
+}
+.totals-hero__kicker {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+.totals-hero__value {
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: #0f172a;
+}
+.totals-hero__sub {
+    font-size: 13px;
+    color: #475569;
+}
+
                 .totals-note {
                     margin-top: 12px;
                     font-size: 12px;
@@ -756,42 +892,136 @@ class WP_Travel_Proposal_Viewer {
                 .observations li {
                     margin-bottom: 6px;
                 }
-            </style>
+            
+                /* Premium tweaks */
+                .proposal-page {
+                    background: #f6f7f8;
+                }
+                .proposal-container {
+                    max-width: 980px;
+                    margin: 0 auto;
+                }
+                .proposal-header {
+                    padding: 26px 18px 18px;
+                }
+                .proposal-header h1 {
+                    letter-spacing: -0.02em;
+                    font-size: 34px;
+                    margin-bottom: 6px;
+                }
+                .proposal-subtitle {
+                    font-size: 15px;
+                    color: #475569;
+                    margin-bottom: 10px;
+                }
+                .proposal-status__meta {
+                    gap: 6px;
+                }
+                .proposal-meta, .travel-dates {
+                    font-size: 13px;
+                    color: #64748b;
+                }
+                .proposal-version {
+                    margin-top: 10px;
+                    font-size: 12px;
+                    color: #64748b;
+                }
+                .version-pill {
+                    border-radius: 999px;
+                    padding: 4px 10px;
+                }
+                .service-card__image img {
+                    width: 100%;
+                    height: clamp(220px, 34vh, 360px);
+                    object-fit: cover;
+                    display: block;
+                }
+                .service-card--media {
+                    display: grid;
+                    grid-template-columns: 92px 1fr;
+                    gap: 14px;
+                    align-items: start;
+                }
+                .service-card__thumb {
+                    width: 92px;
+                    height: 72px;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    background: #e5e7eb;
+                    border: 1px solid rgba(0,0,0,.06);
+                }
+                .service-card__thumb img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    display: block;
+                }
+                .proposal-accept__button--secondary {
+                    background: transparent;
+                    border: 1px solid rgba(0,0,0,.12);
+                    color: #0f172a;
+                    box-shadow: none;
+                }
+                .proposal-accept__form {
+                    grid-template-columns: 1fr 1fr;
+                    gap: 14px;
+                }
+                .proposal-accept__actions {
+                    display: flex;
+                    gap: 10px;
+                    justify-content: center;
+                    grid-column: 1 / -1;
+                }
+.proposal-accept__note--small{margin-top:10px;text-align:center;font-size:12px;color:#64748b;}
+</style>
         </head>
         <body>
         <div class="proposal-page">
-            <div class="proposal-header">
-                <?php if ( ! empty( $logo_url ) ) : ?>
-                    <div class="proposal-logo">
-                        <img src="<?php echo esc_url( $logo_url ); ?>" alt="" />
-                    </div>
-                <?php endif; ?>
-                <h1><?php echo esc_html( $destination ?: ( $header['proposal_title'] ?? '' ) ?: 'Propuesta de viaje' ); ?></h1>
-                <?php if ( ! empty( $header['customer_name'] ) ) : ?>
-                    <div class="proposal-subtitle"><?php echo esc_html( $header['customer_name'] ); ?></div>
-                <?php endif; ?>
-                <div class="proposal-status__meta">
-                    <?php if ( $dates ) : ?>
-                        <div class="travel-dates">Fechas: <?php echo esc_html( $dates ); ?></div>
-                    <?php endif; ?>
-                    <?php if ( $meta_line ) : ?>
-                        <div class="proposal-meta"><?php echo esc_html( $meta_line ); ?></div>
-                    <?php endif; ?>
+            <div class="proposal-hero">
+    <?php if ( ! empty( $hero_image_url ) ) : ?>
+        <div class="proposal-hero__bg" style="background-image:url('<?php echo esc_url( $hero_image_url ); ?>');" aria-hidden="true"></div>
+    <?php else : ?>
+        <div class="proposal-hero__bg" aria-hidden="true"></div>
+    <?php endif; ?>
+    <div class="proposal-hero__overlay" aria-hidden="true"></div>
+    <div class="proposal-hero__content">
+        <div class="proposal-hero__topline">
+            <?php if ( ! empty( $logo_url ) ) : ?>
+                <div class="proposal-logo">
+                    <img src="<?php echo esc_url( $logo_url ); ?>" alt="" />
                 </div>
-                <div class="proposal-version">
-                    <span><?php echo esc_html( $view_label ); ?></span>
-                    <span class="version-pill <?php echo $is_current ? 'version-pill--active' : 'version-pill--archive'; ?>">
-                        <?php echo $is_current ? 'Versión vigente' : 'Versión anterior'; ?>
-                    </span>
-                </div>
-                <?php if ( ! $is_current && $current_version ) : ?>
-                    <div class="version-banner">
-                        <strong>Estás viendo una versión anterior.</strong>
-                        <span><?php echo esc_html( $current_version_message ); ?></span>
-                        <a href="<?php echo esc_url( self::get_proposal_url( $proposal['proposal_token'] ) ); ?>" class="version-banner__link">Ver versión actual</a>
-                    </div>
-                <?php endif; ?>
+            <?php endif; ?>
+            <div class="proposal-hero__pillrow">
+                <span class="version-pill <?php echo $is_current ? 'version-pill--active' : 'version-pill--archive'; ?>">
+                    <?php echo $is_current ? 'Versión vigente' : 'Versión anterior'; ?>
+                </span>
             </div>
+        </div>
+
+        <h1 class="proposal-hero__title"><?php echo esc_html( $destination ?: ( $header['proposal_title'] ?? 'Propuesta de viaje' ) ); ?></h1>
+
+        <div class="proposal-hero__subtitle">
+            <div><?php echo esc_html( $header['customer_name'] ?: 'Cliente' ); ?><?php if ( ! empty( $header['customer_email'] ) ) : ?> · <?php echo esc_html( $header['customer_email'] ); ?><?php endif; ?></div>
+            <div class="proposal-hero__meta">
+                <?php if ( $dates ) : ?>
+                    <span><?php echo esc_html( 'Fechas: ' . $dates ); ?></span>
+                <?php endif; ?>
+                <?php if ( $meta_line ) : ?>
+                    <span><?php echo esc_html( $meta_line ); ?></span>
+                <?php endif; ?>
+                <span><?php echo esc_html( $view_label ); ?></span>
+            </div>
+        </div>
+
+        <?php if ( ! $is_current && $current_version ) : ?>
+            <div class="version-banner" style="margin:0;">
+                <strong>Estás viendo una versión anterior.</strong>
+                <span><?php echo esc_html( $current_version_message ); ?></span>
+                <a href="<?php echo esc_url( self::get_proposal_url( $proposal['proposal_token'] ) ); ?>" class="version-banner__link">Ver versión actual</a>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
 
             <?php if ( $accepted_message || $can_accept ) : ?>
                 <div class="proposal-section proposal-accept" id="proposal-accept">
@@ -820,8 +1050,12 @@ class WP_Travel_Proposal_Viewer {
                                 <button type="submit" class="proposal-accept__button" id="proposal-accept-submit">
                                     Confirmar aceptación
                                 </button>
-                                <span class="proposal-accept__note">No necesitas registro para confirmar.</span>
+                                <button type="button" class="proposal-accept__button proposal-accept__button--secondary" id="proposal-accept-close">
+                                    Cerrar
+                                </button>
+                                
                             </div>
+                            <div class="proposal-accept__note proposal-accept__note--small">No necesitas registro para confirmar.</div>
                         </form>
                         <div class="proposal-accept__note" id="proposal-accept-feedback" style="display:none;"></div>
                     <?php endif; ?>
@@ -898,49 +1132,50 @@ class WP_Travel_Proposal_Viewer {
                                 $meta_line = implode( ' · ', $meta_parts );
                                 ?>
                                 <div class="service-card">
-                                    <?php if ( $hotel_image_url ) : ?>
-                                        <div class="service-card__image">
-                                            <img src="<?php echo esc_url( $hotel_image_url ); ?>" alt="<?php echo esc_attr( $hotel_image_alt ?: $display_name ); ?>" loading="lazy" />
-                                        </div>
-                                    <?php endif; ?>
-                                    <div class="service-card__title"><?php echo $display_name; ?></div>
-                                    <?php if ( $meta_line ) : ?>
-                                        <div class="service-card__meta"><?php echo esc_html( $meta_line ); ?></div>
-                                    <?php endif; ?>
-                                    <?php if ( $room_type || $regimen_label ) : ?>
-                                        <div class="service-card__details">
-                                            <?php if ( $room_type ) : ?>
-                                                <div>Tipo de habitación: <?php echo esc_html( $room_type ); ?></div>
-                                            <?php endif; ?>
-                                            <?php if ( $regimen_label ) : ?>
-                                                <div>Régimen: <?php echo esc_html( $regimen_label ); ?></div>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php endif; ?>
-                                    <?php if ( $double_enabled || $single_enabled ) : ?>
-                                        <div class="service-card__details">
-                                            <?php if ( $double_enabled ) : ?>
-                                                <?php
-                                                $double_rooms = absint( $room_pricing['double']['rooms'] ?? 0 );
-                                                $double_label = $double_rooms > 0
-                                                    ? sprintf( 'Habitaciones dobles (%d hab.)', $double_rooms )
-                                                    : 'Habitaciones dobles';
-                                                ?>
-                                                <div><?php echo esc_html( $double_label ); ?></div>
-                                            <?php endif; ?>
-                                            <?php if ( $single_enabled ) : ?>
-                                                <?php
-                                                $single_rooms = absint( $room_pricing['single']['rooms'] ?? 0 );
-                                                $single_label = $single_rooms > 0
-                                                    ? sprintf( 'Habitaciones individuales (%d hab.)', $single_rooms )
-                                                    : 'Habitaciones individuales';
-                                                ?>
-                                                <div><?php echo esc_html( $single_label ); ?></div>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php endif; ?>
-
-                                    <?php
+    <div class="service-card__media">
+        <?php if ( $hotel_image_url ) : ?>
+            <div class="service-card__thumb">
+                <img src="<?php echo esc_url( $hotel_image_url ); ?>" alt="<?php echo esc_attr( $hotel_image_alt ?: $display_name ); ?>" loading="lazy" />
+            </div>
+        <?php endif; ?>
+        <div class="service-card__body">
+            <div class="service-card__title"><?php echo $display_name; ?></div>
+            <?php if ( $meta_line ) : ?>
+                <div class="service-card__meta"><?php echo esc_html( $meta_line ); ?></div>
+            <?php endif; ?>
+            <?php if ( $room_type || $regimen_label ) : ?>
+                <div class="service-card__details">
+                    <?php if ( $room_type ) : ?>
+                        <div>Tipo de habitación: <?php echo esc_html( $room_type ); ?></div>
+                    <?php endif; ?>
+                    <?php if ( $regimen_label ) : ?>
+                        <div>Régimen: <?php echo esc_html( $regimen_label ); ?></div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+            <?php if ( $double_enabled || $single_enabled ) : ?>
+                <div class="service-card__details">
+                    <?php if ( $double_enabled ) : ?>
+                        <?php
+                        $double_rooms = absint( $room_pricing['double']['rooms'] ?? 0 );
+                        $double_label = $double_rooms > 0
+                            ? sprintf( 'Habitaciones dobles (%d hab.)', $double_rooms )
+                            : 'Habitaciones dobles';
+                        ?>
+                        <div><?php echo esc_html( $double_label ); ?></div>
+                    <?php endif; ?>
+                    <?php if ( $single_enabled ) : ?>
+                        <?php
+                        $single_rooms = absint( $room_pricing['single']['rooms'] ?? 0 );
+                        $single_label = $single_rooms > 0
+                            ? sprintf( 'Habitaciones individuales (%d hab.)', $single_rooms )
+                            : 'Habitaciones individuales';
+                        ?>
+                        <div><?php echo esc_html( $single_label ); ?></div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+<?php
                                     $hotel_pricing_mode = isset( $item['hotel_pricing_mode'] ) ? (string) $item['hotel_pricing_mode'] : '';
                                     if ( $hotel_pricing_mode === '' && isset( $item['pricing_mode'] ) ) {
                                         $hotel_pricing_mode = (string) $item['pricing_mode'];
@@ -988,6 +1223,9 @@ class WP_Travel_Proposal_Viewer {
                                     <?php if ( $notes ) : ?>
                                         <div class="service-card__note"><?php echo esc_html( $notes ); ?></div>
                                     <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -1016,9 +1254,27 @@ class WP_Travel_Proposal_Viewer {
                                     $golf_meta[] = sprintf( '%d green-fees por jugador', $green_value );
                                 }
                                 $golf_meta_line = implode( ' · ', $golf_meta );
+                                $thumb_url = '';
+                                $golf_post_id = absint( $item['wp_object_id'] ?? 0 );
+                                if ( $golf_post_id ) {
+                                    $thumb_id = get_post_thumbnail_id( $golf_post_id );
+                                    if ( $thumb_id ) {
+                                        $thumb_url = wp_get_attachment_image_url( $thumb_id, 'medium_large' );
+                                        if ( ! $thumb_url ) {
+                                            $thumb_url = wp_get_attachment_image_url( $thumb_id, 'medium' );
+                                        }
+                                    }
+                                }
+
                                 ?>
-                                <div class="service-card">
-                                    <div class="service-card__title"><?php echo $display_name; ?></div>
+                                <div class="service-card service-card--media">
+                                    <?php if ( $thumb_url ) : ?>
+                                        <div class="service-card__thumb">
+                                            <img src="<?php echo esc_url( $thumb_url ); ?>" alt="" loading="lazy" />
+                                        </div>
+                                    <?php endif; ?>
+                                    <div class="service-card__body">
+                                        <div class="service-card__title"><?php echo $display_name; ?></div>
                                     <?php if ( $golf_meta_line ) : ?>
                                         <div class="service-card__meta"><?php echo esc_html( $golf_meta_line ); ?></div>
                                     <?php endif; ?>
@@ -1071,35 +1327,64 @@ class WP_Travel_Proposal_Viewer {
             </div>
 
             <div class="proposal-section">
-                <h2>Totales</h2>
-                <div class="totals-grid">
-                    <div class="totals-card">
-                        <div class="label">Total viaje</div>
-                        <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $pricing['total_trip'], 2 ); ?></div>
-                    </div>
-                    <?php if ( $pricing['players_count'] > 0 && null !== ( $pricing['price_player_double'] ?? null ) ) : ?>
-                        <div class="totals-card">
-                            <div class="label">Precio jugador en doble</div>
-                            <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $pricing['price_player_double'], 2 ); ?></div>
-                        </div>
-                    <?php endif; ?>
-                    <div class="totals-card">
-                        <div class="label">Precio no jugador en doble</div>
-                        <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $pricing['price_non_player_double'], 2 ); ?></div>
-                    </div>
-                    <?php if ( $pricing['has_single_supplement'] ) : ?>
-                        <div class="totals-card">
-                            <div class="label">Suplemento individual</div>
-                            <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $pricing['supplement_single'], 2 ); ?></div>
-                        </div>
-                    <?php endif; ?>
-                </div>
-                <div class="totals-note">
-                    Precios por persona. El suplemento individual aplica por persona alojada en habitación individual.
-                </div>
-            </div>
+    <h2>Totales</h2>
+    <?php
+    $pax_total = absint( $pricing['pax_total'] ?? 0 );
+    $players_count = absint( $pricing['players_count'] ?? 0 );
+    $price_cards = [];
+
+    if ( $players_count > 0 && null !== ( $pricing['price_player_double'] ?? null ) ) {
+        $price_cards[] = [
+            'label' => 'Precio por jugador',
+            'value' => (float) $pricing['price_player_double'],
+        ];
+    }
+
+    if ( $pax_total > $players_count && null !== ( $pricing['price_non_player_double'] ?? null ) ) {
+        $price_cards[] = [
+            'label' => 'Precio por acompañante',
+            'value' => (float) $pricing['price_non_player_double'],
+        ];
+    }
+
+    if ( ! empty( $pricing['has_single_supplement'] ) ) {
+        $price_cards[] = [
+            'label' => 'Suplemento individual',
+            'value' => (float) $pricing['supplement_single'],
+        ];
+    }
+
+    $price_cards_count = count( $price_cards );
+    ?>
+
+    <?php if ( 1 === $price_cards_count ) : ?>
+        <div class="totals-hero">
+            <div class="totals-hero__kicker"><?php echo esc_html( $price_cards[0]['label'] ); ?></div>
+            <div class="totals-hero__value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $price_cards[0]['value'], 2 ); ?></div>
+            <div class="totals-hero__sub">Total estimado del viaje: <?php echo esc_html( $currency ); ?> <?php echo number_format( $pricing['total_trip'], 2 ); ?></div>
         </div>
-        <script>
+    <?php else : ?>
+        <div class="totals-grid">
+            <div class="totals-card totals-card--primary">
+                <div class="label">Total viaje</div>
+                <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $pricing['total_trip'], 2 ); ?></div>
+            </div>
+
+            <?php foreach ( $price_cards as $card ) : ?>
+                <div class="totals-card">
+                    <div class="label"><?php echo esc_html( $card['label'] ); ?></div>
+                    <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( (float) $card['value'], 2 ); ?></div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+
+    <div class="totals-note">
+        Precios por persona. El suplemento individual aplica por persona alojada en habitación individual.
+    </div>
+</div>
+
+<script>
             window.TRAVEL_PUBLIC = <?php echo wp_json_encode( $public_payload ); ?>;
         </script>
         <?php if ( $can_accept && ! $accepted_message ) : ?>
@@ -1113,11 +1398,17 @@ class WP_Travel_Proposal_Viewer {
                 if (!button) return;
                 const feedback = document.getElementById('proposal-accept-feedback');
                 button.addEventListener('click', () => {
-                    if (form) {
-                        form.style.display = 'grid';
-                    }
-                    button.style.display = 'none';
-                    if (fullNameInput) {
+                    if (!form) return;
+                const closeButton = document.getElementById('proposal-accept-close');
+                if (closeButton) {
+                    closeButton.addEventListener('click', () => {
+                        form.style.display = 'none';
+                    });
+                }
+
+                    const isOpen = form.style.display === 'grid';
+                    form.style.display = isOpen ? 'none' : 'grid';
+                    if (!isOpen && fullNameInput) {
                         fullNameInput.focus();
                     }
                 });
