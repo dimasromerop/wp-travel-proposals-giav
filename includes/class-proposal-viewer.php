@@ -466,18 +466,20 @@ class WP_Travel_Proposal_Viewer {
         <head>
             <meta charset="<?php echo esc_attr( get_option( 'blog_charset' ) ); ?>">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title><?php echo esc_html( $header['customer_name'] ?: 'Propuesta de viaje' ); ?></title>
+            <title><?php echo esc_html( $destination ?: ( $header['proposal_title'] ?? '' ) ?: 'Propuesta de viaje' ); ?></title>
             <style>
                 body {
                     margin: 0;
-                    background: #f4f4f7;
-                    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+                    background: radial-gradient(circle at top, #f8fafc 0%, #f3f4f6 55%, #eef2f7 100%);
+                    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
                     color: #0f172a;
+                    -webkit-font-smoothing: antialiased;
+                    -moz-osx-font-smoothing: grayscale;
                 }
                 .proposal-page {
-                    max-width: 960px;
+                    max-width: 980px;
                     margin: 0 auto;
-                    padding: 36px 24px 48px;
+                    padding: 46px 18px 64px;
                 }
                 .proposal-header {
                     text-align: center;
@@ -498,8 +500,13 @@ class WP_Travel_Proposal_Viewer {
                 }
                 .proposal-header h1 {
                     margin: 0;
-                    font-size: 32px;
-                    letter-spacing: 0.02em;
+                    font-size: clamp(28px, 4vw, 40px);
+                    letter-spacing: -0.02em;
+                    line-height: 1.08;
+                }
+                .proposal-subtitle {
+                    font-size: 15px;
+                    color: #475569;
                 }
                 .proposal-status__meta {
                     color: #475569;
@@ -554,11 +561,13 @@ class WP_Travel_Proposal_Viewer {
                     margin-top: 6px;
                 }
                 .proposal-section {
-                    margin-bottom: 32px;
-                    background: #ffffff;
-                    border-radius: 16px;
-                    padding: 24px;
-                    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.05);
+                    margin-bottom: 22px;
+                    background: rgba(255, 255, 255, 0.92);
+                    border-radius: 18px;
+                    padding: 26px;
+                    border: 1px solid rgba(15, 23, 42, 0.06);
+                    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+                    backdrop-filter: blur(6px);
                 }
                 .proposal-accept {
                     display: flex;
@@ -568,14 +577,16 @@ class WP_Travel_Proposal_Viewer {
                     text-align: center;
                 }
                 .proposal-accept__button {
-                    background: #0ea5e9;
+                    background: linear-gradient(180deg, #0f766e 0%, #0b5f58 100%);
                     color: #ffffff;
                     border: none;
                     border-radius: 999px;
-                    padding: 12px 24px;
+                    padding: 12px 26px;
                     font-size: 15px;
-                    font-weight: 600;
+                    font-weight: 700;
+                    letter-spacing: 0.01em;
                     cursor: pointer;
+                    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.16);
                 }
                 .proposal-accept__button[disabled] {
                     opacity: 0.6;
@@ -675,16 +686,18 @@ class WP_Travel_Proposal_Viewer {
                     background: #ffffff;
                 }
                 .service-card__image {
-                    margin: 0 0 10px;
-                    border-radius: 12px;
+                    margin: 0 0 12px;
+                    border-radius: 14px;
                     overflow: hidden;
-                    border: 1px solid #e5e7eb;
+                    border: 1px solid rgba(15,23,42,.08);
                     background: #f8fafc;
+                    box-shadow: 0 16px 36px rgba(15,23,42,.10);
                 }
                 .service-card__image img {
                     display: block;
                     width: 100%;
-                    height: auto;
+                    height: clamp(220px, 34vh, 360px);
+                    object-fit: cover;
                 }
                 .service-card__title {
                     font-weight: 600;
@@ -753,7 +766,10 @@ class WP_Travel_Proposal_Viewer {
                         <img src="<?php echo esc_url( $logo_url ); ?>" alt="" />
                     </div>
                 <?php endif; ?>
-                <h1><?php echo esc_html( $header['customer_name'] ?: 'Propuesta de viaje' ); ?></h1>
+                <h1><?php echo esc_html( $destination ?: ( $header['proposal_title'] ?? '' ) ?: 'Propuesta de viaje' ); ?></h1>
+                <?php if ( ! empty( $header['customer_name'] ) ) : ?>
+                    <div class="proposal-subtitle"><?php echo esc_html( $header['customer_name'] ); ?></div>
+                <?php endif; ?>
                 <div class="proposal-status__meta">
                     <?php if ( $dates ) : ?>
                         <div class="travel-dates">Fechas: <?php echo esc_html( $dates ); ?></div>
