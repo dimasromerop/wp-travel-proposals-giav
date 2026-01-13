@@ -62,6 +62,10 @@ class WP_Travel_GIAV_Snapshot_Resolver {
      *
      * Field: imagen_hotel
      * Can be stored as attachment ID, URL, JSON, or serialized data depending on configuration.
+     *
+     * Notes:
+     * - Uses $wpdb->prefix so it works across environments with different DB prefixes.
+     * - Detects PK column dynamically (prefers _ID, then id, then ID).
      */
     private static function resolve_cct_hotel_image_url( int $cct_id, string $slug = 'hoteles' ) : array {
         $url = '';
@@ -81,12 +85,38 @@ class WP_Travel_GIAV_Snapshot_Resolver {
         global $wpdb;
         $table = $wpdb->prefix . 'jet_cct_' . $slug;
 
-        // JetEngine CCT PK column can vary by version/config, try common options.
+        // Ensure the table exists.
+        $maybe_table = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+        if ( ! $maybe_table ) {
+            return [ 'url' => $url, 'alt' => $alt ];
+        }
+
+        // Detect PK column (JetEngine often uses _ID).
+        $columns = $wpdb->get_results( "SHOW COLUMNS FROM {$table}", ARRAY_A );
+        $col_names = [];
+        if ( is_array( $columns ) ) {
+            foreach ( $columns as $col ) {
+                if ( ! empty( $col['Field'] ) ) {
+                    $col_names[] = (string) $col['Field'];
+                }
+            }
+        }
+
+        $pk = '_ID';
+        if ( ! in_array( $pk, $col_names, true ) ) {
+            $pk = in_array( 'id', $col_names, true ) ? 'id' : ( in_array( 'ID', $col_names, true ) ? 'ID' : '' );
+        }
+        if ( $pk === '' ) {
+            return [ 'url' => $url, 'alt' => $alt ];
+        }
+
+        if ( ! in_array( 'imagen_hotel', $col_names, true ) ) {
+            return [ 'url' => $url, 'alt' => $alt ];
+        }
+
         $row = $wpdb->get_row(
             $wpdb->prepare(
-                "SELECT imagen_hotel FROM {$table} WHERE _ID = %d OR id = %d OR ID = %d LIMIT 1",
-                $cct_id,
-                $cct_id,
+                "SELECT imagen_hotel FROM {$table} WHERE {$pk} = %d LIMIT 1",
                 $cct_id
             ),
             ARRAY_A
@@ -107,7 +137,6 @@ class WP_Travel_GIAV_Snapshot_Resolver {
                 if ( filter_var( $raw, FILTER_VALIDATE_URL ) ) {
                     $url = $raw;
                 } else {
-                    // Try unserialize and JSON.
                     $maybe = maybe_unserialize( $raw );
                     if ( is_array( $maybe ) ) {
                         if ( empty( $url ) && ! empty( $maybe['url'] ) && is_string( $maybe['url'] ) ) {
@@ -407,19 +436,27 @@ class WP_Travel_GIAV_Snapshot_Resolver {
 
             if ( $service_type === 'hotel' ) {
                 // Enrich snapshot with hotel image (optional).
-                // - CPTs: from custom field "imagen_hotel"
-                // - JetEngine CCT (slug hoteles): from table {prefix}jet_cct_hoteles column imagen_hotel
+                // - CPTs: from custom field "imagen_hotel".
+                // - JetEngine CCT (slug hoteles): from table {prefix}jet_cct_hoteles column imagen_hotel.
                 // Keeps compatibility: if already provided in the payload, we don't overwrite.
                 if ( empty( $item['hotel_image_url'] ) && ! $is_manual && $wp_object_id > 0 ) {
                     $img = [ 'url' => '', 'alt' => '' ];
 
-                    if ( $wp_object_type === 'cct' ) {
-                        // Default slug for hotels CCT if not provided.
-                        $slug = $wp_object_subtype !== '' ? $wp_object_subtype : 'hoteles';
-                        $img = self::resolve_cct_hotel_image_url( $wp_object_id, $slug );
-                    } else {
-                        $img = self::resolve_hotel_image_url( $wp_object_id );
-                    }
+                    // Prefer JetEngine CCT when explicitly marked as CCT,
+// or when hotel objects are stored as CCT items (legacy used wp_object_type='hotel').
+// If CCT lookup yields nothing, fall back to CPT/meta lookup.
+$try_cct = ( $wp_object_type === 'cct' || $wp_object_type === 'hotel' );
+if ( $try_cct ) {
+    // Default hotels CCT slug if not provided.
+    $slug = $wp_object_subtype !== '' ? $wp_object_subtype : 'hoteles';
+    $img = self::resolve_cct_hotel_image_url( $wp_object_id, $slug );
+    if ( empty( $img['url'] ) ) {
+        // Fall back to CPT/meta.
+        $img = self::resolve_hotel_image_url( $wp_object_id );
+    }
+} else {
+    $img = self::resolve_hotel_image_url( $wp_object_id );
+}
 
                     if ( ! empty( $img['url'] ) ) {
                         $item['hotel_image_url'] = (string) $img['url'];
