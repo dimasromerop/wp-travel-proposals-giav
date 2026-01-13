@@ -253,17 +253,17 @@ export default function StepPreview({
       hasSingleSupplement,
     };
   }, [snapshotHeader?.pax_total, snapshotHeader?.players_count, snapshotItems, snapshotTotals?.totals_sell_price]);
+  const hasEmail = Boolean(snapshotHeader.customer_email);
+  // UX: "Enviar" aquí no envía emails, solo publica/crea versión y marca como enviada.
+  // Así que lo llamamos "Compartir".
   const primaryLabel =
     mode === 'edit'
       ? 'Guardar nueva versión'
-      : snapshotHeader.customer_email
-      ? 'Enviar propuesta'
-      : 'Crear enlace';
+      : hasEmail
+      ? 'Compartir propuesta'
+      : 'Crear enlace público';
 
-  const send = async () => {
-    setLoading(true);
-    setError('');
-
+  const resolveProposalId = () => {
     // Resolve proposalId from props first, then from URL query as fallback.
     const getProposalIdFromUrl = () => {
       try {
@@ -284,13 +284,18 @@ export default function StepPreview({
       return null;
     };
 
-    const resolvedProposalId = (function () {
-      const pid = proposalId && Number(proposalId) > 0 ? Number(proposalId) : null;
-      if (pid) return pid;
-      const fromUrl = getProposalIdFromUrl();
-      if (fromUrl) return fromUrl;
-      return null;
-    })();
+    const pid = proposalId && Number(proposalId) > 0 ? Number(proposalId) : null;
+    if (pid) return pid;
+    const fromUrl = getProposalIdFromUrl();
+    if (fromUrl) return fromUrl;
+    return null;
+  };
+
+  const runCreateVersion = async () => {
+    setLoading(true);
+    setError('');
+
+    const resolvedProposalId = resolveProposalId();
 
     // Dev-only debug logging
     try {
@@ -302,23 +307,11 @@ export default function StepPreview({
 
     if (!resolvedProposalId || Number(resolvedProposalId) <= 0) {
       setLoading(false);
-      setError('No se pudo enviar: falta el identificador de propuesta válido (proposalId).');
+      setError('No se pudo continuar: falta el identificador de propuesta válido (proposalId).');
       return;
     }
-
-    if (primaryLabel === 'Enviar propuesta') {
-      const confirmed = window.confirm('Confirmar envio de la propuesta?');
-      if (!confirmed) {
-        setLoading(false);
-        return;
-      }
-    }
-
     try {
-      const res =
-        mode === 'edit'
-          ? await API.createProposalVersion(resolvedProposalId, snapshot, versionNumber)
-          : await API.sendProposal(resolvedProposalId, snapshot, versionNumber);
+      const res = await API.createProposalVersion(resolvedProposalId, snapshot, versionNumber);
 
       onSent({
         versionId: res.version_id,
@@ -328,7 +321,42 @@ export default function StepPreview({
         snapshot,
       });
     } catch (e) {
-      setError(e?.message || 'Error enviando la propuesta.');
+      setError(e?.message || 'Error guardando la versión.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runShare = async () => {
+    setLoading(true);
+    setError('');
+
+    const resolvedProposalId = resolveProposalId();
+    if (!resolvedProposalId || Number(resolvedProposalId) <= 0) {
+      setLoading(false);
+      setError('No se pudo compartir: falta el identificador de propuesta válido (proposalId).');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      '¿Marcar como enviada y generar enlace público? (Esto no envía emails automáticamente)'
+    );
+    if (!confirmed) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await API.sendProposal(resolvedProposalId, snapshot, versionNumber);
+      onSent({
+        versionId: res.version_id,
+        publicToken: res.public_token,
+        publicUrl: res.public_url,
+        status: res.status || 'sent',
+        snapshot,
+      });
+    } catch (e) {
+      setError(e?.message || 'Error compartiendo la propuesta.');
     } finally {
       setLoading(false);
     }
@@ -461,9 +489,20 @@ export default function StepPreview({
             Volver
           </Button>
 
-          <Button variant="primary" onClick={send} disabled={loading}>
-            {primaryLabel}
-          </Button>
+          {mode === 'edit' ? (
+            <>
+              <Button variant="secondary" onClick={runCreateVersion} disabled={loading}>
+                Guardar nueva versión
+              </Button>
+              <Button variant="primary" onClick={runShare} disabled={loading}>
+                Compartir propuesta
+              </Button>
+            </>
+          ) : (
+            <Button variant="primary" onClick={hasEmail ? runShare : runCreateVersion} disabled={loading}>
+              {primaryLabel}
+            </Button>
+          )}
 
           {loading && <Spinner />}
         </div>

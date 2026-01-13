@@ -259,11 +259,13 @@ export default function ProposalWizard({
     content = (
       <Card>
         <CardHeader>
-          <strong>Preview y envio</strong>
+          <strong>Preview y compartir</strong>
         </CardHeader>
         <CardBody>
           <Notice status="success" isDismissible={false}>
-            {mode === 'edit' ? 'Nueva version creada:' : 'Propuesta enviada. Version creada:'}{' '}
+            {mode === 'edit'
+              ? 'Nueva versión creada:'
+              : 'Propuesta compartida (marcada como enviada). Versión creada:'}{' '}
             <strong>{versionId}</strong>
           </Notice>
 
@@ -294,7 +296,7 @@ export default function ProposalWizard({
 
             {emailLink ? (
               <Button variant="secondary" onClick={() => window.location.assign(emailLink)}>
-                Enviar email al cliente
+                Preparar email al cliente
               </Button>
             ) : null}
 

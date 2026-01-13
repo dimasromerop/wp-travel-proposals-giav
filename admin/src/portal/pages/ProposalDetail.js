@@ -1,6 +1,6 @@
 import { useEffect, useState } from '@wordpress/element';
 import { useNavigate, useParams } from 'react-router-dom';
-import API, { acceptProposal } from '../api';
+import API, { acceptProposal, markProposalSent } from '../api';
 import { buildCustomerFullName } from '../../utils/customer';
 
 const ACCEPTED_BY_LABELS = {
@@ -57,6 +57,7 @@ export default function ProposalDetail() {
   const [accepting, setAccepting] = useState(false);
   const [giavProcessing, setGiavProcessing] = useState(false);
   const [giavDisabledReason, setGiavDisabledReason] = useState('');
+  const [sharing, setSharing] = useState(false);
 
   const loadDetail = async () => {
     setLoading(true);
@@ -238,6 +239,33 @@ export default function ProposalDetail() {
     }
   };
 
+  const handleShare = async () => {
+    if (!proposal?.id) {
+      setActionError('No se encontró la propuesta.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      '¿Marcar como enviada y habilitar el enlace público? (No envía emails automáticamente)'
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setSharing(true);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      await markProposalSent(proposal.id);
+      setSuccessMessage('Propuesta marcada como enviada.');
+      await loadDetail();
+    } catch (err) {
+      setActionError(err?.message || 'No se pudo marcar como enviada.');
+    } finally {
+      setSharing(false);
+    }
+  };
+
   if (loading && !proposal) {
     return <div className="casanova-portal-section">Cargando detalle…</div>;
   }
@@ -265,6 +293,16 @@ export default function ProposalDetail() {
           </p>
         </div>
         <div className="casanova-portal-detail__actions">
+          {proposal.status !== 'accepted' ? (
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={handleShare}
+              disabled={sharing}
+            >
+              {sharing ? 'Compartiendo...' : 'Compartir propuesta'}
+            </button>
+          ) : null}
           <button
             type="button"
             className="button-secondary"
@@ -473,7 +511,7 @@ export default function ProposalDetail() {
         <button
           type="button"
           className="button-primary"
-          onClick={() => navigate('/proposals')}
+          onClick={() => navigate(`/proposals/${proposalId}/edit`)}
         >
           Editar propuesta
         </button>

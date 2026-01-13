@@ -117,6 +117,19 @@ export const retryGiavSync = async (proposalId) => {
   });
 };
 
+export const markProposalSent = async (proposalId) => {
+  if (!proposalId) {
+    return Promise.reject(new Error('ID de propuesta inválido'));
+  }
+
+  configureApiFetch();
+
+  return apiFetch({
+    path: `/travel/v1/proposals/${proposalId}/mark-sent`,
+    method: 'POST',
+  });
+};
+
 const listEndpoint = (params = {}) => {
   const searchParams = new URLSearchParams();
   const setParam = (key, value) => {

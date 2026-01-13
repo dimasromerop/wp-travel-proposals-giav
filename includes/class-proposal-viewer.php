@@ -426,7 +426,12 @@ class WP_Travel_Proposal_Viewer {
             );
         }
 
-        $can_accept = $proposal_status === 'sent' && ! empty( $proposal['current_version_id'] );
+        // Permitir aceptación en la vista pública siempre que exista una versión vigente
+        // y la propuesta no esté ya aceptada. Históricamente el estado ha variado
+        // (draft/sent/published), así que no acoplamos la UI a un único literal.
+        $can_accept = $proposal_status !== 'accepted'
+            && ! empty( $proposal['proposal_token'] )
+            && ! empty( $proposal['current_version_id'] );
         $meta_parts = [];
         if ( $pax_total ) {
             $meta_parts[] = sprintf( '%d pax', $pax_total );

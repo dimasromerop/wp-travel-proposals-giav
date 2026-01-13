@@ -17,6 +17,17 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
             ],
         ] );
 
+        // Portal-friendly: mark as sent ("compartida") WITHOUT creating a new version.
+        // Useful when the version was created already (e.g. from the wizard) and you just want
+        // to change status + expose the public link.
+        register_rest_route( $this->namespace, '/proposals/(?P<id>\d+)/mark-sent', [
+            [
+                'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => [ $this, 'mark_proposal_sent' ],
+                'permission_callback' => [ $this, 'permission_check' ],
+            ],
+        ] );
+
         register_rest_route( $this->namespace, '/proposals/(?P<id>\d+)/accept', [
             [
                 'methods'             => WP_REST_Server::CREATABLE,
@@ -164,6 +175,50 @@ class WP_Travel_Proposal_Actions_Controller extends WP_Travel_REST_Controller {
             'status'       => 'sent',
         ] );
     }
+
+    /**
+     * Mark a proposal as "sent" (shared) without creating a new version.
+     * Intended for portal actions when a version already exists.
+     */
+    public function mark_proposal_sent( WP_REST_Request $request ) {
+
+        $proposal_id = (int) $request['id'];
+
+        $proposal_repo = new WP_Travel_Proposal_Repository();
+        $audit_repo    = new WP_Travel_Audit_Log_Repository();
+
+        $proposal = $proposal_repo->get_by_id( $proposal_id );
+        if ( ! $proposal ) {
+            return $this->error( 'Proposal not found', 404 );
+        }
+
+        if ( ! $proposal_repo->is_editable( $proposal ) ) {
+            return $this->error( 'Proposal cannot be sent in current status' );
+        }
+
+        $current_version_id = isset( $proposal['current_version_id'] ) ? (int) $proposal['current_version_id'] : 0;
+        if ( $current_version_id <= 0 ) {
+            return $this->error( 'Missing current version. Create a version first.' );
+        }
+
+        $proposal_repo->update_status( $proposal_id, 'sent' );
+
+        $audit_repo->log(
+            get_current_user_id(),
+            'mark_sent',
+            'proposal',
+            $proposal_id,
+            [ 'version_id' => $current_version_id ]
+        );
+
+        return $this->response( [
+            'ok'         => true,
+            'status'     => 'sent',
+            'version_id' => $current_version_id,
+            'public_url' => wp_travel_giav_get_public_proposal_url( $proposal['proposal_token'] ),
+        ] );
+    }
+
     public function accept_proposal_admin( WP_REST_Request $request ) {
         $proposal_id = (int) $request['id'];
         $version_id = (int) $request->get_param( 'version_id' );

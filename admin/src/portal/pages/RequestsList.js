@@ -140,7 +140,7 @@ export default function RequestsList() {
           <span>{name}</span>
           <span>{mapped.email || '—'}</span>
           <span>
-            {mapped.fecha_llegada || '—'} ? {mapped.fecha_regreso || '—'}
+            {mapped.fecha_llegada || '—'} - {mapped.fecha_regreso || '—'}
           </span>
           <span>{pax}</span>
           <span>
@@ -244,7 +244,7 @@ export default function RequestsList() {
         </div>
         {loading ? (
           <div className="casanova-portal-table__row casanova-portal-table__row--loading">
-            Cargando solicitudes?
+            Cargando solicitudes...
           </div>
         ) : null}
         {!loading && !rows.length ? (
@@ -260,7 +260,7 @@ export default function RequestsList() {
           Anterior
         </button>
         <span style={{ alignSelf: 'center' }}>
-          P?gina {filters.page} de {pagination.total_pages || 1}
+          Pagina {filters.page} de {pagination.total_pages || 1}
         </span>
         <button className="button-secondary" onClick={() => handleFilterChange('page', filters.page + 1)} disabled={filters.page >= (pagination.total_pages || 1)}
         >
