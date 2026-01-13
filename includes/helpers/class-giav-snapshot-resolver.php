@@ -53,6 +53,101 @@ class WP_Travel_GIAV_Snapshot_Resolver {
         return [ 'url' => $url, 'alt' => $alt ];
     }
 
+
+    /**
+     * Try to resolve the hotel image from a JetEngine Custom Content Type (CCT) item.
+     *
+     * Expected CCT table pattern: {prefix}jet_cct_{slug}
+     * Example (slug hoteles): wp_jet_cct_hoteles
+     *
+     * Field: imagen_hotel
+     * Can be stored as attachment ID, URL, JSON, or serialized data depending on configuration.
+     */
+    private static function resolve_cct_hotel_image_url( int $cct_id, string $slug = 'hoteles' ) : array {
+        $url = '';
+        $alt = '';
+
+        $cct_id = absint( $cct_id );
+        if ( $cct_id <= 0 ) {
+            return [ 'url' => $url, 'alt' => $alt ];
+        }
+
+        // Basic hardening: only allow safe slugs in table names.
+        $slug = strtolower( trim( $slug ) );
+        if ( $slug === '' || ! preg_match( '/^[a-z0-9_]+$/', $slug ) ) {
+            $slug = 'hoteles';
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'jet_cct_' . $slug;
+
+        // JetEngine CCT PK column can vary by version/config, try common options.
+        $row = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT imagen_hotel FROM {$table} WHERE _ID = %d OR id = %d OR ID = %d LIMIT 1",
+                $cct_id,
+                $cct_id,
+                $cct_id
+            ),
+            ARRAY_A
+        );
+
+        if ( empty( $row ) || empty( $row['imagen_hotel'] ) ) {
+            return [ 'url' => $url, 'alt' => $alt ];
+        }
+
+        $raw = $row['imagen_hotel'];
+        $attachment_id = 0;
+
+        if ( is_numeric( $raw ) ) {
+            $attachment_id = absint( $raw );
+        } elseif ( is_string( $raw ) ) {
+            $raw = trim( $raw );
+            if ( $raw !== '' ) {
+                if ( filter_var( $raw, FILTER_VALIDATE_URL ) ) {
+                    $url = $raw;
+                } else {
+                    // Try unserialize and JSON.
+                    $maybe = maybe_unserialize( $raw );
+                    if ( is_array( $maybe ) ) {
+                        if ( empty( $url ) && ! empty( $maybe['url'] ) && is_string( $maybe['url'] ) ) {
+                            $url = trim( $maybe['url'] );
+                        }
+                        if ( empty( $attachment_id ) && ! empty( $maybe['id'] ) && is_numeric( $maybe['id'] ) ) {
+                            $attachment_id = absint( $maybe['id'] );
+                        }
+                        if ( empty( $attachment_id ) && ! empty( $maybe['ID'] ) && is_numeric( $maybe['ID'] ) ) {
+                            $attachment_id = absint( $maybe['ID'] );
+                        }
+                    }
+
+                    $json = json_decode( $raw, true );
+                    if ( is_array( $json ) ) {
+                        if ( empty( $url ) && ! empty( $json['url'] ) && is_string( $json['url'] ) ) {
+                            $url = trim( $json['url'] );
+                        }
+                        if ( empty( $attachment_id ) && ! empty( $json['id'] ) && is_numeric( $json['id'] ) ) {
+                            $attachment_id = absint( $json['id'] );
+                        }
+                        if ( empty( $attachment_id ) && ! empty( $json['ID'] ) && is_numeric( $json['ID'] ) ) {
+                            $attachment_id = absint( $json['ID'] );
+                        }
+                    }
+                }
+            }
+        }
+
+        if ( $url === '' && $attachment_id > 0 ) {
+            $maybe = wp_get_attachment_image_url( $attachment_id, 'large' );
+            if ( ! $maybe ) {
+                $maybe = wp_get_attachment_image_url( $attachment_id, 'full' );
+            }
+            $url = $maybe ? (string) $maybe : '';
+        }
+
+        return [ 'url' => $url, 'alt' => $alt ];
+    }
+
     /**
      * Hotel pricing modes
      * - simple: legacy behaviour (single price per night / room_pricing)
@@ -274,6 +369,7 @@ class WP_Travel_GIAV_Snapshot_Resolver {
             $requires_supplier = in_array( $service_type, (array) $requires_mapping, true );
 
             $wp_object_type = isset( $item['wp_object_type'] ) ? (string) $item['wp_object_type'] : '';
+            $wp_object_subtype = isset( $item['wp_object_subtype'] ) ? (string) $item['wp_object_subtype'] : '';
             $wp_object_id   = isset( $item['wp_object_id'] ) ? (int) $item['wp_object_id'] : 0;
             $is_manual = ( $wp_object_type === 'manual' ) || $wp_object_id <= 0;
 
@@ -310,10 +406,21 @@ class WP_Travel_GIAV_Snapshot_Resolver {
             }
 
             if ( $service_type === 'hotel' ) {
-                // Enrich snapshot with hotel image (optional) from CPT field "imagen_hotel".
+                // Enrich snapshot with hotel image (optional).
+                // - CPTs: from custom field "imagen_hotel"
+                // - JetEngine CCT (slug hoteles): from table {prefix}jet_cct_hoteles column imagen_hotel
                 // Keeps compatibility: if already provided in the payload, we don't overwrite.
                 if ( empty( $item['hotel_image_url'] ) && ! $is_manual && $wp_object_id > 0 ) {
-                    $img = self::resolve_hotel_image_url( $wp_object_id );
+                    $img = [ 'url' => '', 'alt' => '' ];
+
+                    if ( $wp_object_type === 'cct' ) {
+                        // Default slug for hotels CCT if not provided.
+                        $slug = $wp_object_subtype !== '' ? $wp_object_subtype : 'hoteles';
+                        $img = self::resolve_cct_hotel_image_url( $wp_object_id, $slug );
+                    } else {
+                        $img = self::resolve_hotel_image_url( $wp_object_id );
+                    }
+
                     if ( ! empty( $img['url'] ) ) {
                         $item['hotel_image_url'] = (string) $img['url'];
                         if ( ! empty( $img['alt'] ) ) {
