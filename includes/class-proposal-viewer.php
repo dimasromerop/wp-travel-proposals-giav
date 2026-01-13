@@ -443,6 +443,17 @@ class WP_Travel_Proposal_Viewer {
             $meta_parts[] = $currency;
         }
         $meta_line = implode( ' | ', $meta_parts );
+
+        // Optional branding: show agency logo if provided via constant or filter.
+        // You can define WP_TRAVEL_GIAV_PUBLIC_LOGO_URL (or CASANOVA_AGENCY_LOGO_URL for legacy setups)
+        // or hook wp_travel_giav_public_logo_url.
+        $logo_url = '';
+        if ( defined( 'WP_TRAVEL_GIAV_PUBLIC_LOGO_URL' ) && WP_TRAVEL_GIAV_PUBLIC_LOGO_URL ) {
+            $logo_url = (string) WP_TRAVEL_GIAV_PUBLIC_LOGO_URL;
+        } elseif ( defined( 'CASANOVA_AGENCY_LOGO_URL' ) && CASANOVA_AGENCY_LOGO_URL ) {
+            $logo_url = (string) CASANOVA_AGENCY_LOGO_URL;
+        }
+        $logo_url = (string) apply_filters( 'wp_travel_giav_public_logo_url', $logo_url, $proposal, $version, $header );
         $rest_nonce = wp_create_nonce( 'wp_rest' );
         $accept_endpoint = rest_url( 'travel/v1/proposals/public/' . $proposal['proposal_token'] . '/accept' );
         $public_payload = [
@@ -474,6 +485,16 @@ class WP_Travel_Proposal_Viewer {
                     display: flex;
                     flex-direction: column;
                     gap: 12px;
+                }
+                .proposal-logo {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    margin-bottom: 6px;
+                }
+                .proposal-logo img {
+                    max-height: 52px;
+                    width: auto;
                 }
                 .proposal-header h1 {
                     margin: 0;
@@ -653,6 +674,18 @@ class WP_Travel_Proposal_Viewer {
                     border-radius: 12px;
                     background: #ffffff;
                 }
+                .service-card__image {
+                    margin: 0 0 10px;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    border: 1px solid #e5e7eb;
+                    background: #f8fafc;
+                }
+                .service-card__image img {
+                    display: block;
+                    width: 100%;
+                    height: auto;
+                }
                 .service-card__title {
                     font-weight: 600;
                     margin-bottom: 6px;
@@ -715,6 +748,11 @@ class WP_Travel_Proposal_Viewer {
         <body>
         <div class="proposal-page">
             <div class="proposal-header">
+                <?php if ( ! empty( $logo_url ) ) : ?>
+                    <div class="proposal-logo">
+                        <img src="<?php echo esc_url( $logo_url ); ?>" alt="" />
+                    </div>
+                <?php endif; ?>
                 <h1><?php echo esc_html( $header['customer_name'] ?: 'Propuesta de viaje' ); ?></h1>
                 <div class="proposal-status__meta">
                     <?php if ( $dates ) : ?>
@@ -826,6 +864,8 @@ class WP_Travel_Proposal_Viewer {
                                 $start_date = self::format_spanish_date( (string) ( $item['start_date'] ?? '' ) );
                                 $end_date = self::format_spanish_date( (string) ( $item['end_date'] ?? '' ) );
                                 $notes = trim( (string) ( $item['notes_public'] ?? '' ) );
+                                $hotel_image_url = trim( (string) ( $item['hotel_image_url'] ?? '' ) );
+                                $hotel_image_alt = trim( (string) ( $item['hotel_image_alt'] ?? '' ) );
                                 $nights = absint( $item['hotel_nights'] ?? 0 );
                                 $room_pricing = isset( $item['room_pricing'] ) && is_array( $item['room_pricing'] )
                                     ? $item['room_pricing']
@@ -842,6 +882,11 @@ class WP_Travel_Proposal_Viewer {
                                 $meta_line = implode( ' · ', $meta_parts );
                                 ?>
                                 <div class="service-card">
+                                    <?php if ( $hotel_image_url ) : ?>
+                                        <div class="service-card__image">
+                                            <img src="<?php echo esc_url( $hotel_image_url ); ?>" alt="<?php echo esc_attr( $hotel_image_alt ?: $display_name ); ?>" loading="lazy" />
+                                        </div>
+                                    <?php endif; ?>
                                     <div class="service-card__title"><?php echo $display_name; ?></div>
                                     <?php if ( $meta_line ) : ?>
                                         <div class="service-card__meta"><?php echo esc_html( $meta_line ); ?></div>

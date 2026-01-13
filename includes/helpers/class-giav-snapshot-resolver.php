@@ -6,6 +6,54 @@ if ( ! defined( 'ABSPATH' ) ) {
 class WP_Travel_GIAV_Snapshot_Resolver {
 
     /**
+     * Try to resolve the hotel image from the Hotel CPT.
+     *
+     * Expects a custom field named "imagen_hotel".
+     * - If ACF is present (get_field), supports return types: array | id | url.
+     * - Otherwise falls back to post_meta.
+     */
+    private static function resolve_hotel_image_url( int $post_id ) : array {
+        $url = '';
+        $alt = '';
+
+        // Prefer ACF if available.
+        if ( function_exists( 'get_field' ) ) {
+            $val = get_field( 'imagen_hotel', $post_id );
+            if ( is_array( $val ) ) {
+                $url = isset( $val['url'] ) ? (string) $val['url'] : '';
+                $alt = isset( $val['alt'] ) ? (string) $val['alt'] : '';
+                if ( $url === '' && isset( $val['ID'] ) ) {
+                    $maybe = wp_get_attachment_image_url( (int) $val['ID'], 'large' );
+                    $url = $maybe ? (string) $maybe : '';
+                }
+            } elseif ( is_numeric( $val ) ) {
+                $maybe = wp_get_attachment_image_url( (int) $val, 'large' );
+                $url = $maybe ? (string) $maybe : '';
+            } elseif ( is_string( $val ) ) {
+                $url = trim( $val );
+            }
+        }
+
+        // Fallback: plain post meta.
+        if ( $url === '' ) {
+            $meta = get_post_meta( $post_id, 'imagen_hotel', true );
+            if ( is_numeric( $meta ) ) {
+                $maybe = wp_get_attachment_image_url( (int) $meta, 'large' );
+                $url = $maybe ? (string) $maybe : '';
+            } elseif ( is_string( $meta ) ) {
+                $url = trim( $meta );
+            }
+        }
+
+        // Try to pick a reasonable alt text.
+        if ( $url !== '' && $alt === '' ) {
+            $alt = get_the_title( $post_id );
+        }
+
+        return [ 'url' => $url, 'alt' => $alt ];
+    }
+
+    /**
      * Hotel pricing modes
      * - simple: legacy behaviour (single price per night / room_pricing)
      * - per_night: variable net price per night breakdown (Option A)
@@ -262,6 +310,18 @@ class WP_Travel_GIAV_Snapshot_Resolver {
             }
 
             if ( $service_type === 'hotel' ) {
+                // Enrich snapshot with hotel image (optional) from CPT field "imagen_hotel".
+                // Keeps compatibility: if already provided in the payload, we don't overwrite.
+                if ( empty( $item['hotel_image_url'] ) && ! $is_manual && $wp_object_id > 0 ) {
+                    $img = self::resolve_hotel_image_url( $wp_object_id );
+                    if ( ! empty( $img['url'] ) ) {
+                        $item['hotel_image_url'] = (string) $img['url'];
+                        if ( ! empty( $img['alt'] ) ) {
+                            $item['hotel_image_alt'] = (string) $img['alt'];
+                        }
+                    }
+                }
+
                 // Normalize optional hotel per-night pricing (Option A)
                 $hotel_pricing_patch = self::normalize_hotel_nightly_rates( $item, $item_blocking, $item_warnings );
                 $item = array_merge( $item, $hotel_pricing_patch );
