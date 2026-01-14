@@ -403,10 +403,24 @@ class WP_Travel_Proposal_Viewer {
                         );
                     }
                     if ( $single_info['extra'] > 0 ) {
-                        $informative_room_extras[] = self::build_informative_extra_line(
+                        // For client-facing display we don't want to look like we are "including" an extra room.
+                        // Show it as a supplement option (+X) and the resulting per-person price.
+                        $supp = (float) ( $pricing['informative_supplement_single'] ?? 0 );
+                        $pp_single_est = (float) ( $pricing['informative_price_pp_single'] ?? 0 );
+
+                        // Fallbacks just in case older snapshots don't have the computed fields.
+                        if ( $supp <= 0 && ! empty( $pricing['pp_double'] ) && ! empty( $pricing['option_single_total'] ) && ! empty( $pricing['option_single_rooms'] ) ) {
+                            $pp_opt_single = (float) $pricing['option_single_total'] / max( 1, (int) $pricing['option_single_rooms'] );
+                            $supp = max( 0.0, $pp_opt_single - (float) $pricing['pp_double'] );
+                        }
+                        if ( $pp_single_est <= 0 && $pax_total > 0 ) {
+                            $pp_single_est = ( (float) ( $pricing['total_trip'] ?? 0 ) / $pax_total ) + $supp;
+                        }
+
+                        $informative_room_extras[] = self::build_informative_single_option_line(
                             $hotel_name,
-                            self::format_room_label( 'single', $single_info['extra'], true ),
-                            $single_info['per_room_price'],
+                            $supp,
+                            $pp_single_est,
                             $currency_label
                         );
                     }
@@ -1193,9 +1207,6 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                 <?php if ( $informative_room_extras ) : ?>
                     <div class="includes-block includes-block--informative">
                         <h3><?php echo esc_html__( 'Cotización informativa', 'wp-travel-giav' ); ?></h3>
-                        <p class="includes-block__note">
-                            <?php echo esc_html__( 'Estas opciones se muestran solo para ayudar a decidir. No están incluidas en el total salvo que se confirmen.', 'wp-travel-giav' ); ?>
-                        </p>
                         <ul class="includes-list">
                             <?php foreach ( $informative_room_extras as $extra_line ) : ?>
                                 <li><?php echo esc_html( $extra_line ); ?></li>
@@ -1449,8 +1460,9 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
         ];
     } elseif ( ! empty( $pricing['has_informative_single_option'] ) ) {
         $price_cards[] = [
-            'label' => __( 'Opción individual (informativa)', 'wp-travel-giav' ),
+            'label' => __( 'Suplemento individual (informativo)', 'wp-travel-giav' ),
             'value' => (float) ( $pricing['informative_supplement_single'] ?? 0 ),
+            'sub'   => (float) ( $pricing['informative_price_pp_single'] ?? 0 ),
         ];
     }
 
@@ -1489,6 +1501,9 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                 <div class="totals-card">
                     <div class="label"><?php echo esc_html( $card['label'] ); ?></div>
                     <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( (float) $card['value'], 2 ); ?></div>
+                    <?php if ( isset( $card['sub'] ) && (float) $card['sub'] > 0 ) : ?>
+                        <div class="sub"><?php echo esc_html( sprintf( __( 'Precio por persona en individual: %s %s', 'wp-travel-giav' ), $currency, number_format( (float) $card['sub'], 2 ) ) ); ?></div>
+                    <?php endif; ?>
                 </div>
             <?php endforeach; ?>
         </div>
@@ -1499,7 +1514,15 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
         if ( ! empty( $pricing['has_single_supplement'] ) ) {
             echo esc_html__( 'Precios por persona. El suplemento individual aplica por persona alojada en habitación individual.', 'wp-travel-giav' );
         } elseif ( ! empty( $pricing['has_informative_single_option'] ) ) {
-            echo esc_html__( 'Precios por persona. La opción individual es una cotización informativa y no está incluida en el total salvo confirmación.', 'wp-travel-giav' );
+            $pp_single_est = (float) ( $pricing['informative_price_pp_single'] ?? 0 );
+            $note = __( 'Precios por persona. La opción individual es una cotización informativa y no está incluida en el total salvo confirmación.', 'wp-travel-giav' );
+            if ( $pp_single_est > 0 ) {
+                $note .= ' ' . sprintf(
+                    __( 'Precio estimado por persona en habitación individual: %s', 'wp-travel-giav' ),
+                    self::format_currency_value( $pp_single_est, $currency )
+                );
+            }
+            echo esc_html( $note );
         } else {
             echo esc_html( ( ! empty( $pricing['base_room_type'] ) && 'single' === $pricing['base_room_type'] ) ? __( 'Precios por persona en habitación individual.', 'wp-travel-giav' ) : __( 'Precios por persona en habitación doble.', 'wp-travel-giav' ) );
         }
@@ -1739,11 +1762,17 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
 
         $has_informative_single_option = false;
         $informative_supplement_single = null;
+        $informative_price_pp_single = null;
         if ( ! $has_single_supplement && $pax_double_cap > 0 && $option_single_rooms > 0 ) {
             // Informative option: extra single rooms were quoted in addition to the base accommodation.
             $pp_option_single = ( $option_single_rooms > 0 ) ? ( $option_single_total / $option_single_rooms ) : 0.0;
             $informative_supplement_single = max( 0, $pp_option_single - $pp_double );
             $has_informative_single_option = true;
+
+            // For client display: estimated per-person price if choosing the single option.
+            // We use the base per-person (total / pax) and add the hotel supplement.
+            $base_pp = ( $pax_total > 0 ) ? ( $total_trip / $pax_total ) : 0.0;
+            $informative_price_pp_single = $base_pp + (float) $informative_supplement_single;
         }
 
         // common_total = total_trip - hotel_double - hotel_single - golf_total
@@ -1772,6 +1801,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
             'supplement_single'        => $supplement_single,
             'has_informative_single_option' => $has_informative_single_option,
             'informative_supplement_single' => $informative_supplement_single,
+            'informative_price_pp_single'    => $informative_price_pp_single,
             'option_single_rooms'        => $option_single_rooms,
             'option_single_total'        => $option_single_total,
             'pp_double'                => $pp_double,
@@ -1877,6 +1907,26 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                 self::format_currency_value( $per_room_price, $currency )
             );
         }
+        if ( $hotel_name !== '' ) {
+            $line = sprintf( '%s: %s', $hotel_name, $line );
+        }
+        return $line;
+    }
+
+    /**
+     * Builds a concise client-facing line for an informative single-room option.
+     * We communicate it as a supplement (+X) and the resulting per-person price.
+     */
+    private static function build_informative_single_option_line( string $hotel_name, float $supplement_pp, float $pp_single_est, string $currency ) : string {
+        $parts = [];
+        $parts[] = __( 'Habitación individual (opción informativa)', 'wp-travel-giav' );
+        if ( $supplement_pp > 0 ) {
+            $parts[] = sprintf( '+%s %s', $currency !== '' ? $currency : 'EUR', number_format( $supplement_pp, 2 ) ) . ' ' . __( 'p.p.', 'wp-travel-giav' );
+        }
+        if ( $pp_single_est > 0 ) {
+            $parts[] = sprintf( '(%s)', sprintf( __( '%s p.p. en individual', 'wp-travel-giav' ), self::format_currency_value( $pp_single_est, $currency ) ) );
+        }
+        $line = implode( ' · ', array_filter( array_map( 'trim', $parts ) ) );
         if ( $hotel_name !== '' ) {
             $line = sprintf( '%s: %s', $hotel_name, $line );
         }
