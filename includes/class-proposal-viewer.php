@@ -1416,7 +1416,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
             <div class="totals-card totals-card--primary">
                 <div class="label"><?php echo esc_html( $price_cards[0]['label'] ); ?></div>
                 <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $price_cards[0]['value'], 2 ); ?></div>
-                <div class="sub"><?php echo esc_html__( 'Precio por persona en habitación doble.', 'wp-travel-giav' ); ?></div>
+                <div class="sub"><?php echo esc_html( ( ! empty( $pricing['base_room_type'] ) && 'single' === $pricing['base_room_type'] ) ? __( 'Precio por persona en habitación individual.', 'wp-travel-giav' ) : __( 'Precio por persona en habitación doble.', 'wp-travel-giav' ) ); ?></div>
             </div>
             <div class="totals-card">
                 <div class="label"><?php echo esc_html__( 'Total del viaje', 'wp-travel-giav' ); ?></div>
@@ -1441,7 +1441,13 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
     <?php endif; ?>
 
     <div class="totals-note">
-        <?php echo esc_html__( 'Precios por persona. El suplemento individual aplica por persona alojada en habitación individual.', 'wp-travel-giav' ); ?>
+        <?php
+        if ( ! empty( $pricing['has_single_supplement'] ) ) {
+            echo esc_html__( 'Precios por persona. El suplemento individual aplica por persona alojada en habitación individual.', 'wp-travel-giav' );
+        } else {
+            echo esc_html( ( ! empty( $pricing['base_room_type'] ) && 'single' === $pricing['base_room_type'] ) ? __( 'Precios por persona en habitación individual.', 'wp-travel-giav' ) : __( 'Precios por persona en habitación doble.', 'wp-travel-giav' ) );
+        }
+        ?>
     </div>
 </div>
 
@@ -1644,7 +1650,10 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
         $common_total = $total_trip - ( $total_double + $total_single ) - $golf_total;
         $common_pp = ( $pax_total > 0 ) ? ( $common_total / $pax_total ) : 0.0;
 
-        $price_non_player_double = $pp_double + $common_pp;
+        $base_room_type = ( $pax_double_cap > 0 ) ? 'double' : ( ( $pax_single_cap > 0 ) ? 'single' : 'double' );
+
+        $pp_base = ( 'single' === $base_room_type ) ? $pp_single : $pp_double;
+        $price_non_player_double = $pp_base + $common_pp;
         $price_player_double = null;
         if ( $players_count > 0 && $golf_total > 0 ) {
             $price_player_double = $price_non_player_double + ( $golf_total / $players_count );
@@ -1658,6 +1667,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
             'total_trip'               => $total_trip,
             'price_non_player_double'  => $price_non_player_double,
             'price_player_double'      => $price_player_double,
+            'base_room_type'         => $base_room_type,
             'has_single_supplement'    => $has_single_supplement,
             'supplement_single'        => $supplement_single,
             'pp_double'                => $pp_double,
@@ -1812,7 +1822,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                 <?php if ( $show_player_price ) : ?>
                     <div class="proposal-accepted__tile">
                         <div class="proposal-accepted__label">
-                            <?php echo esc_html__( 'Precio jugador en doble', 'wp-travel-giav' ); ?>
+                            <?php echo esc_html( ( ! empty( $pricing['base_room_type'] ) && 'single' === $pricing['base_room_type'] ) ? __( 'Precio jugador en individual', 'wp-travel-giav' ) : __( 'Precio jugador en doble', 'wp-travel-giav' ) ); ?>
                         </div>
                         <div class="proposal-accepted__value">
                             <?php echo esc_html( $currency_label ); ?> <?php echo number_format( (float) $pricing['price_player_double'], 2 ); ?>
@@ -1821,7 +1831,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                 <?php endif; ?>
                 <div class="proposal-accepted__tile">
                     <div class="proposal-accepted__label">
-                        <?php echo esc_html__( 'Precio no jugador en doble', 'wp-travel-giav' ); ?>
+                        <?php echo esc_html( ( ! empty( $pricing['base_room_type'] ) && 'single' === $pricing['base_room_type'] ) ? __( 'Precio no jugador en individual', 'wp-travel-giav' ) : __( 'Precio no jugador en doble', 'wp-travel-giav' ) ); ?>
                     </div>
                     <div class="proposal-accepted__value">
                         <?php echo esc_html( $currency_label ); ?> <?php echo number_format( (float) $pricing['price_non_player_double'], 2 ); ?>

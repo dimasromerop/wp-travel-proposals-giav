@@ -31,6 +31,8 @@ export default function StepPreview({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [basicsSaved, setBasicsSaved] = useState('');
+  const [savingBasics, setSavingBasics] = useState(false);
   const sourceTag =
     typeof window !== 'undefined' && window.CASANOVA_GESTION_RESERVAS
       ? 'wp-travel-giav-portal'
@@ -232,10 +234,12 @@ export default function StepPreview({
 
     const commonTotal = totalTrip - (summary.totalDouble + summary.totalSingle) - summary.golfTotal;
     const commonPP = summary.paxTotal > 0 ? commonTotal / summary.paxTotal : 0;
+    const baseRoomType = summary.doubleRooms > 0 ? 'double' : summary.singleRooms > 0 ? 'single' : 'double';
+    const baseHotelPP = baseRoomType === 'double' ? ppDouble : ppSingle;
 
-    const priceNonPlayerDouble = ppDouble + commonPP;
-    const pricePlayerDouble =
-      summary.playersCount > 0 ? priceNonPlayerDouble + summary.golfTotal / summary.playersCount : null;
+    const priceNonPlayerBase = baseHotelPP + commonPP;
+    const pricePlayerBase =
+      summary.playersCount > 0 ? priceNonPlayerBase + summary.golfTotal / summary.playersCount : null;
 
     const hasSingleSupplement = summary.doubleRooms > 0 && summary.singleRooms > 0;
     let supplementSingle = null;
@@ -247,8 +251,9 @@ export default function StepPreview({
       ...summary,
       totalTrip,
       baseTotal,
-      priceNonPlayerDouble,
-      pricePlayerDouble,
+      baseRoomType,
+      priceNonPlayerBase,
+      pricePlayerBase,
       supplementSingle,
       hasSingleSupplement,
     };
@@ -289,6 +294,21 @@ export default function StepPreview({
     const fromUrl = getProposalIdFromUrl();
     if (fromUrl) return fromUrl;
     return null;
+  };
+
+  const saveBasicsOnly = async () => {
+    const id = resolveProposalId();
+    if (!id) return;
+    setBasicsSaved('');
+    setSavingBasics(true);
+    try {
+      await API.updateProposal(id, basics || {});
+      setBasicsSaved('Cambios guardados.');
+    } catch (e) {
+      setError(e?.message || 'Error guardando datos básicos.');
+    } finally {
+      setSavingBasics(false);
+    }
   };
 
   const runCreateVersion = async () => {
@@ -369,6 +389,12 @@ export default function StepPreview({
       </CardHeader>
 
       <CardBody>
+        {basicsSaved && (
+          <Notice status="success" isDismissible onRemove={() => setBasicsSaved('')}>
+            {basicsSaved}
+          </Notice>
+        )}
+
         {error && (
           <Notice status="error" isDismissible onRemove={() => setError('')}>
             {error}
@@ -466,11 +492,11 @@ export default function StepPreview({
 
             {pricingSummary.playersCount > 0 && (
               <div className="proposal-preview__totals-line">
-                Precio jugador en doble: {snapshotHeader.currency} {round2(pricingSummary.pricePlayerDouble || 0).toFixed(2)}
+                Precio jugador en {pricingSummary.baseRoomType === 'single' ? 'individual' : 'doble'}: {snapshotHeader.currency} {round2(pricingSummary.pricePlayerBase || 0).toFixed(2)}
               </div>
             )}
             <div className="proposal-preview__totals-line">
-              Precio no jugador en doble: {snapshotHeader.currency} {round2(pricingSummary.priceNonPlayerDouble || 0).toFixed(2)}
+              Precio no jugador en {pricingSummary.baseRoomType === 'single' ? 'individual' : 'doble'}: {snapshotHeader.currency} {round2(pricingSummary.priceNonPlayerBase || 0).toFixed(2)}
             </div>
             {pricingSummary.hasSingleSupplement && (
               <div className="proposal-preview__totals-line">
@@ -478,7 +504,11 @@ export default function StepPreview({
               </div>
             )}
             <div className="proposal-preview__totals-note">
-              Precios por persona. El suplemento individual aplica por persona alojada en habitacion individual.
+              {pricingSummary.hasSingleSupplement
+                ? 'Precios por persona. El suplemento individual aplica por persona alojada en habitación individual.'
+                : pricingSummary.baseRoomType === 'single'
+                ? 'Precios por persona en habitación individual.'
+                : 'Precios por persona en habitación doble.'}
             </div>
           </div>
         </div>
@@ -488,6 +518,12 @@ export default function StepPreview({
           <Button variant="secondary" onClick={onBack} disabled={loading}>
             Volver
           </Button>
+
+          {resolveProposalId() && (
+            <Button variant="secondary" onClick={saveBasicsOnly} disabled={loading || savingBasics}>
+              Guardar datos básicos
+            </Button>
+          )}
 
           {mode === 'edit' ? (
             <>

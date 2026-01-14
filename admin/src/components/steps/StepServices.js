@@ -574,11 +574,14 @@ function HotelPricingPanel({ item, idx, updateItem, currency, pax, basics, globa
   const allocatedPax =
     (getMode('double').enabled ? doubleRooms * 2 : 0) + (getMode('single').enabled ? singleRooms : 0);
   const allocationDiff = allocatedPax - pax;
+  const informativeQuote = !!item.hotel_informative_quote;
   const allocationWarning =
     allocationDiff < 0
       ? `Faltan ${Math.abs(allocationDiff)} pax por asignar a habitaciones`
       : allocationDiff > 0
-        ? `Sobran ${allocationDiff} pax asignados`
+        ? (informativeQuote
+          ? `Cotización informativa: +${allocationDiff} pax en habitaciones (no bloquea).`
+          : `Sobran ${allocationDiff} pax asignados`)
         : '';
   const nights = Math.max(0, toInt(item.hotel_nights ?? computeNights(item, basics), 0));
   const { nightsPayable } = computeFreeNights(
@@ -789,10 +792,16 @@ function HotelPricingPanel({ item, idx, updateItem, currency, pax, basics, globa
           Personas asignadas: {allocatedPax} de {pax}
         </div>
         {allocationWarning && (
-          <Notice status="warning" isDismissible={false}>
+          <Notice status={informativeQuote && allocationDiff > 0 ? 'info' : 'warning'} isDismissible={false}>
             {allocationWarning}
           </Notice>
         )}
+        <ToggleControl
+          label="Cotización informativa (permitir habitaciones extra)"
+          checked={informativeQuote}
+          onChange={(v) => updateItem(idx, { hotel_informative_quote: !!v })}
+          help="Actívalo si estás cotizando una habitación adicional solo a efectos informativos (no bloquea si sobran pax asignados)."
+        />
       </div>
 
       <div className="service-card__subcard">
@@ -857,7 +866,7 @@ function HotelPricingPanel({ item, idx, updateItem, currency, pax, basics, globa
               disabled={!item.giav_pricing?.giav_locked}
             />
             {item.giav_pricing?.giav_locked && (
-              <Notice status="warning" isDismissible={false}>
+              <Notice status={informativeQuote && allocationDiff > 0 ? 'info' : 'warning'} isDismissible={false}>
                 Este total se enviará a GIAV. No se recalculará automáticamente.
               </Notice>
             )}
@@ -921,7 +930,7 @@ export function syncServiceDatesFromBasics(services = [], basics = {}) {
   return changed ? synced : services;
 }
 
-export default function StepServices({ basics, initialItems = [], onBack, onNext, onDraftChange, requestIntentions = null }) {
+export default function StepServices({ proposalId, basics, initialItems = [], onBack, onNext, onDraftChange, requestIntentions = null }) {
   const currency = basics?.currency || 'EUR';
   const pax = Math.max(1, toInt(basics?.pax_total ?? 1, 1));
   const playersCount = Math.max(0, toInt(basics?.players_count ?? 0, 0));
@@ -930,6 +939,8 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
   const [applyMarkupToNew, setApplyMarkupToNew] = useState(true);
 
   const [actionError, setActionError] = useState('');
+  const [saveMsg, setSaveMsg] = useState('');
+  const [savingBasics, setSavingBasics] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(null);
   const [flashIndex, setFlashIndex] = useState(null);
   const [openIndex, setOpenIndex] = useState(0);
@@ -1196,7 +1207,11 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
       const doubleRooms = doubleEnabled ? Math.max(0, toInt(pricing.double?.rooms ?? 0, 0)) : 0;
       const singleRooms = singleEnabled ? Math.max(0, toInt(pricing.single?.rooms ?? 0, 0)) : 0;
       const allocatedPax = (doubleEnabled ? doubleRooms * 2 : 0) + (singleEnabled ? singleRooms : 0);
-      if (allocatedPax !== pax) {
+      const informativeQuote = !!it.hotel_informative_quote;
+      if (allocatedPax < pax) {
+        issues.push('Faltan pax');
+        fieldErrors.pricing = 'Ajusta pax doble/individual.';
+      } else if (allocatedPax > pax && !informativeQuote) {
         issues.push('Pax no cuadra');
         fieldErrors.pricing = 'Ajusta pax doble/individual.';
       }
@@ -1381,6 +1396,19 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
       }
     }
   };
+  const saveBasicsOnly = async () => {
+    if (!proposalId) return;
+    setSaveMsg('');
+    setSavingBasics(true);
+    try {
+      await API.updateProposal(proposalId, basics);
+      setSaveMsg('Cambios guardados.');
+    } catch (e) {
+      setActionError(e?.message || 'Error guardando datos básicos.');
+    } finally {
+      setSavingBasics(false);
+    }
+  };
 
   const continueNext = () => {
     const { errors: globalErrors, serviceErrors } = validateAll();
@@ -1429,6 +1457,13 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
       </CardHeader>
 
       <CardBody ref={topRef}>
+
+        {saveMsg && (
+          <Notice status="success" isDismissible onRemove={() => setSaveMsg('')}>
+            {saveMsg}
+          </Notice>
+        )}
+
 
         {requestIntentions && (
           <div className="services-intention-banner">
@@ -2049,6 +2084,11 @@ export default function StepServices({ basics, initialItems = [], onBack, onNext
               <Button variant="secondary" onClick={onBack}>
                 Volver
               </Button>
+              {proposalId && (
+                <Button variant="secondary" onClick={saveBasicsOnly} disabled={savingBasics}>
+                  Guardar datos básicos
+                </Button>
+              )}
             </div>
             <div className="services-footer__summary">
               <span>Total viaje</span>

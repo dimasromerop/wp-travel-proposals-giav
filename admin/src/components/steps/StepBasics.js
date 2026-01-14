@@ -16,8 +16,8 @@ import API from '../../api';
 import { buildCustomerFullName, splitCustomerFullName } from '../../utils/customer';
 
 const LANG_OPTIONS = [
-  { label: 'Español', value: 'es' },
-  { label: 'English', value: 'en' },
+  { label: 'Español', value: 'es_ES' },
+  { label: 'English (US)', value: 'en_US' },
 ];
 
 const CURRENCY_OPTIONS = [
@@ -409,6 +409,7 @@ const defaults = useMemo(() => {
   const [values, setValues] = useState(defaults);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [saved, setSaved] = useState('');
   const [fieldError, setFieldError] = useState('');
   const [countryQuery, setCountryQuery] = useState('');
   const fieldRefs = useRef({});
@@ -550,6 +551,7 @@ const defaults = useMemo(() => {
   const onSubmit = async () => {
     const issue = validate();
     if (issue) {
+      setSaved('');
       setError(issue.message);
       setFieldError(issue.field || '');
       focusField(issue.field);
@@ -557,6 +559,7 @@ const defaults = useMemo(() => {
     }
 
     setLoading(true);
+    setSaved('');
     setError('');
 
     // ✅ payload definido SIEMPRE (antes del try)
@@ -595,6 +598,45 @@ const defaults = useMemo(() => {
     }
   };
 
+
+  const onSaveOnly = async () => {
+    if (!proposalId) return;
+    const issue = validate();
+    if (issue) {
+      setSaved('');
+      setError(issue.message);
+      setFieldError(issue.field || '');
+      focusField(issue.field);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSaved('');
+
+    const computedCustomerName = buildCustomerFullName(
+      values.first_name,
+      values.last_name,
+      values.customer_name
+    );
+
+    const payload = {
+      ...values,
+      customer_name: computedCustomerName,
+      pax_total: parseInt(values.pax_total, 10),
+      players_count: Math.max(0, parseInt(values.players_count, 10)),
+      customer_country: values.customer_country ? values.customer_country.toUpperCase() : '',
+    };
+
+    try {
+      await API.updateProposal(proposalId, payload);
+      setSaved('Cambios guardados.');
+    } catch (e) {
+      setError(e?.message || 'Error guardando la propuesta.');
+    } finally {
+      setLoading(false);
+    }
+  };
   const filteredCountryOptions = useMemo(() => {
     if (!countryQuery) return COUNTRY_OPTIONS;
     const search = countryQuery.toLowerCase();
@@ -616,12 +658,19 @@ const defaults = useMemo(() => {
       </CardHeader>
 
       <CardBody>
+        {saved && (
+          <Notice status="success" isDismissible onRemove={() => setSaved('')}>
+            {saved}
+          </Notice>
+        )}
+
         {error && (
           <Notice
             status="error"
             isDismissible
             onRemove={() => {
               setError('');
+              setSaved('');
               setFieldError('');
             }}
           >
@@ -800,6 +849,11 @@ const defaults = useMemo(() => {
         </div>
 
         <div className="proposal-basics__actions">
+          {proposalId && (
+            <Button variant="secondary" onClick={onSaveOnly} disabled={loading}>
+              Guardar
+            </Button>
+          )}
           <Button variant="primary" onClick={onSubmit} disabled={loading}>
             {error ? 'Revisa los campos marcados' : 'Continuar'}
           </Button>

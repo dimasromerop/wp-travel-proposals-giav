@@ -16,6 +16,15 @@ const STATUS_LABELS = {
   lost: 'Perdida',
 };
 
+const normalizeCustomerLocale = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return 'es_ES';
+  if (raw === 'es') return 'es_ES';
+  if (raw === 'en') return 'en_US';
+  return raw;
+};
+
+
 const formatDate = (value) => {
   if (!value) return '-';
   const raw = String(value);
@@ -138,7 +147,7 @@ export default function ProposalWizard({
       customer_name: buildCustomerFullName(firstName, lastName, header.customer_name || initialProposal?.customer_name || ''),
       customer_email: header.customer_email || initialProposal?.customer_email || '',
       customer_country: header.customer_country || initialProposal?.customer_country || '',
-      customer_language: header.customer_language || initialProposal?.customer_language || 'en',
+      customer_language: normalizeCustomerLocale(header.customer_language || initialProposal?.customer_language || 'es_ES'),
       start_date: header.start_date || initialProposal?.start_date || '',
       end_date: header.end_date || initialProposal?.end_date || '',
       pax_total: header.pax_total || initialProposal?.pax_total || 1,
@@ -174,7 +183,7 @@ export default function ProposalWizard({
   if (step === 1) {
     content = (
       <StepBasics
-        initialValues={basics || { customer_language: 'en', currency: 'EUR', pax_total: 1 }}
+        initialValues={basics || { customer_language: 'es_ES', currency: 'EUR', pax_total: 1 }}
         // Si ya existe proposalId, no recreamos. Solo avanzamos guardando el state.
         onNext={({ basics: b }) => {
           setBasics(b);
@@ -194,6 +203,7 @@ export default function ProposalWizard({
   } else if (step === 2) {
         content = (
           <StepServices
+            proposalId={proposalId}
             basics={basics}
             initialItems={items}
             onDraftChange={({ items: it, totals: t }) => {
