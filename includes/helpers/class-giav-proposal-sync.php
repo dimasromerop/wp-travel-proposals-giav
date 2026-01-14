@@ -438,6 +438,173 @@ function wp_travel_giav_reserva_set_anidamiento( int $id_reserva_coste, ?int $id
 }
 
 
+
+/**
+ * Map hotel meal plan label (human) to GIAV regimen enum.
+ * GIAV enums: AD, SA, MP, PC, TI, SP
+ */
+function wp_travel_giav_map_regimen_label_to_code( ?string $label ): ?string {
+    if ( $label === null ) {
+        return null;
+    }
+    $l = strtolower( trim( $label ) );
+    if ( $l === '' ) {
+        return null;
+    }
+    // Common Spanish labels
+    if ( strpos( $l, 'alojamiento y desayuno' ) !== false || strpos( $l, 'desayuno' ) !== false || $l === 'ad' ) {
+        return 'AD';
+    }
+    if ( strpos( $l, 'solo alojamiento' ) !== false || strpos( $l, 'sin desayuno' ) !== false || $l === 'sa' ) {
+        return 'SA';
+    }
+    if ( strpos( $l, 'media' ) !== false || strpos( $l, 'mp' ) !== false ) {
+        return 'MP';
+    }
+    if ( strpos( $l, 'pensión completa' ) !== false || strpos( $l, 'pension completa' ) !== false || strpos( $l, 'pc' ) !== false ) {
+        return 'PC';
+    }
+    if ( strpos( $l, 'todo incluido' ) !== false || strpos( $l, 'ti' ) !== false ) {
+        return 'TI';
+    }
+    if ( $l === 'sp' ) {
+        return 'SP';
+    }
+    // Unknown label -> don't send (GIAV is picky)
+    return null;
+}
+
+/**
+ * Best-effort players count resolver for golf services (GIAV uses numPax).
+ */
+function wp_travel_giav_get_players_count( array $proposal, array $snapshot, array $item, array $snapshot_item = [] ): int {
+    $candidates = [
+        $item['players_quantity'] ?? null,
+        $item['players'] ?? null,
+        $item['quantity'] ?? null,
+        $snapshot_item['players_quantity'] ?? null,
+        $snapshot_item['players'] ?? null,
+        $snapshot['header']['players'] ?? null,
+        $snapshot['header']['players_count'] ?? null,
+        $proposal['players_count'] ?? null,
+        $proposal['golf_players'] ?? null,
+        $proposal['players'] ?? null,
+    ];
+    foreach ( $candidates as $v ) {
+        if ( is_numeric( $v ) ) {
+            $n = (int) $v;
+            if ( $n > 0 ) {
+                return $n;
+            }
+        }
+    }
+    return 0;
+}
+
+/**
+ * Build GIAV hotel-specific fields: numPax, regimen, rooming text, and uso/num lines.
+ * Uses snapshot room_pricing when available and excludes "extra" single rooms when quote is informative.
+ */
+function wp_travel_giav_build_giav_hotel_fields( array $proposal, array $snapshot, array $item, array $snapshot_item = [] ): array {
+    $pax_total = 0;
+    $pax_candidates = [
+        $proposal['pax_total'] ?? null,
+        $snapshot['header']['pax'] ?? null,
+        $proposal['pax'] ?? null,
+    ];
+    foreach ( $pax_candidates as $v ) {
+        if ( is_numeric( $v ) ) {
+            $pax_total = (int) $v;
+            if ( $pax_total > 0 ) {
+                break;
+            }
+        }
+    }
+
+    $room_pricing = [];
+    if ( isset( $snapshot_item['room_pricing'] ) && is_array( $snapshot_item['room_pricing'] ) ) {
+        $room_pricing = $snapshot_item['room_pricing'];
+    } elseif ( isset( $item['room_pricing'] ) && is_array( $item['room_pricing'] ) ) {
+        $room_pricing = $item['room_pricing'];
+    }
+
+    $double_rooms = 0;
+    $single_rooms = 0;
+    if ( isset( $room_pricing['double']['rooms'] ) && is_numeric( $room_pricing['double']['rooms'] ) ) {
+        $double_rooms = (int) $room_pricing['double']['rooms'];
+    }
+    if ( isset( $room_pricing['single']['rooms'] ) && is_numeric( $room_pricing['single']['rooms'] ) ) {
+        $single_rooms = (int) $room_pricing['single']['rooms'];
+    }
+
+    $informative = false;
+    foreach ( [ 'hotel_informative_quote', 'informative_quote', 'quote_informative', 'cotizacion_informativa', 'allow_extra_rooms' ] as $k ) {
+        if ( ! empty( $snapshot_item[ $k ] ) ) { $informative = true; break; }
+        if ( ! empty( $item[ $k ] ) ) { $informative = true; break; }
+    }
+
+    // Exclude "extra" single rooms if informative: cover pax with doubles first, then only needed singles.
+    $included_double = max( 0, $double_rooms );
+    $included_single = max( 0, $single_rooms );
+    if ( $informative && $pax_total > 0 ) {
+        $covered = $included_double * 2;
+        $remain = $pax_total - $covered;
+        if ( $remain <= 0 ) {
+            $included_single = 0;
+        } else {
+            $included_single = min( $included_single, $remain ); // singles cover 1 pax each
+        }
+    }
+
+    $computed_pax = 0;
+    $computed_pax += $included_double * 2;
+    $computed_pax += $included_single;
+
+    if ( $computed_pax <= 0 && $pax_total > 0 ) {
+        $computed_pax = $pax_total;
+    }
+
+    $meal_label = $snapshot_item['meal_plan_label'] ?? $snapshot_item['meal_plan'] ?? $item['meal_plan_label'] ?? $item['meal_plan'] ?? null;
+    $regimen = wp_travel_giav_map_regimen_label_to_code( is_string( $meal_label ) ? $meal_label : null );
+
+    $room_type = $snapshot_item['room_type_label'] ?? $snapshot_item['room_type'] ?? $item['room_type_label'] ?? $item['room_type'] ?? '';
+    $room_type = trim( (string) $room_type );
+
+    $rooming_lines = [];
+    if ( $included_double > 0 ) {
+        $rooming_lines[] = sprintf( '%d x Habitación Doble%s', $included_double, $room_type !== '' ? ' - ' . $room_type : '' );
+    }
+    if ( $included_single > 0 ) {
+        $rooming_lines[] = sprintf( '%d x Habitación Individual%s', $included_single, $room_type !== '' ? ' - ' . $room_type : '' );
+    }
+    $rooming_text = ! empty( $rooming_lines ) ? implode( "\n", $rooming_lines ) : null;
+
+    $fields = [
+        'numPax'  => $computed_pax > 0 ? $computed_pax : null,
+        'regimen' => $regimen,
+        'rooming' => $rooming_text,
+        'uso1'    => null, 'num1' => null,
+        'uso2'    => null, 'num2' => null,
+        'uso3'    => null, 'num3' => null,
+        'uso4'    => null, 'num4' => null,
+    ];
+
+    $idx = 1;
+    if ( $included_double > 0 ) {
+        $fields['uso' . $idx] = 'DB';
+        $fields['num' . $idx] = $included_double;
+        $idx++;
+    }
+    if ( $included_single > 0 && $idx <= 4 ) {
+        $fields['uso' . $idx] = 'IN';
+        $fields['num' . $idx] = $included_single;
+        $idx++;
+    }
+
+    return $fields;
+}
+
+
 function wp_travel_giav_send_error_notification( array $proposal, string $error, array $trace = [] ) {
     $internal_email = wp_travel_giav_get_internal_notification_email();
     if ( ! $internal_email ) {
@@ -810,9 +977,9 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
                 $item_observaciones = trim( $item_observaciones . "\nPaquetePQ:" . $pq_reserva_id );
             }
 
-            $reserva_response = wp_travel_giav_reserva_normal_create(
-                [
-                    'idExpediente' => $giav_expediente_id,
+            
+    $reserva_payload = [
+'idExpediente' => $giav_expediente_id,
                     'idCliente'    => $giav_client_id,
                     'idProveedor'  => (int) ( $item['giav_supplier_id'] ?? WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_ID ),
                     'tipoReserva'  => $tipo_reserva,
@@ -831,11 +998,33 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
             'destinationCountryISO3166Code' => $destination_meta['code'] ?? null,
             'destinationIdCountryZone'      => $destination_meta['zone'],
             'tipoIVA'      => $tax_type,
-            
+
             'numPax'       => isset( $item['pax_quantity'] ) ? (int) $item['pax_quantity'] : (int) ( $proposal['pax_total'] ?? 0 ),
-                ],
-                $trace
-            );
+    ];
+
+    $snapshot_item_for_giav = ( isset( $snapshot_items[ $index ] ) && is_array( $snapshot_items[ $index ] ) ) ? $snapshot_items[ $index ] : [];
+    $giav_extra_fields = [];
+
+    if ( $service_type === 'hotel' ) {
+        $giav_extra_fields = wp_travel_giav_build_giav_hotel_fields( $proposal, $snapshot, $item, $snapshot_item_for_giav );
+    } elseif ( $service_type === 'golf' ) {
+        $players = wp_travel_giav_get_players_count( $proposal, $snapshot, $item, $snapshot_item_for_giav );
+        if ( $players > 0 ) {
+            $giav_extra_fields['numPax'] = $players;
+        }
+    } else {
+        // transfer/extra/otros: keep numPax already set (pax_quantity or proposal pax)
+        $giav_extra_fields = [];
+    }
+
+    // Merge extra fields without losing existing values (extra fields win when not null).
+    foreach ( $giav_extra_fields as $k => $v ) {
+        if ( $v !== null ) {
+            $reserva_payload[ $k ] = $v;
+        }
+    }
+
+    $reserva_response = wp_travel_giav_reserva_normal_create( $reserva_payload, $trace );
 
             if ( is_wp_error( $reserva_response ) ) {
                 $proposal_repo->update_giav_sync_status( $proposal_id, 'error', $reserva_response->get_error_message() );
