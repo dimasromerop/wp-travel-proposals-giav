@@ -402,7 +402,6 @@ function wp_travel_giav_build_reserva_payload( array $data ): array {
         'idEntityStage'                  => null,
         'customDataValues'               => null,
         'idsPasajeros'                   => null,
-        'Anidacion_IdReservaContenedora' => null,
     ];
 
     return array_merge( $defaults, $data );
@@ -412,6 +411,32 @@ function wp_travel_giav_reserva_normal_create( array $data, array &$trace = null
     $payload = wp_travel_giav_build_reserva_payload( $data );
     return wp_travel_giav_call( 'Reserva_Normal_POST', $payload, $trace );
 }
+
+/**
+ * Sets reservation nesting (anidamiento) to a container reservation (e.g. PQ).
+ *
+ * According to WSDL: Reserva_Anidamiento_PUT(apikey, idReservaCoste, idReservaContenedoraAnidamiento).
+ *
+ * @return true|WP_Error
+ */
+function wp_travel_giav_reserva_set_anidamiento( int $id_reserva_coste, ?int $id_reserva_contenedora, array &$trace = null ) {
+    if ( $id_reserva_coste <= 0 ) {
+        return new WP_Error( 'bad_id', 'ID reserva inválido para anidamiento.' );
+    }
+
+    $params = [
+        'idReservaCoste' => (int) $id_reserva_coste,
+        'idReservaContenedoraAnidamiento' => $id_reserva_contenedora !== null ? (int) $id_reserva_contenedora : null,
+    ];
+
+    $res = wp_travel_giav_call( 'Reserva_Anidamiento_PUT', $params, $trace );
+    if ( is_wp_error( $res ) ) {
+        return $res;
+    }
+
+    return true;
+}
+
 
 function wp_travel_giav_send_error_notification( array $proposal, string $error, array $trace = [] ) {
     $internal_email = wp_travel_giav_get_internal_notification_email();
@@ -583,11 +608,17 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
     $fecha_desde = wp_travel_giav_format_date( $dates['start_date'] ?? ( $proposal['start_date'] ?? '' ) );
     $fecha_hasta = wp_travel_giav_format_date( $dates['end_date'] ?? ( $proposal['end_date'] ?? '' ) );
 
-    $titulo = sprintf(
-        'Propuesta #%d - %s',
-        (int) $proposal['id'],
-        $full_name !== '' ? $full_name : 'Cliente'
-    );
+    $titulo = '';
+    if ( ! empty( $proposal['proposal_title'] ) ) {
+        $titulo = (string) $proposal['proposal_title'];
+    } elseif ( ! empty( $proposal['display_title'] ) ) {
+        $titulo = (string) $proposal['display_title'];
+    } elseif ( ! empty( $proposal['customer_name'] ) ) {
+        $titulo = 'Viaje - ' . (string) $proposal['customer_name'];
+    } else {
+        $titulo = sprintf( 'Propuesta #%d', (int) $proposal['id'] );
+    }
+
 
     $observaciones = sprintf(
         'Creado desde WP Travel. Proposal:%d Version:%d Token:%s',
@@ -655,11 +686,16 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
                 'idCliente'    => $giav_client_id,
                 'idProveedor'  => (int) WP_TRAVEL_GIAV_PQ_SUPPLIER_ID,
                 'tipoReserva'  => 'PQ',
+                // GIAV requiere margen de operación previsto para permitir costes anidados en PQ/CI.
+                // Establecemos 20% por defecto para evitar el fallo: "Para admitir servicios de costes anidados...".
+                'margenOperacionPrevisto' => 20,
                 'descripcion'  => sprintf( 'Paquete combinado - Propuesta #%d', (int) $proposal['id'] ),
                 'observaciones'=> $observaciones,
                 'fechadesde'   => $fecha_desde,
                 'fechahasta'   => $fecha_hasta,
                 'ventacomis'   => $total_sell,
+                // En modo valoración ANIDADA, el paquete PQ no lleva coste directo.
+                // El coste se compone con los servicios anidados (hijos).
                 'costeComis'   => 0,
                 'ventaNoComis' => 0,
                 'costeNoComis' => 0,
@@ -670,7 +706,6 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
                 'destinationCountryISO3166Code'    => $destination_meta['code'] ?? null,
                 'destinationIdCountryZone'         => $destination_meta['zone'],
                 'tipoIVA'                          => $tax_type,
-                'Anidacion_IdReservaContenedora'   => null,
             ],
             $trace
         );
@@ -764,6 +799,11 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
                 }
             }
 
+            // When using a package (PQ) as container, line items should carry only cost. PVP is on the package.
+            if ( $pq_reserva_id > 0 ) {
+                $line_sell = 0.0;
+            }
+
             $notes_public = trim( (string) ( $item['notes_public'] ?? '' ) );
             $item_observaciones = $notes_public;
             if ( $pq_reserva_id > 0 ) {
@@ -791,7 +831,7 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
             'destinationCountryISO3166Code' => $destination_meta['code'] ?? null,
             'destinationIdCountryZone'      => $destination_meta['zone'],
             'tipoIVA'      => $tax_type,
-            'Anidacion_IdReservaContenedora' => $pq_reserva_id > 0 ? $pq_reserva_id : null,
+            
             'numPax'       => isset( $item['pax_quantity'] ) ? (int) $item['pax_quantity'] : (int) ( $proposal['pax_total'] ?? 0 ),
                 ],
                 $trace
@@ -809,6 +849,16 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
             );
 
             if ( $giav_reserva_id ) {
+                // Force nesting under the PQ container (Reserva_Anidamiento_PUT).
+                if ( $pq_reserva_id > 0 ) {
+                    $anid = wp_travel_giav_reserva_set_anidamiento( (int) $giav_reserva_id, (int) $pq_reserva_id, $trace );
+                    if ( is_wp_error( $anid ) ) {
+                        $proposal_repo->update_giav_sync_status( $proposal_id, 'error', $anid->get_error_message() );
+                        wp_travel_giav_send_error_notification( $proposal, $anid->get_error_message(), $trace );
+                        return $anid;
+                    }
+                }
+
                 $reserva_repo->create( [
                     'proposal_id'    => $proposal_id,
                     'version_id'     => $version_id,
