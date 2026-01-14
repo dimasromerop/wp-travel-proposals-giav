@@ -1112,7 +1112,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                         <span class="meta-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 3l8 4-8 4V3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M6 22h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span><?php echo esc_html( sprintf( _n( '%d jugador', '%d jugadores', $players_total, 'wp-travel-giav' ), $players_total ) ); ?></span></span>
                     <?php endif; ?>
                     <?php if ( $currency ) : ?>
-                        <span class="meta-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5H9.5a4.5 4.5 0 0 0 0 9H15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 14h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 10h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span><?php echo esc_html( $currency ); ?></span></span>
+                        <span class="meta-pill"><span><?php echo esc_html( $currency ); ?></span></span>
                     <?php endif; ?>
                 </div>
                 <div class="proposal-hero__view"><?php echo esc_html( $view_label ); ?></div>
