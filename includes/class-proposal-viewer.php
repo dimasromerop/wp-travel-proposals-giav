@@ -588,7 +588,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
     gap: 10px;
 }
 .proposal-logo img {
-    max-height: 44px;
+    max-height: 80px;
     width: auto;
     filter: drop-shadow(0 6px 12px rgba(2,6,23,0.35));
 }
