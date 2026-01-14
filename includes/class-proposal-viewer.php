@@ -1276,7 +1276,6 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                                         }
                                     }
                                 }
-
                                 ?>
                                 <div class="service-card service-card--media">
                                     <?php if ( $thumb_url ) : ?>
@@ -1286,12 +1285,13 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                                     <?php endif; ?>
                                     <div class="service-card__body">
                                         <div class="service-card__title"><?php echo $display_name; ?></div>
-                                    <?php if ( $golf_meta_line ) : ?>
-                                        <div class="service-card__meta"><?php echo esc_html( $golf_meta_line ); ?></div>
-                                    <?php endif; ?>
-                                    <?php if ( $notes ) : ?>
-                                        <div class="service-card__note"><?php echo esc_html( $notes ); ?></div>
-                                    <?php endif; ?>
+                                        <?php if ( $golf_meta_line ) : ?>
+                                            <div class="service-card__meta"><?php echo esc_html( $golf_meta_line ); ?></div>
+                                        <?php endif; ?>
+                                        <?php if ( $notes ) : ?>
+                                            <div class="service-card__note"><?php echo esc_html( $notes ); ?></div>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
