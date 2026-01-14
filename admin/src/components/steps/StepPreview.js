@@ -166,6 +166,9 @@ export default function StepPreview({
       hotel_rooms: it.hotel_rooms ?? null,
       hotel_room_type: it.hotel_room_type ?? '',
       hotel_regimen: it.hotel_regimen ?? '',
+      // When true, extra rooms (beyond pax) are treated as informative options and
+      // must NOT be included in the default accommodation / totals for the client.
+      hotel_informative_quote: !!it.hotel_informative_quote,
       // Per-night (optional, backward compatible)
       hotel_pricing_mode: it.hotel_pricing_mode ?? it.hotel_rate_mode ?? 'simple',
       nightly_rates: Array.isArray(it.nightly_rates)
