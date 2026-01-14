@@ -1251,18 +1251,26 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                                         <?php endif; ?>
 
                                         <?php
-                                        $double_rooms = absint( $room_pricing['double']['rooms'] ?? 0 );
-                                        $single_rooms = absint( $room_pricing['single']['rooms'] ?? 0 );
+                                        $informative_quote = ! empty( $item['hotel_informative_quote'] );
+                                        $allocation = self::evaluate_hotel_room_allocation( $room_pricing, $pax_total );
+
+                                        $double_rooms = $informative_quote
+                                            ? absint( $allocation['types']['double']['needed'] ?? 0 )
+                                            : absint( $room_pricing['double']['rooms'] ?? 0 );
+
+                                        $single_rooms = $informative_quote
+                                            ? absint( $allocation['types']['single']['needed'] ?? 0 )
+                                            : absint( $room_pricing['single']['rooms'] ?? 0 );
 
                                         if ( $double_enabled && $double_rooms > 0 ) {
-                                            $double_label = $double_rooms === 1 ? 'Habitación doble (1 hab.)' : sprintf( 'Habitaciones dobles (%d hab.)', $double_rooms );
+                                            $double_label = $double_rooms === 1 ? __( 'Habitación doble', 'wp-travel-giav' ) : sprintf( __( 'Habitaciones dobles (%d hab.)', 'wp-travel-giav' ), $double_rooms );
                                             echo '<div class="service-card__meta">' . esc_html( $double_label ) . '</div>';
                                         }
                                         if ( $single_enabled && $single_rooms > 0 ) {
-                                            $single_label = $single_rooms === 1 ? 'Habitación individual (1 hab.)' : sprintf( 'Habitaciones individuales (%d hab.)', $single_rooms );
+                                            $single_label = $single_rooms === 1 ? __( 'Habitación individual', 'wp-travel-giav' ) : sprintf( __( 'Habitaciones individuales (%d hab.)', 'wp-travel-giav' ), $single_rooms );
                                             echo '<div class="service-card__meta">' . esc_html( $single_label ) . '</div>';
                                         }
-                                        ?>
+?>
 
                                         <?php
                                         $hotel_pricing_mode = isset( $item['hotel_pricing_mode'] ) ? (string) $item['hotel_pricing_mode'] : '';
