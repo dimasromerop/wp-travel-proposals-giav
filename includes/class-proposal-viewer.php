@@ -6,6 +6,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 class WP_Travel_Proposal_Viewer {
 
     private static $booted = false;
+    /** Locale selected for formatting during the current render. */
+    private static $snapshot_client_locale = '';
 
     public static function boot() {
         if ( self::$booted ) {
@@ -189,10 +191,6 @@ class WP_Travel_Proposal_Viewer {
         ];
 
         $header = wp_parse_args( $snapshot['header'] ?? [], $header_defaults );
-
-        $basics = $snapshot['basics'] ?? ( $snapshot['data']['basics'] ?? [] );
-        if ( ! is_array( $basics ) ) { $basics = []; }
-
         $totals = wp_parse_args( $snapshot['totals'] ?? [], [
             'totals_cost_net'   => 0,
             'totals_sell_price' => 0,
@@ -203,7 +201,8 @@ class WP_Travel_Proposal_Viewer {
         // Render in the proposal's client language (stored in snapshot header).
         // This is essential when WPML is active: we want the proposal language,
         // not the global site/admin language.
-        $client_locale = self::resolve_client_locale( $header, $basics );
+        $client_locale = self::resolve_client_locale( $header );
+        self::$snapshot_client_locale = $client_locale;
         $switched = false;
         if ( $client_locale && function_exists( 'switch_to_locale' ) ) {
             $switched = switch_to_locale( $client_locale );
@@ -224,6 +223,7 @@ class WP_Travel_Proposal_Viewer {
             if ( $switched && function_exists( 'restore_previous_locale' ) ) {
                 restore_previous_locale();
             }
+            self::$snapshot_client_locale = '';
         }
     }
 
@@ -234,8 +234,8 @@ class WP_Travel_Proposal_Viewer {
      * This helper keeps us future-proof: if we later store full locales ("en_US"),
      * they will work as-is.
      */
-    private static function resolve_client_locale( array $header, array $basics = [] ): string {
-        $raw = (string) ( $header['client_locale'] ?? $header['customer_locale'] ?? $header['customer_language'] ?? $basics['client_locale'] ?? $basics['customer_locale'] ?? $basics['customer_language'] ?? '' );
+    private static function resolve_client_locale( array $header ): string {
+        $raw = (string) ( $header['client_locale'] ?? $header['customer_locale'] ?? $header['customer_language'] ?? '' );
         $raw = trim( $raw );
         if ( $raw === '' ) {
             return '';
@@ -2107,19 +2107,180 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
         if ( $date === '' ) {
             return '';
         }
+
         $timestamp = strtotime( $date );
         if ( ! $timestamp ) {
             return $date;
         }
-                $locale = function_exists( 'determine_locale' ) ? determine_locale() : get_locale();
-        $locale = (string) $locale;
-        $fmt = 'j F Y';
+
+        $locale = self::get_current_snapshot_locale();
+        $intl_formatted = self::format_date_with_intl( $timestamp, $locale );
+        if ( $intl_formatted !== '' ) {
+            return $intl_formatted;
+        }
+
+        $manual_formatted = self::format_date_manually( $timestamp, $locale );
+        if ( $manual_formatted !== '' ) {
+            return $manual_formatted;
+        }
+
         if ( stripos( $locale, 'es' ) === 0 ) {
             $fmt = 'j \\d\\e F \\d\\e Y';
         } elseif ( stripos( $locale, 'en' ) === 0 ) {
             $fmt = 'F j, Y';
+        } else {
+            $fmt = 'j F Y';
         }
+
+        if ( function_exists( 'date_i18n' ) ) {
+            return date_i18n( $fmt, $timestamp );
+        }
+
         return wp_date( $fmt, $timestamp );
+    }
+
+    private static function get_current_snapshot_locale() : string {
+        if ( self::$snapshot_client_locale !== '' ) {
+            return self::$snapshot_client_locale;
+        }
+
+        if ( function_exists( 'determine_locale' ) ) {
+            return determine_locale();
+        }
+
+        return get_locale();
+    }
+
+    private static function format_date_with_intl( int $timestamp, string $locale ) : string {
+        if ( ! class_exists( '\\IntlDateFormatter' ) ) {
+            return '';
+        }
+
+        $normalized_locale = self::normalize_locale_code( $locale );
+        $timezone = self::get_formatter_timezone();
+
+        try {
+            $formatter = new \IntlDateFormatter(
+                $normalized_locale ?: '',
+                \IntlDateFormatter::LONG,
+                \IntlDateFormatter::NONE,
+                $timezone,
+                \IntlDateFormatter::GREGORIAN
+            );
+        } catch ( \Throwable $ex ) {
+            return '';
+        }
+
+        if ( $formatter === false ) {
+            return '';
+        }
+
+        $formatted = $formatter->format( $timestamp );
+        return $formatted ?: '';
+    }
+
+    private static function get_formatter_timezone() : string {
+        if ( function_exists( 'wp_timezone_string' ) ) {
+            $timezone = wp_timezone_string();
+            if ( $timezone ) {
+                return $timezone;
+            }
+        }
+
+        $option = get_option( 'timezone_string' );
+        if ( $option ) {
+            return $option;
+        }
+
+        return 'UTC';
+    }
+
+    private static function normalize_locale_code( string $locale ) : string {
+        $code = trim( (string) $locale );
+        if ( $code === '' ) {
+            return '';
+        }
+
+        $code = str_replace( '-', '_', $code );
+        if ( strpos( $code, '_' ) !== false ) {
+            return $code;
+        }
+
+        $map = [
+            'es' => 'es_ES',
+            'en' => 'en_US',
+        ];
+
+        $key = strtolower( $code );
+        return $map[ $key ] ?? $code;
+    }
+
+    private static function format_date_manually( int $timestamp, string $locale ) : string {
+        $lang = strtolower( strtok( $locale, '_' ) ?: $locale );
+        $month_number = (int) wp_date( 'n', $timestamp );
+        if ( $month_number < 1 || $month_number > 12 ) {
+            return '';
+        }
+
+        $day = wp_date( 'j', $timestamp );
+        $year = wp_date( 'Y', $timestamp );
+
+        $months = self::get_manual_month_names();
+        $english = $months['en'][ $month_number ] ?? '';
+        $translated = $months[ $lang ][ $month_number ] ?? $english;
+        if ( $translated === '' ) {
+            return '';
+        }
+
+        if ( $lang === 'es' ) {
+            return sprintf( '%s de %s de %s', $day, $translated, $year );
+        }
+
+        if ( $lang === 'en' ) {
+            return sprintf( '%s %s, %s', $translated, $day, $year );
+        }
+
+        return sprintf( '%s %s %s', $day, $translated, $year );
+    }
+
+    private static function get_manual_month_names() : array {
+        static $cache = null;
+        if ( $cache !== null ) {
+            return $cache;
+        }
+
+        $cache = [
+            'en' => [
+                1  => 'January',
+                2  => 'February',
+                3  => 'March',
+                4  => 'April',
+                5  => 'May',
+                6  => 'June',
+                7  => 'July',
+                8  => 'August',
+                9  => 'September',
+                10 => 'October',
+                11 => 'November',
+                12 => 'December',
+            ],
+            'es' => [
+                1  => 'enero',
+                2  => 'febrero',
+                3  => 'marzo',
+                4  => 'abril',
+                5  => 'mayo',
+                6  => 'junio',
+                7  => 'julio',
+                8  => 'agosto',
+                9  => 'septiembre',
+                10 => 'octubre',
+                11 => 'noviembre',
+                12 => 'diciembre',
+            ],
+        ];
+
+        return $cache;
     }
 
     private static function render_error( $message, array $details = [], $status = 500 ) {
