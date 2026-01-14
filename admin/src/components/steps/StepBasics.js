@@ -304,7 +304,22 @@ function normalizeToISO(value) {
   return '';
 }
 
-function DateField({ id, label, value, onChange, className = '', fieldRef }) {
+function isoToLocalMidnight(iso) {
+  if (!iso) return null;
+  const safe = typeof iso === 'string' ? iso.slice(0, 10) : iso;
+  const date = safe instanceof Date ? safe : new Date(`${safe}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function startOfTodayLocal() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function DateField({ id, label, value, onChange, className = '', fieldRef, isInvalidDate }) {
   const [isOpen, setIsOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const displayValue = formatDisplayDate(value);
@@ -354,7 +369,7 @@ function DateField({ id, label, value, onChange, className = '', fieldRef }) {
           <DatePicker
             currentDate={value || todayISO()}
             onChange={handleSelect}
-            minDate={todayISO()}
+            isInvalidDate={isInvalidDate}
           />
         </Popover>
       )}
@@ -397,6 +412,7 @@ const defaults = useMemo(() => {
   const [fieldError, setFieldError] = useState('');
   const [countryQuery, setCountryQuery] = useState('');
   const fieldRefs = useRef({});
+  const isCreating = !proposalId;
 
   // ✅ FIX: al volver atrás, rehidratar el formulario con initialValues
   useEffect(() => {
@@ -677,6 +693,12 @@ const defaults = useMemo(() => {
                 onChange={onChangeStartDate}
                 className={fieldError === 'start_date' ? 'is-error' : ''}
                 fieldRef={registerField('start_date')}
+                isInvalidDate={(date) => {
+                  if (!isCreating) return false;
+                  const candidate = isoToLocalMidnight(normalizeToISO(date));
+                  if (!candidate) return false;
+                  return candidate < startOfTodayLocal();
+                }}
               />
               <div className="proposal-basics__date-arrow" aria-hidden="true">
                 →
@@ -688,6 +710,18 @@ const defaults = useMemo(() => {
                 onChange={onChangeEndDate}
                 className={fieldError === 'end_date' ? 'is-error' : ''}
                 fieldRef={registerField('end_date')}
+                isInvalidDate={(date) => {
+                  const candidate = isoToLocalMidnight(normalizeToISO(date));
+                  if (!candidate) return false;
+
+                  // En creación, nunca permitimos fechas pasadas.
+                  const min = isCreating
+                    ? isoToLocalMidnight(values.start_date) || startOfTodayLocal()
+                    : isoToLocalMidnight(values.start_date);
+
+                  if (!min) return false;
+                  return candidate < min;
+                }}
               />
               <div
                 className={`proposal-basics__field proposal-basics__field--pax ${
