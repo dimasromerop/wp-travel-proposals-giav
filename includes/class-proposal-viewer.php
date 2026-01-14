@@ -52,7 +52,7 @@ class WP_Travel_Proposal_Viewer {
 
         $proposal = $proposal_repo->get_by_token( $proposal_token );
         if ( ! $proposal ) {
-            self::render_error( 'Propuesta no encontrada', [ 'token' => $proposal_token ], 404 );
+            self::render_error( __( 'Propuesta no encontrada', 'wp-travel-giav' ), [ 'token' => $proposal_token ], 404 );
         }
 
         $current_version = null;
@@ -77,7 +77,7 @@ class WP_Travel_Proposal_Viewer {
         }
 
         if ( ! $current_version ) {
-            self::render_error( 'No hay versiones disponibles para esta propuesta', [ 'proposal_id' => $proposal['id'] ], 404 );
+            self::render_error( __( 'No hay versiones disponibles para esta propuesta', 'wp-travel-giav' ), [ 'proposal_id' => $proposal['id'] ], 404 );
         }
 
         $selected_version = null;
@@ -89,7 +89,7 @@ class WP_Travel_Proposal_Viewer {
                     $version_token,
                     $proposal['id']
                 ) );
-                self::render_error( 'Versión no encontrada', [ 'version_token' => $version_token ], 404 );
+                self::render_error( __( 'Versión no encontrada', 'wp-travel-giav' ), [ 'version_token' => $version_token ], 404 );
             }
         } elseif ( $version_id_override ) {
             $selected_version = $version_repo->get_by_id( $version_id_override );
@@ -99,7 +99,7 @@ class WP_Travel_Proposal_Viewer {
                     $version_id_override,
                     $proposal['id']
                 ) );
-                self::render_error( 'Versión no disponible', [ 'version_id' => $version_id_override ], 404 );
+                self::render_error( __( 'Versión no disponible', 'wp-travel-giav' ), [ 'version_id' => $version_id_override ], 404 );
             }
 
             $expired = ! empty( $selected_version['revoked_at'] )
@@ -110,7 +110,7 @@ class WP_Travel_Proposal_Viewer {
                     $version_id_override,
                     $proposal['id']
                 ) );
-                self::render_error( 'Versión no disponible', [ 'version_id' => $version_id_override ], 404 );
+                self::render_error( __( 'Versión no disponible', 'wp-travel-giav' ), [ 'version_id' => $version_id_override ], 404 );
             }
         } else {
             $selected_version = $current_version;
@@ -132,12 +132,12 @@ class WP_Travel_Proposal_Viewer {
 
         $snapshot = json_decode( $version['json_snapshot'], true );
         if ( ! is_array( $snapshot ) ) {
-            self::render_error( 'Snapshot inválido para esta versión', [ 'version_id' => $version['id'] ], 500 );
+            self::render_error( __( 'Snapshot inválido para esta versión', 'wp-travel-giav' ), [ 'version_id' => $version['id'] ], 500 );
         }
 
         $items = isset( $snapshot['items'] ) && is_array( $snapshot['items'] ) ? $snapshot['items'] : [];
         if ( empty( $items ) ) {
-            self::render_error( 'No hay servicios asociados a esta propuesta', [ 'version_id' => $version['id'] ], 404 );
+            self::render_error( __( 'No hay servicios asociados a esta propuesta', 'wp-travel-giav' ), [ 'version_id' => $version['id'] ], 404 );
         }
 
         $requires_mapping = apply_filters(
@@ -162,7 +162,7 @@ class WP_Travel_Proposal_Viewer {
         }
 
         if ( $errors ) {
-            self::render_error( 'Snapshot incompleto', $errors, 422 );
+            self::render_error( __( 'Snapshot incompleto', 'wp-travel-giav' ), $errors, 422 );
         }
 
         $warnings = [];
@@ -196,16 +196,59 @@ class WP_Travel_Proposal_Viewer {
             'totals_margin_pct' => 0,
         ] );
 
-        self::output_html(
-            $proposal,
-            $current_version,
-            $version,
-            $accepted_version,
-            $header,
-            $items,
-            array_values( $warnings ),
-            $totals
-        );
+        // Render in the proposal's client language (stored in snapshot header).
+        // This is essential when WPML is active: we want the proposal language,
+        // not the global site/admin language.
+        $client_locale = self::resolve_client_locale( $header );
+        $switched = false;
+        if ( $client_locale && function_exists( 'switch_to_locale' ) ) {
+            $switched = switch_to_locale( $client_locale );
+        }
+
+        try {
+            self::output_html(
+                $proposal,
+                $current_version,
+                $version,
+                $accepted_version,
+                $header,
+                $items,
+                array_values( $warnings ),
+                $totals
+            );
+        } finally {
+            if ( $switched && function_exists( 'restore_previous_locale' ) ) {
+                restore_previous_locale();
+            }
+        }
+    }
+
+    /**
+     * Map the snapshot language to a WordPress locale.
+     *
+     * We store a short language code ("es", "en") in the snapshot header for now.
+     * This helper keeps us future-proof: if we later store full locales ("en_US"),
+     * they will work as-is.
+     */
+    private static function resolve_client_locale( array $header ): string {
+        $raw = (string) ( $header['client_locale'] ?? $header['customer_locale'] ?? $header['customer_language'] ?? '' );
+        $raw = trim( $raw );
+        if ( $raw === '' ) {
+            return '';
+        }
+
+        // Already a full locale (en_US, es_ES, etc.).
+        if ( strpos( $raw, '_' ) !== false ) {
+            return $raw;
+        }
+
+        $map = [
+            'es' => 'es_ES',
+            'en' => 'en_US',
+        ];
+
+        $key = strtolower( $raw );
+        return $map[ $key ] ?? '';
     }
 
     /**
@@ -307,12 +350,12 @@ class WP_Travel_Proposal_Viewer {
         $hotel_double_total = 0;
         $hotel_single_total = 0;
         $regimen_labels = [
-            'AD' => 'Alojamiento y Desayuno',
-            'SA' => 'Solo Alojamiento',
-            'MP' => 'Media Pensión',
-            'PC' => 'Pensión Completa',
-            'TI' => 'Todo Incluido',
-            'SP' => 'Según Programa',
+            'AD' => __( 'Alojamiento y Desayuno', 'wp-travel-giav' ),
+            'SA' => __( 'Solo Alojamiento', 'wp-travel-giav' ),
+            'MP' => __( 'Media Pensión', 'wp-travel-giav' ),
+            'PC' => __( 'Pensión Completa', 'wp-travel-giav' ),
+            'TI' => __( 'Todo Incluido', 'wp-travel-giav' ),
+            'SP' => __( 'Según Programa', 'wp-travel-giav' ),
         ];
         $hotel_count = count( $hotel_items );
         foreach ( $hotel_items as $hotel_item ) {
@@ -320,14 +363,14 @@ class WP_Travel_Proposal_Viewer {
             $room_type = trim( (string) ( $hotel_item['hotel_room_type'] ?? '' ) );
             $nights = absint( $hotel_item['hotel_nights'] ?? 0 );
             $night_label = $nights > 0
-                ? sprintf( '%d noche%s', $nights, $nights === 1 ? '' : 's' )
-                : 'Estancia';
-            $line = sprintf( '%s de alojamiento', $night_label );
+                ? sprintf( _n( '%d noche', '%d noches', $nights, 'wp-travel-giav' ), $nights )
+                : __( 'Estancia', 'wp-travel-giav' );
+            $line = sprintf( __( '%s de alojamiento', 'wp-travel-giav' ), $night_label );
             if ( $room_type !== '' ) {
-                $line .= sprintf( ' en %s', $room_type );
+                $line .= sprintf( __( ' en %s', 'wp-travel-giav' ), $room_type );
             }
             if ( $hotel_name !== '' ) {
-                $line .= sprintf( ' en %s', $hotel_name );
+                $line .= sprintf( __( ' en %s', 'wp-travel-giav' ), $hotel_name );
             }
             $includes_hotel[] = $line;
 
@@ -488,7 +531,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
         <head>
             <meta charset="<?php echo esc_attr( get_option( 'blog_charset' ) ); ?>">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title><?php echo esc_html( $destination ?: ( $header['proposal_title'] ?? '' ) ?: 'Propuesta de viaje' ); ?></title>
+            <title><?php echo esc_html( $destination ?: ( $header['proposal_title'] ?? '' ) ?: __( 'Propuesta de viaje', 'wp-travel-giav' ) ); ?></title>
             <style>
                 body {
                     margin: 0;
@@ -1043,7 +1086,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
     <div class="proposal-hero__overlay" aria-hidden="true"></div>
     <div class="proposal-hero__content">
         <span class="version-pill proposal-hero__version <?php echo $is_current ? 'version-pill--active' : 'version-pill--archive'; ?>">
-            <?php echo $is_current ? 'Versión vigente' : 'Versión anterior'; ?>
+            <?php echo $is_current ? esc_html__( 'Versión vigente', 'wp-travel-giav' ) : esc_html__( 'Versión anterior', 'wp-travel-giav' ); ?>
         </span>
         <div class="proposal-hero__topline proposal-hero__topline--center">
             <?php if ( ! empty( $logo_url ) ) : ?>
@@ -1053,10 +1096,10 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
             <?php endif; ?>
         </div>
 
-        <h1 class="proposal-hero__title"><?php echo esc_html( $destination ?: ( $header['proposal_title'] ?? 'Propuesta de viaje' ) ); ?></h1>
+        <h1 class="proposal-hero__title"><?php echo esc_html( $destination ?: ( $header['proposal_title'] ?? __( 'Propuesta de viaje', 'wp-travel-giav' ) ) ); ?></h1>
 
         <div class="proposal-hero__subtitle">
-            <div><?php echo esc_html( $header['customer_name'] ?: 'Cliente' ); ?><?php if ( ! empty( $header['customer_email'] ) ) : ?> · <?php echo esc_html( $header['customer_email'] ); ?><?php endif; ?></div>
+            <div><?php echo esc_html( $header['customer_name'] ?: __( 'Cliente', 'wp-travel-giav' ) ); ?><?php if ( ! empty( $header['customer_email'] ) ) : ?> · <?php echo esc_html( $header['customer_email'] ); ?><?php endif; ?></div>
             <div class="proposal-hero__meta">
                 <div class="proposal-hero__pillrow proposal-hero__pillrow--meta">
                     <?php if ( $dates ) : ?>
@@ -1066,7 +1109,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                         <span class="meta-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span><?php echo esc_html( sprintf( '%d pax', $pax_total ) ); ?></span></span>
                     <?php endif; ?>
                     <?php if ( $players_total ) : ?>
-                        <span class="meta-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 3l8 4-8 4V3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M6 22h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span><?php echo esc_html( sprintf( '%d jugadores', $players_total ) ); ?></span></span>
+                        <span class="meta-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 3l8 4-8 4V3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M6 22h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span><?php echo esc_html( sprintf( _n( '%d jugador', '%d jugadores', $players_total, 'wp-travel-giav' ), $players_total ) ); ?></span></span>
                     <?php endif; ?>
                     <?php if ( $currency ) : ?>
                         <span class="meta-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5H9.5a4.5 4.5 0 0 0 0 9H15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 14h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 10h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span><?php echo esc_html( $currency ); ?></span></span>
@@ -1078,9 +1121,9 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
 
         <?php if ( ! $is_current && $current_version ) : ?>
             <div class="version-banner" style="margin:0;">
-                <strong>Estás viendo una versión anterior.</strong>
+                <strong><?php echo esc_html__( 'Estás viendo una versión anterior.', 'wp-travel-giav' ); ?></strong>
                 <span><?php echo esc_html( $current_version_message ); ?></span>
-                <a href="<?php echo esc_url( self::get_proposal_url( $proposal['proposal_token'] ) ); ?>" class="version-banner__link">Ver versión actual</a>
+                <a href="<?php echo esc_url( self::get_proposal_url( $proposal['proposal_token'] ) ); ?>" class="version-banner__link"><?php echo esc_html__( 'Ver versión actual', 'wp-travel-giav' ); ?></a>
             </div>
         <?php endif; ?>
     </div>
@@ -1089,10 +1132,10 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
 	<div class="proposal-container">
 
             <div class="proposal-section">
-                <h2>Programa de viaje</h2>
+                <h2><?php echo esc_html__( 'Programa de viaje', 'wp-travel-giav' ); ?></h2>
                 <?php if ( $includes_hotel || $includes_regimens || $has_green_fee_breakdown || $other_includes ) : ?>
                     <div class="includes-block">
-                        <h3>Incluye:</h3>
+                        <h3><?php echo esc_html__( 'Incluye:', 'wp-travel-giav' ); ?></h3>
                         <ul class="includes-list">
                             <?php foreach ( $includes_hotel as $line ) : ?>
                                 <li><?php echo esc_html( $line ); ?></li>
@@ -1102,7 +1145,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                             <?php endforeach; ?>
                             <?php if ( $has_green_fee_breakdown ) : ?>
                                 <li>
-                                    <?php echo esc_html( sprintf( '%d green-fees por jugador en:', $total_green_fees_per_person ) ); ?>
+                                    <?php echo esc_html( sprintf( __( '%d green-fees por jugador en:', 'wp-travel-giav' ), $total_green_fees_per_person ) ); ?>
                                     <ul>
                                         <?php foreach ( $golf_fee_breakdown as $fee_detail ) : ?>
                                             <?php
@@ -1129,11 +1172,11 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
 
                 <?php if ( $hotel_items ) : ?>
                     <div class="service-group">
-                        <h3>Alojamiento</h3>
+                        <h3><?php echo esc_html__( 'Alojamiento', 'wp-travel-giav' ); ?></h3>
                         <div class="service-group__grid">
                             <?php foreach ( $hotel_items as $item ) : ?>
                                 <?php
-                                $display_name = esc_html( $item['display_name'] ?? 'Alojamiento' );
+                                $display_name = esc_html( $item['display_name'] ?? __( 'Alojamiento', 'wp-travel-giav' ) );
                                 $room_type = trim( (string) ( $item['hotel_room_type'] ?? '' ) );
                                 $regimen = trim( (string) ( $item['hotel_regimen'] ?? '' ) );
                                 $regimen_label = $regimen !== '' ? ( $regimen_labels[ $regimen ] ?? $regimen ) : '';
@@ -1245,7 +1288,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
 
                 <?php if ( $golf_items ) : ?>
                     <div class="service-group">
-                        <h3>Golf</h3>
+                        <h3><?php echo esc_html__( 'Golf', 'wp-travel-giav' ); ?></h3>
                         <div class="service-group__grid">
                             <?php foreach ( $golf_items as $item ) : ?>
                                 <?php
@@ -1300,11 +1343,11 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
 
                 <?php if ( $other_items ) : ?>
                     <div class="service-group">
-                        <h3>Extras y transfers</h3>
+                        <h3><?php echo esc_html__( 'Extras y transfers', 'wp-travel-giav' ); ?></h3>
                         <div class="service-group__grid">
                             <?php foreach ( $other_items as $item ) : ?>
                                 <?php
-                                $display_name = esc_html( $item['display_name'] ?? 'Servicio' );
+                                $display_name = esc_html( $item['display_name'] ?? __( 'Servicio', 'wp-travel-giav' ) );
                                 $start_date = self::format_spanish_date( (string) ( $item['start_date'] ?? '' ) );
                                 $end_date = self::format_spanish_date( (string) ( $item['end_date'] ?? '' ) );
                                 $notes = trim( (string) ( $item['notes_public'] ?? '' ) );
@@ -1338,7 +1381,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
             </div>
 
             <div class="proposal-section">
-    <h2>Totales</h2>
+    <h2><?php echo esc_html__( 'Totales', 'wp-travel-giav' ); ?></h2>
     <?php
     $pax_total = absint( $pricing['pax_total'] ?? 0 );
     $players_count = absint( $pricing['players_count'] ?? 0 );
@@ -1346,21 +1389,21 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
 
     if ( $players_count > 0 && null !== ( $pricing['price_player_double'] ?? null ) ) {
         $price_cards[] = [
-            'label' => 'Precio por jugador',
+            'label' => __( 'Precio por jugador', 'wp-travel-giav' ),
             'value' => (float) $pricing['price_player_double'],
         ];
     }
 
     if ( $pax_total > $players_count && null !== ( $pricing['price_non_player_double'] ?? null ) ) {
         $price_cards[] = [
-            'label' => 'Precio por acompañante',
+            'label' => __( 'Precio por acompañante', 'wp-travel-giav' ),
             'value' => (float) $pricing['price_non_player_double'],
         ];
     }
 
     if ( ! empty( $pricing['has_single_supplement'] ) ) {
         $price_cards[] = [
-            'label' => 'Suplemento individual',
+            'label' => __( 'Suplemento individual', 'wp-travel-giav' ),
             'value' => (float) $pricing['supplement_single'],
         ];
     }
@@ -1373,10 +1416,10 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
             <div class="totals-card totals-card--primary">
                 <div class="label"><?php echo esc_html( $price_cards[0]['label'] ); ?></div>
                 <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $price_cards[0]['value'], 2 ); ?></div>
-                <div class="sub">Precio por persona en habitación doble.</div>
+                <div class="sub"><?php echo esc_html__( 'Precio por persona en habitación doble.', 'wp-travel-giav' ); ?></div>
             </div>
             <div class="totals-card">
-                <div class="label">Total del viaje</div>
+                <div class="label"><?php echo esc_html__( 'Total del viaje', 'wp-travel-giav' ); ?></div>
                 <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $pricing['total_trip'], 2 ); ?></div>
                 <div class="sub">Importe total estimado para el grupo.</div>
             </div>
@@ -1384,7 +1427,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
     <?php else : ?>
         <div class="totals-grid">
             <div class="totals-card totals-card--primary">
-                <div class="label">Total viaje</div>
+                <div class="label"><?php echo esc_html__( 'Total viaje', 'wp-travel-giav' ); ?></div>
                 <div class="value"><?php echo esc_html( $currency ); ?> <?php echo number_format( $pricing['total_trip'], 2 ); ?></div>
             </div>
 
@@ -1398,7 +1441,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
     <?php endif; ?>
 
     <div class="totals-note">
-        Precios por persona. El suplemento individual aplica por persona alojada en habitación individual.
+        <?php echo esc_html__( 'Precios por persona. El suplemento individual aplica por persona alojada en habitación individual.', 'wp-travel-giav' ); ?>
     </div>
 </div>
 

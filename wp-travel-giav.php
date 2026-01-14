@@ -166,6 +166,22 @@ require_once __DIR__ . '/includes/class-proposal-viewer.php';
  */
 register_activation_hook( __FILE__, 'wp_travel_giav_activate' );
 add_action( 'plugins_loaded', 'wp_travel_giav_maybe_upgrade_schema' );
+add_action( 'plugins_loaded', 'wp_travel_giav_load_textdomain' );
+
+/**
+ * Load plugin translations.
+ *
+ * WPML can translate plugin strings via String Translation, but loading a
+ * textdomain keeps us compatible with the standard WordPress i18n pipeline
+ * (mo files, Loco Translate, etc.).
+ */
+function wp_travel_giav_load_textdomain() {
+    load_plugin_textdomain(
+        'wp-travel-giav',
+        false,
+        dirname( plugin_basename( __FILE__ ) ) . '/languages'
+    );
+}
 
 function wp_travel_giav_activate() {
 
