@@ -189,6 +189,10 @@ class WP_Travel_Proposal_Viewer {
         ];
 
         $header = wp_parse_args( $snapshot['header'] ?? [], $header_defaults );
+
+        $basics = $snapshot['basics'] ?? ( $snapshot['data']['basics'] ?? [] );
+        if ( ! is_array( $basics ) ) { $basics = []; }
+
         $totals = wp_parse_args( $snapshot['totals'] ?? [], [
             'totals_cost_net'   => 0,
             'totals_sell_price' => 0,
@@ -199,7 +203,7 @@ class WP_Travel_Proposal_Viewer {
         // Render in the proposal's client language (stored in snapshot header).
         // This is essential when WPML is active: we want the proposal language,
         // not the global site/admin language.
-        $client_locale = self::resolve_client_locale( $header );
+        $client_locale = self::resolve_client_locale( $header, $basics );
         $switched = false;
         if ( $client_locale && function_exists( 'switch_to_locale' ) ) {
             $switched = switch_to_locale( $client_locale );
@@ -230,8 +234,8 @@ class WP_Travel_Proposal_Viewer {
      * This helper keeps us future-proof: if we later store full locales ("en_US"),
      * they will work as-is.
      */
-    private static function resolve_client_locale( array $header ): string {
-        $raw = (string) ( $header['client_locale'] ?? $header['customer_locale'] ?? $header['customer_language'] ?? '' );
+    private static function resolve_client_locale( array $header, array $basics = [] ): string {
+        $raw = (string) ( $header['client_locale'] ?? $header['customer_locale'] ?? $header['customer_language'] ?? $basics['client_locale'] ?? $basics['customer_locale'] ?? $basics['customer_language'] ?? '' );
         $raw = trim( $raw );
         if ( $raw === '' ) {
             return '';
@@ -1189,7 +1193,22 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                         </ul>
                     </div>
                 <?php endif; ?>
-<?php if ( $hotel_items ) : ?>
+
+                <?php if ( $informative_room_extras ) : ?>
+                    <div class="includes-block includes-block--informative">
+                        <h3><?php echo esc_html__( 'Cotización informativa', 'wp-travel-giav' ); ?></h3>
+                        <p class="includes-block__note">
+                            <?php echo esc_html__( 'Estas opciones se muestran solo para ayudar a decidir. No están incluidas en el total salvo que se confirmen.', 'wp-travel-giav' ); ?>
+                        </p>
+                        <ul class="includes-list">
+                            <?php foreach ( $informative_room_extras as $extra_line ) : ?>
+                                <li><?php echo esc_html( $extra_line ); ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ( $hotel_items ) : ?>
                     <div class="service-group">
                         <h3><?php echo esc_html__( 'Alojamiento', 'wp-travel-giav' ); ?></h3>
                         <div class="service-group__grid">
@@ -1416,7 +1435,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
 
     if ( $players_count > 0 && null !== ( $pricing['price_player_double'] ?? null ) ) {
         $price_cards[] = [
-            'label' => __( 'Precio por jugador hab. doble', 'wp-travel-giav' ),
+            'label' => __( 'Precio por jugador', 'wp-travel-giav' ),
             'value' => (float) $pricing['price_player_double'],
         ];
     }
@@ -1434,7 +1453,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
         ];
     } elseif ( ! empty( $pricing['has_informative_single_option'] ) ) {
         $price_cards[] = [
-            'label' => __( 'Opción supl. individual (informativa)', 'wp-travel-giav' ),
+            'label' => __( 'Opción individual (informativa)', 'wp-travel-giav' ),
             'value' => (float) ( $pricing['informative_supplement_single'] ?? 0 ),
         ];
     }
@@ -1740,9 +1759,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
         $pp_base = ( 'single' === $base_room_type ) ? $pp_single : $pp_double;
         $price_non_player_double = $pp_base + $common_pp;
         $price_player_double = null;
-        if ( $players_count > 0 ) {
-            // Even if there is no golf line, we still want a per-person price for "jugadores"
-            // in hotel-only proposals. When $golf_total is 0 this simply equals $price_non_player_double.
+        if ( $players_count > 0 && $golf_total > 0 ) {
             $price_player_double = $price_non_player_double + ( $golf_total / $players_count );
         }
 
@@ -2094,7 +2111,15 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
         if ( ! $timestamp ) {
             return $date;
         }
-        return wp_date( 'j \\d\\e F \\d\\e Y', $timestamp );
+                $locale = function_exists( 'determine_locale' ) ? determine_locale() : get_locale();
+        $locale = (string) $locale;
+        $fmt = 'j F Y';
+        if ( stripos( $locale, 'es' ) === 0 ) {
+            $fmt = 'j \\d\\e F \\d\\e Y';
+        } elseif ( stripos( $locale, 'en' ) === 0 ) {
+            $fmt = 'F j, Y';
+        }
+        return wp_date( $fmt, $timestamp );
     }
 
     private static function render_error( $message, array $details = [], $status = 500 ) {
