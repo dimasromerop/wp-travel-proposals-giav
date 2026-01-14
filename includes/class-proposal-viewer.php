@@ -385,7 +385,7 @@ class WP_Travel_Proposal_Viewer {
             $hotel_double_total += (float) ( $room_pricing['double']['total_pvp'] ?? 0 );
             $hotel_single_total += (float) ( $room_pricing['single']['total_pvp'] ?? 0 );
 
-            $informative_quote = ! empty( $hotel_item['hotel_informative_quote'] );
+            $informative_quote = self::is_informative_hotel_item( $hotel_item );
             if ( $informative_quote ) {
                 if ( $double_info['needed'] > 0 ) {
                     $includes_hotel[] = self::format_room_label( 'double', $double_info['needed'] );
@@ -1251,7 +1251,7 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                                         <?php endif; ?>
 
                                         <?php
-                                        $informative_quote = ! empty( $item['hotel_informative_quote'] );
+                                        $informative_quote = self::is_informative_hotel_item( $item );
                                         $allocation = self::evaluate_hotel_room_allocation( $room_pricing, $pax_total );
 
                                         $double_rooms = $informative_quote
@@ -1442,11 +1442,23 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
             'value' => (float) $pricing['price_non_player_double'],
         ];
     }
-
     if ( ! empty( $pricing['has_single_supplement'] ) ) {
         $price_cards[] = [
             'label' => __( 'Suplemento individual', 'wp-travel-giav' ),
             'value' => (float) $pricing['supplement_single'],
+        ];
+    } elseif ( ! empty( $pricing['has_informative_single_option'] ) ) {
+        $price_cards[] = [
+            'label' => __( 'Opción individual (informativa)', 'wp-travel-giav' ),
+            'value' => (float) ( $pricing['informative_supplement_single'] ?? 0 ),
+        ];
+    }
+
+    
+    if ( empty( $price_cards ) && $pax_total > 0 ) {
+        $price_cards[] = [
+            'label' => __( 'Precio por persona', 'wp-travel-giav' ),
+            'value' => (float) ( $pricing['total_trip'] / $pax_total ),
         ];
     }
 
@@ -1486,6 +1498,8 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
         <?php
         if ( ! empty( $pricing['has_single_supplement'] ) ) {
             echo esc_html__( 'Precios por persona. El suplemento individual aplica por persona alojada en habitación individual.', 'wp-travel-giav' );
+        } elseif ( ! empty( $pricing['has_informative_single_option'] ) ) {
+            echo esc_html__( 'Precios por persona. La opción individual es una cotización informativa y no está incluida en el total salvo confirmación.', 'wp-travel-giav' );
         } else {
             echo esc_html( ( ! empty( $pricing['base_room_type'] ) && 'single' === $pricing['base_room_type'] ) ? __( 'Precios por persona en habitación individual.', 'wp-travel-giav' ) : __( 'Precios por persona en habitación doble.', 'wp-travel-giav' ) );
         }
@@ -1662,18 +1676,53 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                 $room_pricing = isset( $item['room_pricing'] ) && is_array( $item['room_pricing'] )
                     ? $item['room_pricing']
                     : [];
-                if ( ! empty( $room_pricing['double']['enabled'] ) ) {
-                    $double_rooms += absint( $room_pricing['double']['rooms'] ?? 0 );
-                    $total_double += (float) ( $room_pricing['double']['total_pvp'] ?? 0 );
-                }
-                if ( ! empty( $room_pricing['single']['enabled'] ) ) {
-                    $single_rooms += absint( $room_pricing['single']['rooms'] ?? 0 );
-                    $total_single += (float) ( $room_pricing['single']['total_pvp'] ?? 0 );
+
+                $informative_quote = self::is_informative_hotel_item( $item );
+                if ( $informative_quote ) {
+                    $allocation = self::evaluate_hotel_room_allocation( $room_pricing, $pax_total );
+
+                    // Include only the rooms needed to accommodate pax. Extra rooms are treated as informative options.
+                    if ( ! empty( $room_pricing['double']['enabled'] ) ) {
+                        $needed = absint( $allocation['types']['double']['needed'] ?? 0 );
+                        $extra  = absint( $allocation['types']['double']['extra'] ?? 0 );
+                        $per_room = (float) ( $allocation['types']['double']['per_room_price'] ?? 0 );
+                        $double_rooms += $needed;
+                        $total_double += $per_room * $needed;
+                        $option_double_rooms = ( $option_double_rooms ?? 0 ) + $extra;
+                        $option_double_total = ( $option_double_total ?? 0.0 ) + ( $per_room * $extra );
+                    }
+
+                    if ( ! empty( $room_pricing['single']['enabled'] ) ) {
+                        $needed = absint( $allocation['types']['single']['needed'] ?? 0 );
+                        $extra  = absint( $allocation['types']['single']['extra'] ?? 0 );
+                        $per_room = (float) ( $allocation['types']['single']['per_room_price'] ?? 0 );
+                        $single_rooms += $needed;
+                        $total_single += $per_room * $needed;
+                        $option_single_rooms = ( $option_single_rooms ?? 0 ) + $extra;
+                        $option_single_total = ( $option_single_total ?? 0.0 ) + ( $per_room * $extra );
+                    }
+                } else {
+                    if ( ! empty( $room_pricing['double']['enabled'] ) ) {
+                        $double_rooms += absint( $room_pricing['double']['rooms'] ?? 0 );
+                        $total_double += (float) ( $room_pricing['double']['total_pvp'] ?? 0 );
+                    }
+                    if ( ! empty( $room_pricing['single']['enabled'] ) ) {
+                        $single_rooms += absint( $room_pricing['single']['rooms'] ?? 0 );
+                        $total_single += (float) ( $room_pricing['single']['total_pvp'] ?? 0 );
+                    }
                 }
             }
         }
 
-        $total_trip = isset( $totals['totals_sell_price'] ) ? (float) $totals['totals_sell_price'] : 0.0;
+        $option_double_total = isset( $option_double_total ) ? (float) $option_double_total : 0.0;
+        $option_single_total = isset( $option_single_total ) ? (float) $option_single_total : 0.0;
+        $option_double_rooms = isset( $option_double_rooms ) ? absint( $option_double_rooms ) : 0;
+        $option_single_rooms = isset( $option_single_rooms ) ? absint( $option_single_rooms ) : 0;
+
+        $total_trip_raw = isset( $totals['totals_sell_price'] ) ? (float) $totals['totals_sell_price'] : 0.0;
+        // Display totals excluding informative (extra) rooms.
+        $total_trip = max( 0.0, $total_trip_raw - $option_double_total - $option_single_total );
+
 
         // Compute per-person hotel prices using capacities
         $pax_double_cap = $double_rooms * 2;
@@ -1686,6 +1735,15 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
         $supplement_single = null;
         if ( $has_single_supplement ) {
             $supplement_single = max( 0, $pp_single - $pp_double );
+        }
+
+        $has_informative_single_option = false;
+        $informative_supplement_single = null;
+        if ( ! $has_single_supplement && $pax_double_cap > 0 && $option_single_rooms > 0 ) {
+            // Informative option: extra single rooms were quoted in addition to the base accommodation.
+            $pp_option_single = ( $option_single_rooms > 0 ) ? ( $option_single_total / $option_single_rooms ) : 0.0;
+            $informative_supplement_single = max( 0, $pp_option_single - $pp_double );
+            $has_informative_single_option = true;
         }
 
         // common_total = total_trip - hotel_double - hotel_single - golf_total
@@ -1712,11 +1770,34 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
             'base_room_type'         => $base_room_type,
             'has_single_supplement'    => $has_single_supplement,
             'supplement_single'        => $supplement_single,
+            'has_informative_single_option' => $has_informative_single_option,
+            'informative_supplement_single' => $informative_supplement_single,
+            'option_single_rooms'        => $option_single_rooms,
+            'option_single_total'        => $option_single_total,
             'pp_double'                => $pp_double,
             'pp_single'                => $pp_single,
             'pax_double_cap'           => $pax_double_cap,
             'pax_single_cap'           => $pax_single_cap,
         ];
+    }
+
+    private static function is_informative_hotel_item( array $item ) : bool {
+        // Backward/forward compatible flags for informative hotel quotes.
+        // We consider the canonical key hotel_informative_quote and a few fallbacks
+        // in case older snapshots or UI changes used different names.
+        $candidates = [
+            'hotel_informative_quote',
+            'informative_quote',
+            'quote_informative',
+            'cotizacion_informativa',
+            'allow_extra_rooms',
+        ];
+        foreach ( $candidates as $key ) {
+            if ( array_key_exists( $key, $item ) && ! empty( $item[ $key ] ) ) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static function evaluate_hotel_room_allocation( array $room_pricing, int $pax_total ) : array {
