@@ -349,6 +349,7 @@ class WP_Travel_Proposal_Viewer {
         $includes_regimens = [];
         $hotel_double_total = 0;
         $hotel_single_total = 0;
+        $informative_room_extras = [];
         $regimen_labels = [
             'AD' => __( 'Alojamiento y Desayuno', 'wp-travel-giav' ),
             'SA' => __( 'Solo Alojamiento', 'wp-travel-giav' ),
@@ -377,27 +378,46 @@ class WP_Travel_Proposal_Viewer {
             $room_pricing = isset( $hotel_item['room_pricing'] ) && is_array( $hotel_item['room_pricing'] )
                 ? $hotel_item['room_pricing']
                 : [];
-            $double_enabled = ! empty( $room_pricing['double']['enabled'] );
-            $single_enabled = ! empty( $room_pricing['single']['enabled'] );
+            $allocation = self::evaluate_hotel_room_allocation( $room_pricing, $pax_total );
+            $double_info = $allocation['types']['double'];
+            $single_info = $allocation['types']['single'];
 
-            if ( $double_enabled ) {
-                $double_rooms = absint( $room_pricing['double']['rooms'] ?? 0 );
-                $double_total = (float) ( $room_pricing['double']['total_pvp'] ?? 0 );
-                $hotel_double_total += $double_total;
-                $label = $double_rooms > 0
-                    ? sprintf( 'Habitaciones dobles (%d hab.)', $double_rooms )
-                    : 'Habitaciones dobles';
-                $includes_hotel[] = $label;
-            }
+            $hotel_double_total += (float) ( $room_pricing['double']['total_pvp'] ?? 0 );
+            $hotel_single_total += (float) ( $room_pricing['single']['total_pvp'] ?? 0 );
 
-            if ( $single_enabled ) {
-                $single_rooms = absint( $room_pricing['single']['rooms'] ?? 0 );
-                $single_total = (float) ( $room_pricing['single']['total_pvp'] ?? 0 );
-                $hotel_single_total += $single_total;
-                $label = $single_rooms > 0
-                    ? sprintf( 'Habitaciones individuales (%d hab.)', $single_rooms )
-                    : 'Habitaciones individuales';
-                $includes_hotel[] = $label;
+            $informative_quote = ! empty( $hotel_item['hotel_informative_quote'] );
+            if ( $informative_quote ) {
+                if ( $double_info['needed'] > 0 ) {
+                    $includes_hotel[] = self::format_room_label( 'double', $double_info['needed'] );
+                }
+                if ( $single_info['needed'] > 0 ) {
+                    $includes_hotel[] = self::format_room_label( 'single', $single_info['needed'] );
+                }
+                if ( $allocation['has_extra'] ) {
+                    if ( $double_info['extra'] > 0 ) {
+                        $informative_room_extras[] = self::build_informative_extra_line(
+                            $hotel_name,
+                            self::format_room_label( 'double', $double_info['extra'], true ),
+                            $double_info['per_room_price'],
+                            $currency_label
+                        );
+                    }
+                    if ( $single_info['extra'] > 0 ) {
+                        $informative_room_extras[] = self::build_informative_extra_line(
+                            $hotel_name,
+                            self::format_room_label( 'single', $single_info['extra'], true ),
+                            $single_info['per_room_price'],
+                            $currency_label
+                        );
+                    }
+                }
+            } else {
+                if ( $double_info['rooms'] > 0 ) {
+                    $includes_hotel[] = self::format_room_label( 'double', $double_info['rooms'] );
+                }
+                if ( $single_info['rooms'] > 0 ) {
+                    $includes_hotel[] = self::format_room_label( 'single', $single_info['rooms'] );
+                }
             }
 
             $regimen = trim( (string) ( $hotel_item['hotel_regimen'] ?? '' ) );
@@ -1170,6 +1190,20 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                     </div>
                 <?php endif; ?>
 
+                <?php if ( $informative_room_extras ) : ?>
+                    <div class="includes-block includes-block--informative">
+                        <h3><?php echo esc_html__( 'Cotización informativa', 'wp-travel-giav' ); ?></h3>
+                        <p class="includes-block__note">
+                            <?php echo esc_html__( 'Estas opciones se muestran solo para ayudar a decidir. No están incluidas en el total salvo que se confirmen.', 'wp-travel-giav' ); ?>
+                        </p>
+                        <ul class="includes-list">
+                            <?php foreach ( $informative_room_extras as $extra_line ) : ?>
+                                <li><?php echo esc_html( $extra_line ); ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                <?php endif; ?>
+
                 <?php if ( $hotel_items ) : ?>
                     <div class="service-group">
                         <h3><?php echo esc_html__( 'Alojamiento', 'wp-travel-giav' ); ?></h3>
@@ -1675,6 +1709,89 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
             'pax_double_cap'           => $pax_double_cap,
             'pax_single_cap'           => $pax_single_cap,
         ];
+    }
+
+    private static function evaluate_hotel_room_allocation( array $room_pricing, int $pax_total ) : array {
+        $remaining_pax = max( 0, $pax_total );
+        $order = [
+            'double' => 2,
+            'single' => 1,
+        ];
+
+        $allocation = [
+            'types'     => [],
+            'has_extra' => false,
+        ];
+
+        foreach ( $order as $mode => $capacity ) {
+            $mode_pricing = isset( $room_pricing[ $mode ] ) && is_array( $room_pricing[ $mode ] )
+                ? $room_pricing[ $mode ]
+                : [];
+            $enabled = ! empty( $mode_pricing['enabled'] );
+            $rooms = $enabled ? absint( $mode_pricing['rooms'] ?? 0 ) : 0;
+            $total_pvp = (float) ( $mode_pricing['total_pvp'] ?? 0 );
+            $per_room_price = $rooms > 0 ? ( $total_pvp / $rooms ) : 0.0;
+
+            $needed = 0;
+            $extra = 0;
+            for ( $i = 0; $i < $rooms; $i++ ) {
+                if ( $remaining_pax > 0 ) {
+                    $needed++;
+                    $remaining_pax -= $capacity;
+                } else {
+                    $extra++;
+                }
+            }
+
+            if ( $extra > 0 ) {
+                $allocation['has_extra'] = true;
+            }
+
+            $allocation['types'][ $mode ] = [
+                'enabled'        => $enabled,
+                'rooms'          => $rooms,
+                'needed'         => $needed,
+                'extra'          => $extra,
+                'capacity'       => $capacity,
+                'per_room_price' => $per_room_price,
+                'total_pvp'      => $total_pvp,
+            ];
+        }
+
+        return $allocation;
+    }
+
+    private static function format_room_label( string $type, int $count, bool $extra = false ) : string {
+        $base = $type === 'single'
+            ? __( 'Habitaciones individuales', 'wp-travel-giav' )
+            : __( 'Habitaciones dobles', 'wp-travel-giav' );
+        if ( $extra ) {
+            $base .= ' ' . __( 'adicionales', 'wp-travel-giav' );
+        }
+        if ( $count > 0 ) {
+            return sprintf( '%s (%d hab.)', $base, $count );
+        }
+        return $base;
+    }
+
+    private static function format_currency_value( float $amount, string $currency ) : string {
+        $currency_label = $currency !== '' ? $currency : 'EUR';
+        return sprintf( '%s %s', $currency_label, number_format( $amount, 2 ) );
+    }
+
+    private static function build_informative_extra_line( string $hotel_name, string $label, float $per_room_price, string $currency ) : string {
+        $line = $label;
+        if ( $per_room_price > 0 ) {
+            $line .= sprintf(
+                ' — %s: %s',
+                __( 'Precio estimado por habitación', 'wp-travel-giav' ),
+                self::format_currency_value( $per_room_price, $currency )
+            );
+        }
+        if ( $hotel_name !== '' ) {
+            $line = sprintf( '%s: %s', $hotel_name, $line );
+        }
+        return $line;
     }
 
     private static function render_pending_confirmation_view(

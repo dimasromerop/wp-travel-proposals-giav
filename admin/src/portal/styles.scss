@@ -1150,6 +1150,46 @@
   margin-bottom: 8px;
 }
 
+.proposal-preview__includes-lines {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--casanova-muted);
+  margin-bottom: 8px;
+}
+
+.proposal-preview__includes-line {
+  padding-left: 4px;
+}
+
+.proposal-preview__informative-block {
+  border-top: 1px dashed var(--casanova-border);
+  padding-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.proposal-preview__informative-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--casanova-green);
+}
+
+.proposal-preview__informative-note {
+  font-size: 11px;
+  color: var(--casanova-muted);
+}
+
+.proposal-preview__informative-lines {
+  display: grid;
+  gap: 4px;
+}
+
+.proposal-preview__informative-line {
+  font-size: 12px;
+  color: var(--casanova-ink);
+}
+
 .preview-items {
   display: grid;
   gap: 12px;

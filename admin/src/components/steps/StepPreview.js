@@ -19,6 +19,78 @@ function toInt(v, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+const ROOM_ALLOCATION_ORDER = [
+  { key: 'double', capacity: 2 },
+  { key: 'single', capacity: 1 },
+];
+
+function buildRoomAllocation(roomPricing = {}, paxTotal = 0) {
+  let remaining = Math.max(0, paxTotal);
+  const allocation = {
+    types: {},
+    hasExtra: false,
+  };
+
+  ROOM_ALLOCATION_ORDER.forEach(({ key, capacity }) => {
+    const modeData = roomPricing[key] || {};
+    const enabled = Boolean(modeData.enabled);
+    const rooms = enabled ? Math.max(0, toInt(modeData.rooms ?? 0, 0)) : 0;
+    const totalPvp = toNumber(modeData.total_pvp ?? 0);
+    const perRoomPrice = rooms > 0 ? totalPvp / rooms : 0;
+    let needed = 0;
+    let extra = 0;
+
+    for (let i = 0; i < rooms; i += 1) {
+      if (remaining > 0) {
+        needed += 1;
+        remaining -= capacity;
+      } else {
+        extra += 1;
+      }
+    }
+
+    if (extra > 0) {
+      allocation.hasExtra = true;
+    }
+
+    allocation.types[key] = {
+      rooms,
+      needed,
+      extra,
+      capacity,
+      perRoomPrice,
+      totalPvp,
+    };
+  });
+
+  return allocation;
+}
+
+function formatRoomLabel(type, count, extra = false) {
+  const base = type === 'single' ? 'Habitaciones individuales' : 'Habitaciones dobles';
+  const text = extra ? `${base} adicionales` : base;
+  if (count > 0) {
+    return `${text} (${count} hab.)`;
+  }
+  return text;
+}
+
+function formatPreviewPrice(value, currency) {
+  const code = currency || 'EUR';
+  return `${code} ${round2(value).toFixed(2)}`;
+}
+
+function buildInformativeExtraLine(hotelName, label, perRoomPrice, currency) {
+  let line = label;
+  if (perRoomPrice > 0) {
+    line += ` — Precio estimado por habitación: ${formatPreviewPrice(perRoomPrice, currency)}`;
+  }
+  if (hotelName) {
+    line = `${hotelName}: ${line}`;
+  }
+  return line;
+}
+
 export default function StepPreview({
   proposalId,
   basics,
@@ -258,6 +330,75 @@ export default function StepPreview({
       hasSingleSupplement,
     };
   }, [snapshotHeader?.pax_total, snapshotHeader?.players_count, snapshotItems, snapshotTotals?.totals_sell_price]);
+  const { includeRoomLines, informativeExtras } = useMemo(() => {
+    const includeLines = [];
+    const extras = [];
+    const paxTotal = Math.max(0, pricingSummary.paxTotal);
+    const currency = snapshotHeader.currency || 'EUR';
+
+    snapshotItems.forEach((item, idx) => {
+      if (item.service_type !== 'hotel') {
+        return;
+      }
+      const hotelLabel = item.display_name || item.title || 'Alojamiento';
+      const allocation = buildRoomAllocation(item.room_pricing || {}, paxTotal);
+      const doubleInfo = allocation.types.double || { needed: 0, extra: 0, rooms: 0, perRoomPrice: 0 };
+      const singleInfo = allocation.types.single || { needed: 0, extra: 0, rooms: 0, perRoomPrice: 0 };
+      const informativeQuote = !!item.hotel_informative_quote;
+
+      const pushIncludeLine = (suffix, text) => {
+        includeLines.push({
+          key: `${idx}-${suffix}`,
+          text: hotelLabel ? `${hotelLabel} · ${text}` : text,
+        });
+      };
+
+      if (informativeQuote) {
+        if (doubleInfo.needed > 0) {
+          pushIncludeLine('double-needed', formatRoomLabel('double', doubleInfo.needed));
+        }
+        if (singleInfo.needed > 0) {
+          pushIncludeLine('single-needed', formatRoomLabel('single', singleInfo.needed));
+        }
+        if (allocation.hasExtra) {
+          if (doubleInfo.extra > 0) {
+            extras.push({
+              key: `${idx}-double-extra`,
+              text: buildInformativeExtraLine(
+                hotelLabel,
+                formatRoomLabel('double', doubleInfo.extra, true),
+                doubleInfo.perRoomPrice,
+                currency
+              ),
+            });
+          }
+          if (singleInfo.extra > 0) {
+            extras.push({
+              key: `${idx}-single-extra`,
+              text: buildInformativeExtraLine(
+                hotelLabel,
+                formatRoomLabel('single', singleInfo.extra, true),
+                singleInfo.perRoomPrice,
+                currency
+              ),
+            });
+          }
+        }
+      } else {
+        if (doubleInfo.rooms > 0) {
+          pushIncludeLine('double-total', formatRoomLabel('double', doubleInfo.rooms));
+        }
+        if (singleInfo.rooms > 0) {
+          pushIncludeLine('single-total', formatRoomLabel('single', singleInfo.rooms));
+        }
+      }
+    });
+
+    return {
+      includeRoomLines: includeLines,
+      informativeExtras: extras,
+    };
+  }, [snapshotItems, pricingSummary.paxTotal, snapshotHeader.currency]);
   const hasEmail = Boolean(snapshotHeader.customer_email);
   // UX: "Enviar" aquí no envía emails, solo publica/crea versión y marca como enviada.
   // Así que lo llamamos "Compartir".
@@ -419,6 +560,15 @@ export default function StepPreview({
 
           <div className="proposal-preview__includes">
             <div className="proposal-preview__includes-title">Incluye</div>
+            {includeRoomLines.length > 0 && (
+              <div className="proposal-preview__includes-lines">
+                {includeRoomLines.map((line) => (
+                  <div key={line.key} className="proposal-preview__includes-line">
+                    {line.text}
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="preview-items">
               {snapshotItems.map((it, idx) => {
                 const warnings = Array.isArray(it?.warnings) ? it.warnings : [];
@@ -477,11 +627,28 @@ export default function StepPreview({
                           </ul>
                         </details>
                       )}
-                    </div>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
+          </div>
+            {informativeExtras.length > 0 && (
+              <div className="proposal-preview__informative-block">
+                <div className="proposal-preview__informative-title">
+                  Cotización informativa
+                </div>
+                <div className="proposal-preview__informative-note">
+                  Estas opciones se muestran solo para ayudar a decidir. No están incluidas en el total salvo que se confirmen.
+                </div>
+                <div className="proposal-preview__informative-lines">
+                  {informativeExtras.map((line) => (
+                    <div key={line.key} className="proposal-preview__informative-line">
+                      {line.text}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="proposal-preview__totals">
