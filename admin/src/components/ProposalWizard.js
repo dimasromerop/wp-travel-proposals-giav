@@ -1,9 +1,10 @@
-import { useMemo, useState } from '@wordpress/element';
+import { useEffect, useMemo, useState } from '@wordpress/element';
 import { Notice, Button, Card, CardBody, CardHeader } from '@wordpress/components';
 import StepBasics from './steps/StepBasics';
 import StepServices, { syncServiceDatesFromBasics } from './steps/StepServices';
 import StepPreview from './steps/StepPreview';
 import { buildCustomerFullName, splitCustomerFullName } from '../utils/customer';
+import { setStoredProposalId, clearStoredProposalId } from '../utils/proposal';
 
 const STATUS_LABELS = {
   draft: 'Borrador',
@@ -178,6 +179,16 @@ export default function ProposalWizard({
   const [snapshot, setSnapshot] = useState(null);
   const [versionId, setVersionId] = useState(null);
 
+  useEffect(() => {
+    setStoredProposalId(proposalId);
+  }, [proposalId]);
+
+  useEffect(() => {
+    return () => {
+      clearStoredProposalId();
+    };
+  }, []);
+
   let content = null;
 
   if (step === 1) {
@@ -242,6 +253,14 @@ export default function ProposalWizard({
             setProposalStatus(status);
           }
           setStep(4);
+        }}
+        onProposalCreated={({ proposalId: id, basics: latestBasics }) => {
+          if (id && Number.isFinite(id)) {
+            setProposalId(id);
+          }
+          if (latestBasics) {
+            setBasics(latestBasics);
+          }
         }}
       />
     );

@@ -537,6 +537,19 @@ function wp_travel_giav_build_giav_hotel_fields( array $proposal, array $snapsho
         $single_rooms = (int) $room_pricing['single']['rooms'];
     }
 
+// Fallback: some snapshots store hotel_rooms + pax_total without room_pricing.
+if ( $double_rooms === 0 && $single_rooms === 0 ) {
+    $maybe_rooms = $snapshot_item['hotel_rooms'] ?? $item['hotel_rooms'] ?? null;
+    if ( is_numeric( $maybe_rooms ) ) {
+        $maybe_rooms = (int) $maybe_rooms;
+        if ( $maybe_rooms > 0 ) {
+            // Assume doubles by default.
+            $double_rooms = $maybe_rooms;
+        }
+    }
+}
+
+
     $informative = false;
     foreach ( [ 'hotel_informative_quote', 'informative_quote', 'quote_informative', 'cotizacion_informativa', 'allow_extra_rooms' ] as $k ) {
         if ( ! empty( $snapshot_item[ $k ] ) ) { $informative = true; break; }
@@ -564,10 +577,10 @@ function wp_travel_giav_build_giav_hotel_fields( array $proposal, array $snapsho
         $computed_pax = $pax_total;
     }
 
-    $meal_label = $snapshot_item['meal_plan_label'] ?? $snapshot_item['meal_plan'] ?? $item['meal_plan_label'] ?? $item['meal_plan'] ?? null;
+    $meal_label = $snapshot_item['hotel_regimen'] ?? $item['hotel_regimen'] ?? $snapshot_item['meal_plan_label'] ?? $snapshot_item['meal_plan'] ?? $item['meal_plan_label'] ?? $item['meal_plan'] ?? null;
     $regimen = wp_travel_giav_map_regimen_label_to_code( is_string( $meal_label ) ? $meal_label : null );
 
-    $room_type = $snapshot_item['room_type_label'] ?? $snapshot_item['room_type'] ?? $item['room_type_label'] ?? $item['room_type'] ?? '';
+    $room_type = $snapshot_item['hotel_room_type'] ?? $item['hotel_room_type'] ?? $snapshot_item['room_type_label'] ?? $snapshot_item['room_type'] ?? $item['room_type_label'] ?? $item['room_type'] ?? '';
     $room_type = trim( (string) $room_type );
 
     $rooming_lines = [];

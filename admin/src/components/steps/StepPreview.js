@@ -2,6 +2,7 @@ import { useMemo, useState } from '@wordpress/element';
 import { Button, Card, CardBody, CardHeader, Notice, Spinner } from '@wordpress/components';
 import API from '../../api';
 import { buildCustomerFullName } from '../../utils/customer';
+import { getStoredProposalId } from '../../utils/proposal';
 
 function round2(n) {
   const x = parseFloat(n);
@@ -98,6 +99,7 @@ export default function StepPreview({
   totals,
   onBack,
   onSent,
+  onProposalCreated,
   mode = 'create',
   versionNumber = 1,
 }) {
@@ -437,6 +439,53 @@ export default function StepPreview({
     if (pid) return pid;
     const fromUrl = getProposalIdFromUrl();
     if (fromUrl) return fromUrl;
+    const fromStorage = getStoredProposalId();
+    if (fromStorage) return fromStorage;
+    return null;
+  };
+
+  const normalizeLanguageCode = (value) => {
+    const raw = String(value || 'es').trim();
+    if (!raw) return 'es';
+    const base = raw.split(/[-_]/)[0] || raw;
+    if (!base) return 'es';
+    return base.slice(0, 2);
+  };
+
+  const buildProposalPayload = () => {
+    const computedCustomerName = buildCustomerFullName(
+      basics.first_name,
+      basics.last_name,
+      basics.customer_name
+    );
+
+    return {
+      ...basics,
+      customer_name: computedCustomerName,
+      customer_language: normalizeLanguageCode(basics.customer_language),
+      pax_total: Math.max(1, toInt(basics.pax_total ?? 1, 1)),
+      players_count: Math.max(0, toInt(basics.players_count ?? 0, 0)),
+      customer_country: basics.customer_country ? String(basics.customer_country).toUpperCase() : '',
+    };
+  };
+
+  const ensureProposalId = async () => {
+    const resolved = resolveProposalId();
+    if (resolved && Number.isFinite(resolved) && resolved > 0) {
+      return resolved;
+    }
+
+    if (!basics) {
+      return null;
+    }
+
+    const payload = buildProposalPayload();
+    const created = await API.createProposal(payload);
+    const newId = Number(created?.proposal_id || 0);
+    if (newId > 0) {
+      onProposalCreated?.({ proposalId: newId, basics: payload });
+      return newId;
+    }
     return null;
   };
 
@@ -459,7 +508,7 @@ export default function StepPreview({
     setLoading(true);
     setError('');
 
-    const resolvedProposalId = resolveProposalId();
+    const resolvedProposalId = await ensureProposalId();
 
     // Dev-only debug logging
     try {
@@ -495,7 +544,7 @@ export default function StepPreview({
     setLoading(true);
     setError('');
 
-    const resolvedProposalId = resolveProposalId();
+    const resolvedProposalId = await ensureProposalId();
     if (!resolvedProposalId || Number(resolvedProposalId) <= 0) {
       setLoading(false);
       setError('No se pudo compartir: falta el identificador de propuesta válido (proposalId).');
@@ -695,20 +744,27 @@ export default function StepPreview({
             </Button>
           )}
 
-          {mode === 'edit' ? (
-            <>
+        {mode === 'edit' ? (
+          <>
+            <Button variant="secondary" onClick={runCreateVersion} disabled={loading}>
+              Guardar nueva versión
+            </Button>
+            <Button variant="primary" onClick={runShare} disabled={loading}>
+              Compartir propuesta
+            </Button>
+          </>
+        ) : (
+          <>
+            {hasEmail && (
               <Button variant="secondary" onClick={runCreateVersion} disabled={loading}>
-                Guardar nueva versión
+                Guardar borrador
               </Button>
-              <Button variant="primary" onClick={runShare} disabled={loading}>
-                Compartir propuesta
-              </Button>
-            </>
-          ) : (
+            )}
             <Button variant="primary" onClick={hasEmail ? runShare : runCreateVersion} disabled={loading}>
               {primaryLabel}
             </Button>
-          )}
+          </>
+        )}
 
           {loading && <Spinner />}
         </div>
