@@ -74,6 +74,19 @@ export const fetchJSON = async (endpoint, options = {}) => {
   return handleResponse(response);
 };
 
+// Dashboard
+// NOTE: We intentionally use fetchJSON() (not wp apiFetch) to avoid malformed paths when a full URL is passed.
+// apiFetch expects a relative `path` (e.g. `/travel/v1/...`) and will prepend `wpApiSettings.root`.
+export const getDashboard = async ({ year, force } = {}) => {
+  const y = year || new Date().getFullYear();
+  const search = new URLSearchParams();
+  search.set('year', String(y));
+  if (force) {
+    search.set('force', '1');
+  }
+  return fetchJSON(`dashboard?${search.toString()}`);
+};
+
 export const acceptProposal = async (proposalId, versionId) => {
   if (!proposalId) {
     return Promise.reject(new Error('ID de propuesta inválido'));

@@ -4,6 +4,7 @@ import ProposalDetail from './pages/ProposalDetail';
 import ProposalWizardPage from './pages/ProposalWizardPage';
 import RequestsList from './pages/RequestsList';
 import RequestDetail from './pages/RequestDetail';
+import Dashboard from './pages/Dashboard';
 
 const PortalLayout = ( { children, config } ) => (
   <div className="casanova-portal">
@@ -41,6 +42,16 @@ const PortalLayout = ( { children, config } ) => (
           </div>
         </div>
         <nav className="casanova-portal__nav">
+          <NavLink
+            to="/dashboard"
+            className={ ( { isActive } ) =>
+              `casanova-portal__nav-link ${
+                isActive ? 'casanova-portal__nav-link--active' : ''
+              }`
+            }
+          >
+            Dashboard
+          </NavLink>
           <NavLink
             to="/proposals"
             className={ ( { isActive } ) =>
@@ -92,6 +103,7 @@ const App = () => {
       <PortalLayout config={config}>
           <Routes>
             <Route path="/" element={ <Navigate to="/proposals" replace /> } />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/proposals" element={<ProposalsList />} />
             <Route path="/requests" element={<RequestsList />} />
             <Route path="/requests/:requestId" element={<RequestDetail />} />

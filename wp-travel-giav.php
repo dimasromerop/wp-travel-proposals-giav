@@ -147,6 +147,7 @@ require_once __DIR__ . '/includes/helpers/class-giav-snapshot-resolver.php';
 require_once __DIR__ . '/includes/helpers/class-giav-preflight.php';
 require_once __DIR__ . '/includes/helpers/class-proposal-notifications.php';
 require_once __DIR__ . '/includes/helpers/class-giav-proposal-sync.php';
+require_once __DIR__ . '/includes/helpers/class-giav-dashboard-service.php';
 require_once __DIR__ . '/includes/integrations/class-giav-soap-client.php';
 require_once __DIR__ . '/includes/helpers/class-db-migrator.php';
 require_once __DIR__ . '/includes/helpers/class-gf-requests.php';
@@ -696,12 +697,14 @@ function wp_travel_giav_register_api() {
     require_once __DIR__ . '/includes/api/class-items-controller.php';
     require_once __DIR__ . '/includes/api/class-actions-controller.php';
     require_once __DIR__ . '/includes/api/class-requests-controller.php';
+    require_once __DIR__ . '/includes/api/class-dashboard-controller.php';
 
     ( new WP_Travel_Proposals_Controller() )->register_routes();
     ( new WP_Travel_Proposal_Versions_Controller() )->register_routes();
     ( new WP_Travel_Proposal_Items_Controller() )->register_routes();
     ( new WP_Travel_Proposal_Actions_Controller() )->register_routes();
     ( new WP_Travel_Requests_Controller() )->register_routes();
+    ( new WP_Travel_GIAV_Dashboard_Controller() )->register_routes();
 
     // DB health endpoint (public read)
     register_rest_route( 'travel/v1', '/health/db', [
@@ -764,6 +767,15 @@ function wp_travel_giav_admin_menu() {
         26
     );
 
+    add_submenu_page(
+        'travel_proposals',
+        'Dashboard',
+        'Dashboard',
+        WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESERVAS,
+        'wp-travel-giav-dashboard',
+        'wp_travel_giav_render_dashboard'
+    );
+
     // WP ⇄ GIAV mapping admin (uses same React app container)
     add_submenu_page(
         'travel_proposals',
@@ -800,6 +812,22 @@ function wp_travel_giav_admin_menu() {
         'travel_proposals_settings',
         'wp_travel_giav_render_settings'
     );
+}
+
+function wp_travel_giav_render_dashboard() {
+    if ( ! wp_travel_giav_can_manage_proposals() ) {
+        wp_die( 'No tienes permisos suficientes para ver esta página.' );
+    }
+
+    $year = (int) ( $_GET['year'] ?? gmdate( 'Y' ) );
+    if ( $year < 2000 || $year > ( (int) gmdate( 'Y' ) + 2 ) ) {
+        $year = (int) gmdate( 'Y' );
+    }
+
+    echo '<div class="wrap wp-travel-giav-dashboard">';
+    echo '<h1>Dashboard</h1>';
+    echo '<div id="wp-travel-giav-dashboard" data-year="' . esc_attr( $year ) . '"></div>';
+    echo '</div>';
 }
 
 function wp_travel_giav_render_app() {
@@ -933,6 +961,41 @@ function wp_travel_giav_admin_assets( $hook ) {
               'requestStatuses' => WP_TRAVEL_GIAV_REQUEST_STATUSES,
         ]
     );
+
+    // Lightweight admin dashboard (server rendered container + vanilla JS).
+    if ( $page === 'wp-travel-giav-dashboard' ) {
+        if ( ! wp_style_is( 'wp-travel-giav-admin-style', 'enqueued' ) ) {
+            // Ensure there's a handle to attach inline CSS.
+            wp_register_style( 'wp-travel-giav-admin-style', false, [ 'wp-components' ], WP_TRAVEL_GIAV_VERSION );
+            wp_enqueue_style( 'wp-travel-giav-admin-style' );
+        }
+        wp_add_inline_style(
+            'wp-travel-giav-admin-style',
+            '.wp-travel-giav-dashboard .giav-dash-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;margin-top:16px}
+             .wp-travel-giav-dashboard .giav-card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+             .wp-travel-giav-dashboard .giav-card h3{margin:0 0 6px;font-size:13px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+             .wp-travel-giav-dashboard .giav-card .value{font-size:24px;font-weight:700;margin:0}
+             .wp-travel-giav-dashboard .giav-span-3{grid-column:span 3}
+             .wp-travel-giav-dashboard .giav-span-6{grid-column:span 6}
+             .wp-travel-giav-dashboard .giav-span-12{grid-column:span 12}
+             .wp-travel-giav-dashboard table{width:100%;border-collapse:collapse}
+             .wp-travel-giav-dashboard th,.wp-travel-giav-dashboard td{padding:10px 8px;border-bottom:1px solid #eef2f7;vertical-align:top}
+             .wp-travel-giav-dashboard th{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;text-align:left}
+             .wp-travel-giav-dashboard .muted{color:#6b7280}
+             .wp-travel-giav-dashboard .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:#f3f4f6;font-size:12px}
+             .wp-travel-giav-dashboard .pill.ok{background:#ecfdf5;color:#065f46}
+             .wp-travel-giav-dashboard .pill.warn{background:#fff7ed;color:#9a3412}
+             .wp-travel-giav-dashboard .giav-chart{width:100%;height:220px}
+             .wp-travel-giav-dashboard .giav-actions{display:flex;gap:10px;align-items:center;margin:10px 0 0}
+             .wp-travel-giav-dashboard .giav-actions select{padding:6px 10px;border-radius:10px;border:1px solid #e5e7eb}
+            '
+        );
+
+        $inline = file_get_contents( plugin_dir_path( __FILE__ ) . 'admin/dashboard-inline.js' );
+        if ( $inline ) {
+            wp_add_inline_script( 'wp-travel-giav-admin', $inline, 'after' );
+        }
+    }
 }
 
 
