@@ -77,12 +77,43 @@ export const fetchJSON = async (endpoint, options = {}) => {
 // Dashboard
 // NOTE: We intentionally use fetchJSON() (not wp apiFetch) to avoid malformed paths when a full URL is passed.
 // apiFetch expects a relative `path` (e.g. `/travel/v1/...`) and will prepend `wpApiSettings.root`.
-export const getDashboard = async ({ year, force } = {}) => {
+export const getDashboard = async ({
+  year,
+  force,
+  page,
+  perPage,
+  sortBy,
+  order,
+  agent,
+  paymentStatus,
+  paymentDueDays,
+} = {}) => {
   const y = year || new Date().getFullYear();
   const search = new URLSearchParams();
   search.set('year', String(y));
   if (force) {
     search.set('force', '1');
+  }
+  if (page !== undefined && page !== null) {
+    search.set('page', String(page));
+  }
+  if (perPage !== undefined && perPage !== null) {
+    search.set('per_page', String(perPage));
+  }
+  if (sortBy) {
+    search.set('sort_by', sortBy);
+  }
+  if (order) {
+    search.set('order', order);
+  }
+  if (agent) {
+    search.set('agent', agent);
+  }
+  if (paymentStatus) {
+    search.set('payment_status', paymentStatus);
+  }
+  if (paymentDueDays !== undefined && paymentDueDays !== null) {
+    search.set('payment_due_days', String(paymentDueDays));
   }
   return fetchJSON(`dashboard?${search.toString()}`);
 };

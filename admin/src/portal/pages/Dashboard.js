@@ -1,88 +1,213 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getDashboard } from '../api';
 
+const PER_PAGE = 25;
+
 const formatMoney = (amount, currency = 'EUR') => {
-  const n = Number(amount || 0);
+  const value = Number(amount || 0);
   try {
     return new Intl.NumberFormat('es-ES', {
       style: 'currency',
       currency,
       maximumFractionDigits: 0,
-    }).format(n);
-  } catch (e) {
-    return `${n.toFixed(0)} ${currency}`;
+    }).format(value);
+  } catch (error) {
+    return `${value.toFixed(0)} ${currency}`;
   }
 };
 
 const formatDate = (value) => {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString('es-ES', { dateStyle: 'medium' });
+  if (!value) {
+    return '—';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleDateString('es-ES', { dateStyle: 'medium' });
 };
 
-export default function Dashboard() {
+const MonthlyChart = ({ data }) => {
+  if (!data || data.length === 0) {
+    return <div className="dashboard-chart__empty">Sin datos mensuales</div>;
+  }
+
+  const width = 700;
+  const height = 220;
+  const maxValue = Math.max(1, ...data.map((point) => point.ventas));
+  const xStep = data.length > 1 ? width / (data.length - 1) : width / 2;
+  const points = data
+    .map((point, index) => {
+      const x = index * xStep;
+      const ratio = point.ventas / maxValue;
+      const y = height - ratio * height;
+      return `${x},${y}`;
+    })
+    .join(' ');
+  const areaPoints = `${points} ${width},${height} 0,${height}`;
+
+  return (
+    <div className="dashboard-chart">
+      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label="Ventas por mes">
+        <g className="dashboard-chart__grid">
+          {[0.25, 0.5, 0.75].map((position) => (
+            <line
+              key={position}
+              x1={0}
+              x2={width}
+              y1={height - position * height}
+              y2={height - position * height}
+              stroke="#e2e8f0"
+              strokeDasharray="4 6"
+              strokeWidth="1"
+            />
+          ))}
+        </g>
+        <polygon points={areaPoints} fill="rgba(59,130,246,0.08)" />
+        <polyline
+          fill="none"
+          stroke="#3b82f6"
+          strokeWidth={3}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          points={points}
+        />
+      </svg>
+      <div className="dashboard-chart__labels">
+        {data.map((point) => (
+          <span key={point.month}>{point.month.slice(5)}</span>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const Dashboard = () => {
   const nowYear = new Date().getFullYear();
   const [year, setYear] = useState(nowYear);
+  const [filters, setFilters] = useState({
+    page: 1,
+    sortBy: 'fecha_inicio',
+    order: 'asc',
+    agent: '',
+    paymentStatus: '',
+    paymentDueDays: null,
+  });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const currency = data?.currency || 'EUR';
+  const loadDashboard = useCallback(
+    async ({ force } = {}) => {
+      setLoading(true);
+      setError('');
+      try {
+        const payload = await getDashboard({
+          year,
+          force,
+          page: filters.page,
+          perPage: PER_PAGE,
+          sortBy: filters.sortBy,
+          order: filters.order,
+          agent: filters.agent || undefined,
+          paymentStatus: filters.paymentStatus || undefined,
+          paymentDueDays: filters.paymentDueDays ?? undefined,
+        });
+        setData(payload);
+      } catch (err) {
+        setError(err?.message || 'No se pudo cargar el dashboard.');
+        setData(null);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [year, filters]
+  );
 
-  const kpis = useMemo(() => {
-    const k = data?.summary || {};
-    return [
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    setFilters((prev) => ({ ...prev, page: 1 }));
+  }, [year]);
+
+  const summary = data?.summary ?? {};
+  const chartData = data?.chart ?? [];
+  const expedientes = data?.expedientes?.items ?? [];
+  const meta = data?.expedientes?.meta;
+
+  const kpis = useMemo(
+    () => [
       {
-        label: 'Beneficio neto (GIAV)',
-        value: formatMoney(k.margen_neto_total || 0, currency),
+        label: 'Ventas estimadas',
+        value: formatMoney(summary.ventas_estimadas_total || 0, data?.currency),
       },
       {
-        label: 'Pendiente de cobrar',
-        value: formatMoney(k.pending_cobrar_total || 0, currency),
-      },
-      {
-        label: 'Pendiente de pagar',
-        value: formatMoney(k.pending_pagar_total || 0, currency),
+        label: 'Margen estimado',
+        value: formatMoney(summary.margen_estimado_total || 0, data?.currency),
       },
       {
         label: 'Expedientes',
-        value: String(k.expedientes_count || 0),
+        value: String(summary.expedientes_total || 0),
       },
-    ];
-  }, [data, currency]);
+      {
+        label: 'Riesgo de cobro',
+        value: String(summary.expedientes_riesgo_cobro || 0),
+      },
+    ],
+    [summary, data?.currency]
+  );
 
-  const load = async (opts = {}) => {
-    setLoading(true);
-    setError('');
-    try {
-      const payload = await getDashboard({ year, ...opts });
-      setData(payload || null);
-    } catch (e) {
-      setError(e?.message || 'No se pudo cargar el dashboard.');
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
+  const handleSort = (key) => {
+    setFilters((prev) => {
+      const nextOrder = prev.sortBy === key && prev.order === 'asc' ? 'desc' : 'asc';
+      return { ...prev, sortBy: key, order: nextOrder, page: 1 };
+    });
   };
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year]);
+  const handleQuickFilter = (type) => {
+    setFilters((prev) => {
+      if (type === 'overdue') {
+        return { ...prev, paymentStatus: 'vencido', paymentDueDays: null, page: 1 };
+      }
+      if (type === 'upcoming') {
+        return { ...prev, paymentStatus: '', paymentDueDays: 15, page: 1 };
+      }
+      return { ...prev, paymentStatus: '', paymentDueDays: null, agent: '', page: 1 };
+    });
+  };
+
+  const hasFiltersActive = Boolean(
+    filters.agent || filters.paymentStatus || filters.paymentDueDays !== null
+  );
+
+  const handleAgentChange = (value) => {
+    setFilters((prev) => ({ ...prev, agent: value, page: 1 }));
+  };
+
+  const navigatePage = (delta) => {
+    setFilters((prev) => {
+      const nextPage = Math.max(1, Math.min(totalPages, prev.page + delta));
+      return { ...prev, page: nextPage };
+    });
+  };
+
+  const totalPages = meta?.total_pages || 1;
+  const currentPage = filters.page;
 
   return (
-    <div className="casanova-portal-section">
-      <div className="casanova-portal-detail__header">
+    <div className="dashboard-section">
+      <header className="dashboard-header">
         <div>
-          <p className="casanova-portal__eyebrow">Resumen</p>
-          <h2>Dashboard {year}</h2>
-          <p>Ventas, margen y expedientes del año natural.</p>
+          <p className="dashboard-eyebrow">Resumen</p>
+          <h1>Dashboard {year}</h1>
+          <p>Ventas y pagos por año natural.</p>
         </div>
-        <div className="casanova-portal-detail__actions">
-          <label className="casanova-portal-filter" style={{ minWidth: 160 }}>
+        <div className="dashboard-actions">
+          <label className="dashboard-year-picker">
             <span>Año</span>
-            <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
+            <select value={year} onChange={(event) => setYear(Number(event.target.value))}>
               {Array.from({ length: 5 }).map((_, idx) => {
                 const y = nowYear - idx;
                 return (
@@ -96,69 +221,184 @@ export default function Dashboard() {
           <button
             type="button"
             className="button-secondary"
-            onClick={() => load({ force: true })}
+            onClick={() => loadDashboard({ force: true })}
             disabled={loading}
           >
             {loading ? 'Actualizando…' : 'Actualizar'}
           </button>
         </div>
-      </div>
+      </header>
 
-      {error ? (
-        <div className="casanova-portal-section__notice casanova-portal-section__notice--error">
-          {error}
-        </div>
-      ) : null}
-
-      <div className="casanova-portal-grid" style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+      <div className="dashboard-cards">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="casanova-portal-card">
-            <p className="casanova-portal__eyebrow">{kpi.label}</p>
-            <h3 style={{ marginTop: 6 }}>{kpi.value}</h3>
+          <div key={kpi.label} className="dashboard-card">
+            <p className="dashboard-card__label">{kpi.label}</p>
+            <h3 className="dashboard-card__value">{kpi.value}</h3>
           </div>
         ))}
       </div>
 
-      <div className="casanova-portal-card" style={{ marginTop: 18 }}>
-        <h3>Expedientes</h3>
-        <p style={{ marginTop: 6 }}>
-          {data?.expedientes?.length
-            ? `Mostrando ${data.expedientes.length} expedientes (máx. 250).`
-            : 'No hay expedientes para este año.'}
-        </p>
+      <div className="dashboard-chart-card">
+        <div className="dashboard-chart-card__header">
+          <h2>Ventas por mes</h2>
+          <span className="dashboard-chart-card__hint">Basado en fecha de inicio</span>
+        </div>
+        <MonthlyChart data={chartData} />
+      </div>
 
-        {data?.expedientes?.length ? (
-          <div style={{ overflowX: 'auto', marginTop: 12 }}>
-            <table className="widefat striped" style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
+      <section className="dashboard-table-card">
+        <header className="dashboard-toolbar">
+          <div className="dashboard-toolbar__input">
+            <label>
+              <span>Agente comercial</span>
+              <input
+                type="search"
+                placeholder="Buscar agente"
+                value={filters.agent}
+                onChange={(event) => handleAgentChange(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="dashboard-quick-filters">
+            <button
+              type="button"
+              className={`dashboard-quick-filter ${filters.paymentStatus === 'vencido' ? 'is-active' : ''}`}
+              onClick={() => handleQuickFilter('overdue')}
+            >
+              Pagos vencidos
+            </button>
+            <button
+              type="button"
+              className={`dashboard-quick-filter ${filters.paymentDueDays === 15 ? 'is-active' : ''}`}
+              onClick={() => handleQuickFilter('upcoming')}
+            >
+              Próximos pagos
+            </button>
+            <button
+              type="button"
+              className={`dashboard-quick-filter ${hasFiltersActive ? 'is-active' : ''}`}
+              onClick={() => handleQuickFilter('clear')}
+            >
+              Limpiar filtros
+            </button>
+          </div>
+        </header>
+
+        {error && <div className="dashboard-error">{error}</div>}
+
+        <div className="dashboard-table-wrapper">
+          <table className="dashboard-table">
+            <thead>
+              <tr>
+                <th>
+                  <button type="button" onClick={() => handleSort('giav_id_humano')}>
+                    Expediente{' '}
+                    {filters.sortBy === 'giav_id_humano' ? (filters.order === 'asc' ? '▲' : '▼') : '↕'}
+                  </button>
+                </th>
+                <th>Cliente</th>
+                <th>
+                  <button type="button" onClick={() => handleSort('agente_comercial')}>
+                    Agente{' '}
+                    {filters.sortBy === 'agente_comercial' ? (filters.order === 'asc' ? '▲' : '▼') : '↕'}
+                  </button>
+                </th>
+                <th>Viaje</th>
+                <th>
+                  <button type="button" onClick={() => handleSort('fecha_inicio')}>
+                    Inicio{' '}
+                    {filters.sortBy === 'fecha_inicio' ? (filters.order === 'asc' ? '▲' : '▼') : '↕'}
+                  </button>
+                </th>
+                <th>Fin</th>
+                <th>
+                  <button type="button" onClick={() => handleSort('dias_hasta_viaje')}>
+                    Días hasta el viaje{' '}
+                    {filters.sortBy === 'dias_hasta_viaje' ? (filters.order === 'asc' ? '▲' : '▼') : '↕'}
+                  </button>
+                </th>
+                <th>Pagos</th>
+                <th>
+                  <button type="button" onClick={() => handleSort('total_pvp')}>
+                    Total PVP{' '}
+                    {filters.sortBy === 'total_pvp' ? (filters.order === 'asc' ? '▲' : '▼') : '↕'}
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && (
                 <tr>
-                  <th style={{ textAlign: 'left' }}>Título</th>
-                  <th style={{ textAlign: 'left' }}>Fechas viaje</th>
-                  <th style={{ textAlign: 'left' }}>Estado</th>
-                  <th style={{ textAlign: 'right' }}>Pendiente cobrar</th>
-                  <th style={{ textAlign: 'right' }}>Margen neto</th>
+                  <td colSpan={9} className="dashboard-table__status">
+                    Cargando expedientes…
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {data.expedientes.map((row) => (
-                  <tr key={row.id || row.titulo}>
+              )}
+              {!loading && expedientes.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="dashboard-table__status">
+                    No hay expedientes registrados para este año.
+                  </td>
+                </tr>
+              )}
+              {!loading &&
+                expedientes.map((row, index) => (
+                  <tr key={`${row.giav_id_humano}-${index}`}>
                     <td>
-                      <strong>{row.titulo || '—'}</strong>
-                      {row.id ? <div style={{ opacity: 0.7 }}>#{row.id}</div> : null}
+                      <strong>{row.giav_id_humano || '—'}</strong>
                     </td>
                     <td>
-                      {formatDate(row.fecha_desde)} – {formatDate(row.fecha_hasta)}
+                      <div className="dashboard-table__name">{row.cliente_nombre || '—'}</div>
                     </td>
-                    <td>{row.cerrado ? 'Cerrado' : 'Abierto'}</td>
-                    <td style={{ textAlign: 'right' }}>{formatMoney(row.pendiente_cobrar || 0, currency)}</td>
-                    <td style={{ textAlign: 'right' }}>{formatMoney(row.margen_neto || 0, currency)}</td>
+                    <td>{row.agente_comercial || '—'}</td>
+                    <td>
+                      <div className="dashboard-table__travel">{row.nombre_viaje || '—'}</div>
+                    </td>
+                    <td>{formatDate(row.fecha_inicio)}</td>
+                    <td>{formatDate(row.fecha_fin)}</td>
+                    <td>
+                      <span className={`dashboard-badge dashboard-badge--${row.riesgo || 'ok'}`}>
+                        {row.dias_hasta_viaje ?? '—'} días
+                      </span>
+                    </td>
+                    <td>
+                      <div className="dashboard-payments">
+                        <span className={`dashboard-badge dashboard-badge--${row.pagos?.estado || 'pendiente'}`}>
+                          {row.pagos?.estado || 'pendiente'} · {row.pagos?.tipo || '—'}
+                        </span>
+                        <small>
+                          {row.pagos?.proximo_vencimiento ? `Vence ${row.pagos.proximo_vencimiento}` : 'Sin vencimiento'}
+                        </small>
+                      </div>
+                    </td>
+                    <td>{formatMoney(row.total_pvp, data?.currency)}</td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
+            </tbody>
+          </table>
+        </div>
+
+        <footer className="dashboard-pagination">
+          <div className="dashboard-pagination__meta">
+            <span>
+              Página {currentPage} de {totalPages}
+            </span>
+            <span>
+              Mostrando {expedientes.length} de {meta?.total ?? 0} expedientes
+            </span>
           </div>
-        ) : null}
-      </div>
+          <div className="dashboard-pagination__actions">
+            <button type="button" onClick={() => navigatePage(-1)} disabled={currentPage <= 1 || loading}>
+              Anterior
+            </button>
+            <button type="button" onClick={() => navigatePage(1)} disabled={currentPage >= totalPages || loading}>
+              Siguiente
+            </button>
+          </div>
+        </footer>
+      </section>
     </div>
   );
-}
+};
+
+export default Dashboard;
