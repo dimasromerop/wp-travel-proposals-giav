@@ -23,11 +23,13 @@ class WP_Travel_GIAV_Dashboard_Controller extends WP_Travel_REST_Controller {
     protected $rest_base = 'dashboard';
 
     private const SORTABLE_FIELDS = [
+        'giav_id_humano',
         'fecha_inicio',
         'total_pvp',
         'dias_hasta_viaje',
         'agente_comercial',
         'cliente_nombre',
+        'nombre_viaje',
     ];
 
     private const PAYMENT_STATUS = [
@@ -79,6 +81,11 @@ class WP_Travel_GIAV_Dashboard_Controller extends WP_Travel_REST_Controller {
                             'required'          => false,
                             'sanitize_callback' => 'sanitize_text_field',
                         ],
+                        'client' => [
+                            'type'              => 'string',
+                            'required'          => false,
+                            'sanitize_callback' => 'sanitize_text_field',
+                        ],
                         'payment_status' => [
                             'type'              => 'string',
                             'required'          => false,
@@ -88,6 +95,11 @@ class WP_Travel_GIAV_Dashboard_Controller extends WP_Travel_REST_Controller {
                             'type'              => 'integer',
                             'required'          => false,
                             'sanitize_callback' => 'absint',
+                        ],
+                        'expediente' => [
+                            'type'              => 'string',
+                            'required'          => false,
+                            'sanitize_callback' => 'sanitize_text_field',
                         ],
                         'trip_due_days' => [
                             'type'              => 'integer',
@@ -162,17 +174,29 @@ class WP_Travel_GIAV_Dashboard_Controller extends WP_Travel_REST_Controller {
      */
     private function filter_expedientes( array $items, WP_REST_Request $request ): array {
         $agent            = trim( (string) $request->get_param( 'agent' ) );
+        $clientFilter     = trim( (string) $request->get_param( 'client' ) );
         $payment_status   = strtolower( trim( (string) $request->get_param( 'payment_status' ) ) );
         $payment_due_days = $this->sanitize_positive_int( $request->get_param( 'payment_due_days' ) );
         $trip_due_days    = $this->sanitize_positive_int( $request->get_param( 'trip_due_days' ) );
+        $expedienteFilter = trim( (string) $request->get_param( 'expediente' ) );
 
         if ( $payment_status && ! in_array( $payment_status, self::PAYMENT_STATUS, true ) ) {
             $payment_status = '';
         }
 
-        return array_values( array_filter( $items, function( $item ) use ( $agent, $payment_status, $payment_due_days ) {
+        return array_values( array_filter( $items, function( $item ) use ( $agent, $clientFilter, $expedienteFilter, $payment_status, $payment_due_days ) {
             if ( $agent !== '' && $item['agente_comercial'] ) {
                 if ( stripos( $item['agente_comercial'], $agent ) === false ) {
+                    return false;
+                }
+            }
+            if ( $clientFilter !== '' && $item['cliente_nombre'] ) {
+                if ( stripos( $item['cliente_nombre'], $clientFilter ) === false ) {
+                    return false;
+                }
+            }
+            if ( $expedienteFilter !== '' && $item['giav_id_humano'] ) {
+                if ( stripos( $item['giav_id_humano'], $expedienteFilter ) === false ) {
                     return false;
                 }
             }
@@ -186,7 +210,7 @@ class WP_Travel_GIAV_Dashboard_Controller extends WP_Travel_REST_Controller {
 
             if ( $payment_due_days > 0 ) {
                 $dias = isset( $item['pagos']['dias_para_vencer'] ) ? (int) $item['pagos']['dias_para_vencer'] : null;
-                if ( $dias === null || $dias > $payment_due_days ) {
+                if ( $dias === null || $dias < 0 || $dias > $payment_due_days ) {
                     return false;
                 }
             }

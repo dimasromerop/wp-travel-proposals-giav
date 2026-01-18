@@ -56,6 +56,13 @@ class WP_Travel_GIAV_Dashboard_Service {
     private $cliente_name_cache = [];
 
     /**
+     * Cache for agent names to avoid redundant SOAP calls.
+     *
+     * @var array<int,string|null>
+     */
+    private $agent_name_cache = [];
+
+    /**
      * Builds the dashboard payload for a given year.
      *
      * @return array|WP_Error
@@ -880,14 +887,42 @@ class WP_Travel_GIAV_Dashboard_Service {
      * Resolves the agent/commercial contact name.
      */
     private function resolve_agente_comercial( $expediente ): string {
-        $agent = $this->get_value( $expediente, [ 'AgenteComercial', 'agente_comercial', 'Agente', 'agente', 'Responsable', 'responsable' ], null );
-        if ( $agent ) {
-            $name = $this->build_person_name( $agent );
+        $name = $this->extract_agent_name_from_expediente( $expediente );
+        if ( $name !== '' ) {
+            return $name;
+        }
+
+        $agent_id = $this->resolve_agent_id( $expediente );
+        if ( $agent_id > 0 ) {
+            $cached = $this->get_cached_agent_name( $agent_id );
+            if ( $cached ) {
+                return $cached;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Attempts to grab the agent name directly from the expediente payload.
+     */
+    private function extract_agent_name_from_expediente( $expediente ): string {
+        $agent_candidate = $this->get_value( $expediente, [ 'AgenteComercial', 'agente_comercial', 'Agente', 'agente', 'Responsable', 'responsable' ], null );
+        if ( $agent_candidate ) {
+            $name = $this->build_person_name( $agent_candidate );
             if ( $name !== '' ) {
                 return $name;
             }
         }
-        return $this->get_string_field( $expediente, [ 'ResponsableNombre', 'responsableNombre' ] );
+
+        return $this->get_string_field( $expediente, [ 'ResponsableNombre', 'responsableNombre', 'NombreAgenteComercial', 'nombreAgenteComercial', 'AliasAgente' ] );
+    }
+
+    /**
+     * Resolves the agent ID from available fields so we can fetch the name.
+     */
+    private function resolve_agent_id( $expediente ): int {
+        return (int) $this->get_value( $expediente, [ 'IdAgenteComercial', 'idAgenteComercial', 'IdAgente', 'idAgente' ], 0 );
     }
 
     /**
@@ -906,6 +941,48 @@ class WP_Travel_GIAV_Dashboard_Service {
             }
         }
         return '';
+    }
+
+    /**
+     * Retrieves a cached agent name or fetches it from GIAV.
+     */
+    private function get_cached_agent_name( int $agent_id ): ?string {
+        if ( array_key_exists( $agent_id, $this->agent_name_cache ) ) {
+            return $this->agent_name_cache[ $agent_id ];
+        }
+
+        $name = $this->fetch_agent_name( $agent_id );
+        $this->agent_name_cache[ $agent_id ] = $name;
+        return $name;
+    }
+
+    /**
+     * Fetches the agent record from GIAV to resolve the human name.
+     */
+    private function fetch_agent_name( int $agent_id ): ?string {
+        if ( $agent_id <= 0 ) {
+            return null;
+        }
+
+        $trace = [];
+        $res = wp_travel_giav_call( 'AgenteComercial_GET', [ 'id' => $agent_id ], $trace );
+        if ( is_wp_error( $res ) ) {
+            return null;
+        }
+
+        $agent = null;
+        if ( is_object( $res ) && isset( $res->AgenteComercial_GETResult ) ) {
+            $agent = $res->AgenteComercial_GETResult;
+        } else {
+            $agent = $res;
+        }
+
+        if ( ! is_object( $agent ) ) {
+            return null;
+        }
+
+        $name = $this->get_string_field( $agent, [ 'Nombre', 'nombre', 'AliasAgente' ] );
+        return $name !== '' ? $name : null;
     }
 
     /**

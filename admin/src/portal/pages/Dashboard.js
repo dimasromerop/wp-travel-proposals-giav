@@ -17,8 +17,6 @@ const MONTH_LABELS = {
   '12': 'Dic',
 };
 
-const PER_PAGE = 25;
-
 const formatMoney = (amount, currency = 'EUR') => {
   const value = Number(amount || 0);
   try {
@@ -38,9 +36,13 @@ const formatDate = (value) => {
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return value;
+    return '—';
   }
-  return date.toLocaleDateString('es-ES', { dateStyle: 'medium' });
+  return date.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
 };
 
 const formatMonthLabel = (month) => {
@@ -65,34 +67,34 @@ const formatChartCurrency = (value, currency = 'EUR') => {
 };
 
 const SummaryIcon = ({ type }) => {
-    const icons = {
-      ventas: (
-        <svg viewBox="0 0 24 24" role="presentation">
-          <rect x="4" y="9" width="16" height="10" rx="3" stroke="currentColor" fill="none" />
-          <path d="M4 9h16l-2-4H6z" stroke="currentColor" fill="none" />
-        </svg>
-      ),
-      margen: (
-        <svg viewBox="0 0 24 24" role="presentation">
-          <path d="M6 16l4-6 4 4 4-8" stroke="currentColor" fill="none" />
-          <path d="M4 20h16" stroke="currentColor" fill="none" />
-        </svg>
-      ),
-      expedientes: (
-        <svg viewBox="0 0 24 24" role="presentation">
-          <rect x="5" y="6" width="14" height="12" rx="2" stroke="currentColor" fill="none" />
-          <path d="M8 9h8" stroke="currentColor" fill="none" />
-          <path d="M8 13h6" stroke="currentColor" fill="none" />
-        </svg>
-      ),
-      riesgo: (
-        <svg viewBox="0 0 24 24" role="presentation">
-          <path d="M12 4l6 10h-12z" stroke="currentColor" fill="none" />
-          <path d="M12 12v4" stroke="currentColor" fill="none" />
-          <path d="M12 17h.01" stroke="currentColor" fill="none" />
-        </svg>
-      ),
-    };
+  const icons = {
+    ventas: (
+      <svg viewBox="0 0 24 24" role="presentation">
+        <rect x="4" y="8" width="16" height="10" rx="3" fill="none" />
+        <path d="M4 8h16l-2-4H6z" fill="none" />
+      </svg>
+    ),
+    margen: (
+      <svg viewBox="0 0 24 24" role="presentation">
+        <path d="M6 16l4-6 4 5 4-8" fill="none" />
+        <path d="M4 20h16" fill="none" />
+      </svg>
+    ),
+    expedientes: (
+      <svg viewBox="0 0 24 24" role="presentation">
+        <rect x="5" y="6" width="14" height="12" rx="2" fill="none" />
+        <path d="M8 10h8" fill="none" />
+        <path d="M8 14h6" fill="none" />
+      </svg>
+    ),
+    riesgo: (
+      <svg viewBox="0 0 24 24" role="presentation">
+        <path d="M12 4l7 12H5z" fill="none" />
+        <path d="M12 12v4" fill="none" />
+        <path d="M12 18h.01" />
+      </svg>
+    ),
+  };
   return icons[type] || icons.ventas;
 };
 
@@ -112,24 +114,16 @@ const SummaryTile = ({ icon, label, value, helper }) => (
 const SortButton = ({ label, onClick, isActive, order }) => (
   <button
     type="button"
-    className="dashboard-table__sort-button"
+    className={`dashboard-table__sort-button${isActive ? ' is-active' : ''}`}
     onClick={onClick}
+    aria-pressed={isActive}
+    aria-label={`${label} ${isActive ? (order === 'asc' ? 'orden ascendente' : 'orden descendente') : 'ordenar ascendente'}`}
   >
-    <span>{label}</span>
-    <span
-      className={`dashboard-table__sort-icon ${isActive ? 'is-active' : ''}`}
-      data-order={isActive ? order : 'none'}
-      aria-hidden="true"
-    >
+    <span className="dashboard-table__sort-label">{label}</span>
+    <span className="dashboard-table__sort-icon" data-order={isActive ? order : 'none'}>
       <svg viewBox="0 0 12 14" role="presentation" focusable="false">
-        <polygon
-          className="dashboard-table__sort-chevron dashboard-table__sort-chevron--up"
-          points="2,8 6,3 10,8"
-        />
-        <polygon
-          className="dashboard-table__sort-chevron dashboard-table__sort-chevron--down"
-          points="2,6 6,11 10,6"
-        />
+        <path className="dashboard-table__sort-arrow dashboard-table__sort-arrow--up" d="M3 8.5L6 5l3 3.5" />
+        <path className="dashboard-table__sort-arrow dashboard-table__sort-arrow--down" d="M3 5.5L6 9l3-3.5" />
       </svg>
     </span>
   </button>
@@ -140,24 +134,24 @@ const MonthlyChart = ({ data, currency }) => {
     return <div className="dashboard-chart__empty">Sin datos mensuales</div>;
   }
 
-  const pointsData = [...data].sort((a, b) => (a.month || '').localeCompare(b.month || ''));
-  const width = 720;
-  const height = 260;
-  const maxValue = Math.max(1, ...pointsData.map((point) => point.ventas));
-  const xStep = pointsData.length > 1 ? width / (pointsData.length - 1) : width / 2;
-  const points = pointsData
-    .map((point, index) => {
-      const x = index * xStep;
-      const ratio = point.ventas / maxValue;
-      const y = height - ratio * height;
-      return `${x},${y}`;
-    })
-    .join(' ');
-  const areaPath = `${points} ${width},${height} 0,${height}`;
-  const ticks = [1, 0.75, 0.5, 0.25, 0].map((weight) => maxValue * weight);
+  const sorted = [...data].sort((a, b) => (a.month || '').localeCompare(b.month || ''));
+  const width = Math.max(420, sorted.length * 70);
+  const height = 320;
+  const values = sorted.map((point) => point.ventas ?? 0);
+  const maxValue = Math.max(1, ...values);
+  const xStep = sorted.length > 1 ? width / (sorted.length - 1) : width / 2;
+
+  const polylinePoints = sorted.map((point, index) => {
+    const x = index * xStep;
+    const ratio = (point.ventas ?? 0) / maxValue;
+    const y = height - ratio * height;
+    return `${x},${y}`;
+  });
+
+  const ticks = [1, 0.75, 0.5, 0.25, 0].map((factor) => factor * maxValue);
 
   return (
-    <div className="dashboard-chart">
+    <div className="dashboard-chart" role="img" aria-label="Ventas por mes">
       <div className="dashboard-chart__axis" aria-hidden="true">
         {ticks.map((tick) => (
           <span key={`tick-${tick}`}>{formatChartCurrency(tick, currency)}</span>
@@ -165,14 +159,13 @@ const MonthlyChart = ({ data, currency }) => {
       </div>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label="Ventas por mes"
         preserveAspectRatio="none"
+        role="presentation"
       >
         <g className="dashboard-chart__grid">
           {[0.25, 0.5, 0.75].map((position) => (
             <line
-              key={position}
+              key={`grid-${position}`}
               x1={0}
               x2={width}
               y1={height - position * height}
@@ -183,34 +176,35 @@ const MonthlyChart = ({ data, currency }) => {
             />
           ))}
         </g>
-        <polygon points={areaPath} />
-        <polyline points={points} />
+        <polygon
+          points={`${polylinePoints.join(' ')} ${width},${height} 0,${height}`}
+        />
+        <polyline
+          points={polylinePoints.join(' ')}
+        />
         <g className="dashboard-chart__dots">
-          {pointsData.map((point, index) => {
+          {sorted.map((point, index) => {
             const x = index * xStep;
-            const ratio = point.ventas / maxValue;
+            const ratio = (point.ventas ?? 0) / maxValue;
             const y = height - ratio * height;
             return (
               <circle
-                key={`dot-${point.month}`}
+                key={`dot-${point.month}-${index}`}
                 cx={x}
                 cy={y}
                 r={5}
               >
-                <title>{`Ventas ${formatChartCurrency(point.ventas, currency)} · ${formatMonthLabel(point.month)}`}</title>
+                <title>
+                  {`Ventas ${formatChartCurrency(point.ventas ?? 0, currency)} · ${formatMonthLabel(point.month)} · ${point.expedientes ?? 0} expediente${(point.expedientes ?? 0) === 1 ? '' : 's'}`}
+                </title>
               </circle>
             );
           })}
         </g>
       </svg>
       <div className="dashboard-chart__labels">
-        {pointsData.map((point) => (
-          <span
-            key={`label-${point.month}`}
-            title={`Ventas ${formatChartCurrency(point.ventas, currency)}`}
-          >
-            {formatMonthLabel(point.month)}
-          </span>
+        {sorted.map((point) => (
+          <span key={`label-${point.month}`}>{formatMonthLabel(point.month)}</span>
         ))}
       </div>
     </div>
@@ -225,6 +219,8 @@ const Dashboard = () => {
     sortBy: 'fecha_inicio',
     order: 'asc',
     agent: '',
+    client: '',
+    expediente: '',
     paymentStatus: '',
     paymentDueDays: null,
     tripDueDays: null,
@@ -241,15 +237,17 @@ const Dashboard = () => {
         const payload = await getDashboard({
           year,
           force,
-          page: filters.page,
-          perPage: PER_PAGE,
-          sortBy: filters.sortBy,
-          order: filters.order,
-          agent: filters.agent || undefined,
-          paymentStatus: filters.paymentStatus || undefined,
-          paymentDueDays: filters.paymentDueDays ?? undefined,
-          tripDueDays: filters.tripDueDays ?? undefined,
-        });
+        page: filters.page,
+        perPage: 25,
+        sortBy: filters.sortBy,
+        order: filters.order,
+        agent: filters.agent || undefined,
+        client: filters.client || undefined,
+        expediente: filters.expediente || undefined,
+        paymentStatus: filters.paymentStatus || undefined,
+        paymentDueDays: filters.paymentDueDays ?? undefined,
+        tripDueDays: filters.tripDueDays ?? undefined,
+      });
         setData(payload);
       } catch (err) {
         setError(err?.message || 'No se pudo cargar el dashboard.');
@@ -271,19 +269,15 @@ const Dashboard = () => {
 
   const summary = data?.summary ?? {};
   const chartData = data?.chart ?? [];
-  const expedientes = data?.expedientes?.items ?? [];
-  const meta = data?.expedientes?.meta;
-  const totalPages = Math.max(1, meta?.total_pages ?? 1);
-  const currentPage = Math.min(Math.max(1, filters.page), totalPages);
-
   const normalizedChartData = useMemo(() => {
     return (chartData || [])
       .map((point) => {
-        const ventas = typeof point.ventas === 'number'
-          ? point.ventas
-          : Number(point.value ?? 0);
+        const ventas =
+          typeof point.ventas === 'number'
+            ? point.ventas
+            : Number(point.value ?? point.valor ?? 0);
         return {
-          month: point.month || point.mes || '',
+          month: point.month || point.mes || point.label || '',
           ventas: Number.isFinite(ventas) ? ventas : 0,
           expedientes: Number.isFinite(point.expedientes)
             ? point.expedientes
@@ -294,6 +288,11 @@ const Dashboard = () => {
       })
       .filter((point) => point.month);
   }, [chartData]);
+
+  const expedientes = data?.expedientes?.items ?? [];
+  const meta = data?.expedientes?.meta;
+  const totalPages = Math.max(1, meta?.total_pages ?? 1);
+  const currentPage = Math.min(Math.max(1, filters.page), totalPages);
 
   const summaryTiles = useMemo(
     () => [
@@ -368,6 +367,8 @@ const Dashboard = () => {
           paymentDueDays: null,
           tripDueDays: null,
           agent: '',
+          client: '',
+          expediente: '',
           page: 1,
         };
       }
@@ -377,6 +378,8 @@ const Dashboard = () => {
 
   const hasFiltersActive = Boolean(
     filters.agent ||
+    filters.client ||
+    filters.expediente ||
       filters.paymentStatus ||
       filters.paymentDueDays !== null ||
       filters.tripDueDays !== null
@@ -384,6 +387,14 @@ const Dashboard = () => {
 
   const handleAgentChange = (value) => {
     setFilters((prev) => ({ ...prev, agent: value, page: 1 }));
+  };
+
+  const handleClientChange = (value) => {
+    setFilters((prev) => ({ ...prev, client: value, page: 1 }));
+  };
+
+  const handleExpedienteChange = (value) => {
+    setFilters((prev) => ({ ...prev, expediente: value, page: 1 }));
   };
 
   const navigatePage = (delta) => {
@@ -404,15 +415,17 @@ const Dashboard = () => {
       if (estado === 'vencido') {
         stats.overdue += 1;
       }
-      const diasParaVencer = typeof row.pagos?.dias_para_vencer === 'number'
-        ? row.pagos.dias_para_vencer
-        : null;
+      const diasParaVencer =
+        typeof row.pagos?.dias_para_vencer === 'number'
+          ? row.pagos.dias_para_vencer
+          : null;
       if (diasParaVencer !== null && diasParaVencer >= 0 && diasParaVencer <= 15) {
         stats.upcoming += 1;
       }
-      const diasDesdeHoy = typeof row.dias_hasta_viaje === 'number'
-        ? row.dias_hasta_viaje
-        : null;
+      const diasDesdeHoy =
+        typeof row.dias_hasta_viaje === 'number'
+          ? row.dias_hasta_viaje
+          : null;
       if (diasDesdeHoy !== null && diasDesdeHoy >= 0 && diasDesdeHoy <= 30) {
         stats.soon += 1;
       }
@@ -437,16 +450,18 @@ const Dashboard = () => {
   }, [expedientes]);
 
   const renderDayStatus = (row) => {
-    const dias = typeof row.dias_hasta_viaje === 'number' ? row.dias_hasta_viaje : null;
+    const dias =
+      typeof row.dias_hasta_viaje === 'number' ? row.dias_hasta_viaje : null;
     const startDate = row.fecha_inicio ? new Date(row.fecha_inicio) : null;
     const endDate = row.fecha_fin ? new Date(row.fecha_fin) : null;
     const now = new Date();
 
-    const inProgress = startDate && endDate && now >= startDate && now <= endDate;
-    if (inProgress) {
+    if (startDate && endDate && now >= startDate && now <= endDate) {
       return (
         <div className="dashboard-day-status">
-          <span className="dashboard-day-status__badge dashboard-day-status__badge--active">En curso</span>
+          <span className="dashboard-day-status__badge dashboard-day-status__badge--active">
+            En curso
+          </span>
         </div>
       );
     }
@@ -454,7 +469,9 @@ const Dashboard = () => {
     if (dias !== null && dias < 0) {
       return (
         <div className="dashboard-day-status">
-          <span className="dashboard-day-status__badge dashboard-day-status__badge--past">Finalizado</span>
+          <span className="dashboard-day-status__badge dashboard-day-status__badge--past">
+            Finalizado
+          </span>
           <small>Hace {Math.abs(dias)} días</small>
         </div>
       );
@@ -463,37 +480,59 @@ const Dashboard = () => {
     if (dias === 0) {
       return (
         <div className="dashboard-day-status">
-          <span className="dashboard-day-status__badge dashboard-day-status__badge--today">Hoy</span>
+          <span className="dashboard-day-status__badge dashboard-day-status__badge--today">
+            Hoy
+          </span>
         </div>
       );
     }
 
-    const label = dias !== null ? `En ${dias} días` : '—';
+    if (dias !== null) {
+      return (
+        <div className="dashboard-day-status">
+          <span className="dashboard-day-status__badge">
+            En {dias} días
+          </span>
+        </div>
+      );
+    }
+
     return (
       <div className="dashboard-day-status">
-        <span className="dashboard-day-status__badge">{label}</span>
+        <span className="dashboard-day-status__badge">Fecha pendiente</span>
       </div>
     );
   };
 
-  const renderPaymentAmounts = (pagos) => {
-    if (!pagos) {
+  const renderNextPaymentDate = (pagos) => {
+    const nextDate = pagos?.proximo_vencimiento;
+    if (!nextDate) {
       return null;
     }
-    const parts = [];
-    if (pagos.pagado_total !== undefined && pagos.pagado_total !== null) {
-      parts.push(`Pagado: ${formatMoney(pagos.pagado_total, data?.currency)}`);
-    }
-    if (pagos.total_pvp !== undefined && pagos.total_pvp !== null) {
-      parts.push(`Total: ${formatMoney(pagos.total_pvp, data?.currency)}`);
-    }
-    if (pagos.pendiente_total !== undefined && pagos.pendiente_total !== null) {
-      parts.push(`Pendiente: ${formatMoney(pagos.pendiente_total, data?.currency)}`);
-    }
-    if (parts.length === 0) {
+    return (
+      <small className="dashboard-payments__amounts">
+        Próximo pago: {formatDate(nextDate)}
+      </small>
+    );
+  };
+
+  const renderPaidAmount = (pagos) => {
+    const paid = pagos?.pagado_total;
+    if (paid === undefined || paid === null) {
       return null;
     }
-    return <small className="dashboard-payments__amounts">{parts.join(' / ')}</small>;
+    return (
+      <small className="dashboard-payments__amounts">
+        Pagado: {formatMoney(paid, data?.currency)}
+      </small>
+    );
+  };
+
+  const capitalize = (value) => {
+    if (!value) {
+      return '—';
+    }
+    return value.charAt(0).toUpperCase() + value.slice(1);
   };
 
   const copyToClipboard = async (value) => {
@@ -535,7 +574,7 @@ const Dashboard = () => {
             onClick={() => loadDashboard({ force: true })}
             disabled={loading}
           >
-            {loading ? 'Actualizando…' : 'Actualizar'}
+            {loading ? 'Actualizando...' : 'Actualizar'}
           </button>
         </div>
       </header>
@@ -548,21 +587,18 @@ const Dashboard = () => {
             <p className="dashboard-section__hint">Basado en fecha de inicio del viaje.</p>
           </div>
         </div>
-          <div className="dashboard-chart-summary">
+        <div className="dashboard-chart-summary">
+          <div className="dashboard-chart-summary__layout">
             <div className="dashboard-chart-summary__chart">
               <MonthlyChart data={normalizedChartData} currency={data?.currency} />
             </div>
             <div className="dashboard-chart-summary__cards">
-              {summaryTiles.slice(0, 2).map((tile) => (
+              {summaryTiles.map((tile) => (
                 <SummaryTile key={tile.label} {...tile} />
               ))}
-              <div className="dashboard-summary-row">
-                {summaryTiles.slice(2).map((tile) => (
-                  <SummaryTile key={tile.label} {...tile} />
-                ))}
-              </div>
             </div>
           </div>
+        </div>
       </section>
 
       <div className="dashboard-ops">
@@ -598,9 +634,13 @@ const Dashboard = () => {
               <span className="dashboard-today-pill__label">Viajes en 30 días</span>
               <strong>{todayStats.soon}</strong>
             </button>
-            {todayStats.overdue === 0 && todayStats.upcoming === 0 && expedientes.length > 0 && (
-              <span className="dashboard-today-pill dashboard-today-pill--healthy">Todo al día</span>
-            )}
+            {todayStats.overdue === 0 &&
+              todayStats.upcoming === 0 &&
+              expedientes.length > 0 && (
+                <span className="dashboard-today-pill dashboard-today-pill--healthy">
+                  Todo al día
+                </span>
+              )}
           </div>
         </section>
 
@@ -633,6 +673,12 @@ const Dashboard = () => {
                       onClick={() => handleAgentChange(row.agent)}
                       tabIndex={0}
                       role="button"
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleAgentChange(row.agent);
+                        }
+                      }}
                     >
                       <td>{row.agent}</td>
                       <td>{row.expedientes}</td>
@@ -670,6 +716,24 @@ const Dashboard = () => {
               placeholder="Buscar agente"
               value={filters.agent}
               onChange={(event) => handleAgentChange(event.target.value)}
+            />
+          </label>
+          <label className="dashboard-table__filter">
+            <span>Cliente</span>
+            <input
+              type="search"
+              placeholder="Buscar cliente"
+              value={filters.client}
+              onChange={(event) => handleClientChange(event.target.value)}
+            />
+          </label>
+          <label className="dashboard-table__filter">
+            <span>Expediente</span>
+            <input
+              type="search"
+              placeholder="Buscar expediente"
+              value={filters.expediente}
+              onChange={(event) => handleExpedienteChange(event.target.value)}
             />
           </label>
           <div className="dashboard-table__chips">
@@ -711,7 +775,14 @@ const Dashboard = () => {
                     order={filters.order}
                   />
                 </th>
-                <th>Cliente</th>
+                <th>
+                  <SortButton
+                    label="Cliente"
+                    onClick={() => handleSort('cliente_nombre')}
+                    isActive={filters.sortBy === 'cliente_nombre'}
+                    order={filters.order}
+                  />
+                </th>
                 <th>
                   <SortButton
                     label="Agente"
@@ -720,7 +791,14 @@ const Dashboard = () => {
                     order={filters.order}
                   />
                 </th>
-                <th>Viaje</th>
+                <th>
+                  <SortButton
+                    label="Viaje"
+                    onClick={() => handleSort('nombre_viaje')}
+                    isActive={filters.sortBy === 'nombre_viaje'}
+                    order={filters.order}
+                  />
+                </th>
                 <th>
                   <SortButton
                     label="Inicio"
@@ -739,6 +817,7 @@ const Dashboard = () => {
                   />
                 </th>
                 <th>Pagos</th>
+                <th>Pendiente</th>
                 <th>Margen est.</th>
                 <th>
                   <SortButton
@@ -754,14 +833,14 @@ const Dashboard = () => {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={11} className="dashboard-table__status">
-                    Cargando expedientes…
+                  <td colSpan={12} className="dashboard-table__status">
+                    Cargando expedientes...
                   </td>
                 </tr>
               )}
               {!loading && expedientes.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="dashboard-table__status">
+                  <td colSpan={12} className="dashboard-table__status">
                     No hay expedientes registrados para este año.
                   </td>
                 </tr>
@@ -776,7 +855,10 @@ const Dashboard = () => {
                     row.total_pvp > 0 &&
                     row.margen_estimado / row.total_pvp < 0.1;
                   return (
-                    <tr key={`${row.giav_id_humano}-${row.fecha_inicio}-${row.fecha_fin}`}>
+                    <tr
+                      key={`${row.giav_id_humano}-${row.fecha_inicio}-${row.total_pvp}-${row.nombre_viaje}`}
+                      className={`dashboard-table__row dashboard-table__row--risk-${riskLevel}`}
+                    >
                       <td>
                         <strong>{row.giav_id_humano || '—'}</strong>
                       </td>
@@ -793,15 +875,21 @@ const Dashboard = () => {
                       <td>
                         <div className="dashboard-payments">
                           <span className={`dashboard-badge dashboard-badge--${paymentState}`}>
-                            {paymentState}
+                            {capitalize(paymentState)}
                           </span>
-                          {renderPaymentAmounts(row.pagos)}
+                          {renderNextPaymentDate(row.pagos)}
+                          {renderPaidAmount(row.pagos)}
                         </div>
+                      </td>
+                      <td className="dashboard-table__align-right">
+                        {formatMoney(row.pagos?.pendiente_total ?? 0, data?.currency)}
                       </td>
                       <td className="dashboard-table__align-right">
                         <div className="dashboard-margin-cell">
                           <span>{formatMoney(row.margen_estimado || 0, data?.currency)}</span>
-                          {isLowMargin && <span className="dashboard-badge dashboard-badge--margin-low">Bajo</span>}
+                          {isLowMargin && (
+                            <span className="dashboard-badge dashboard-badge--margin-low">Bajo</span>
+                          )}
                         </div>
                       </td>
                       <td>{formatMoney(row.total_pvp || 0, data?.currency)}</td>
