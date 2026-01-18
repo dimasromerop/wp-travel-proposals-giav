@@ -1,10 +1,17 @@
 import { HashRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom';
+import { Suspense, lazy } from 'react';
 import ProposalsList from './pages/ProposalsList';
 import ProposalDetail from './pages/ProposalDetail';
 import ProposalWizardPage from './pages/ProposalWizardPage';
 import RequestsList from './pages/RequestsList';
 import RequestDetail from './pages/RequestDetail';
-import Dashboard from './pages/Dashboard';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const DashboardRoute = () => (
+  <Suspense fallback={<div className="casanova-portal__loading">Cargando dashboard...</div>}>
+    <Dashboard />
+  </Suspense>
+);
 
 const PortalLayout = ( { children, config } ) => (
   <div className="casanova-portal">
@@ -103,7 +110,7 @@ const App = () => {
       <PortalLayout config={config}>
           <Routes>
             <Route path="/" element={ <Navigate to="/proposals" replace /> } />
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/dashboard" element={<DashboardRoute />} />
             <Route path="/proposals" element={<ProposalsList />} />
             <Route path="/requests" element={<RequestsList />} />
             <Route path="/requests/:requestId" element={<RequestDetail />} />

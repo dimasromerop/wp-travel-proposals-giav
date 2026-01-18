@@ -87,6 +87,7 @@ export const getDashboard = async ({
   agent,
   paymentStatus,
   paymentDueDays,
+  tripDueDays,
 } = {}) => {
   const y = year || new Date().getFullYear();
   const search = new URLSearchParams();
@@ -114,6 +115,9 @@ export const getDashboard = async ({
   }
   if (paymentDueDays !== undefined && paymentDueDays !== null) {
     search.set('payment_due_days', String(paymentDueDays));
+  }
+  if (tripDueDays !== undefined && tripDueDays !== null) {
+    search.set('trip_due_days', String(tripDueDays));
   }
   return fetchJSON(`dashboard?${search.toString()}`);
 };

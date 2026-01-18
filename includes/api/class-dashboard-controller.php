@@ -89,6 +89,11 @@ class WP_Travel_GIAV_Dashboard_Controller extends WP_Travel_REST_Controller {
                             'required'          => false,
                             'sanitize_callback' => 'absint',
                         ],
+                        'trip_due_days' => [
+                            'type'              => 'integer',
+                            'required'          => false,
+                            'sanitize_callback' => 'absint',
+                        ],
                         'force' => [
                             'type'              => 'boolean',
                             'required'          => false,
@@ -159,6 +164,7 @@ class WP_Travel_GIAV_Dashboard_Controller extends WP_Travel_REST_Controller {
         $agent            = trim( (string) $request->get_param( 'agent' ) );
         $payment_status   = strtolower( trim( (string) $request->get_param( 'payment_status' ) ) );
         $payment_due_days = $this->sanitize_positive_int( $request->get_param( 'payment_due_days' ) );
+        $trip_due_days    = $this->sanitize_positive_int( $request->get_param( 'trip_due_days' ) );
 
         if ( $payment_status && ! in_array( $payment_status, self::PAYMENT_STATUS, true ) ) {
             $payment_status = '';
@@ -181,6 +187,13 @@ class WP_Travel_GIAV_Dashboard_Controller extends WP_Travel_REST_Controller {
             if ( $payment_due_days > 0 ) {
                 $dias = isset( $item['pagos']['dias_para_vencer'] ) ? (int) $item['pagos']['dias_para_vencer'] : null;
                 if ( $dias === null || $dias > $payment_due_days ) {
+                    return false;
+                }
+            }
+
+            if ( $trip_due_days > 0 ) {
+                $dias = isset( $item['dias_hasta_viaje'] ) ? (int) $item['dias_hasta_viaje'] : null;
+                if ( $dias === null || $dias < 0 || $dias > $trip_due_days ) {
                     return false;
                 }
             }

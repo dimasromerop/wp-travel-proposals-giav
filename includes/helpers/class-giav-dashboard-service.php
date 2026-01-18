@@ -9,6 +9,52 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class WP_Travel_GIAV_Dashboard_Service {
 
+    private const SERVICE_START_KEYS = [
+        'FechaInicioServicio',
+        'fechaInicioServicio',
+        'FechaDesde',
+        'fechaDesde',
+        'FechaInicio',
+        'fechaInicio',
+        'start_date',
+        'FechaSalida',
+        'fechaSalida',
+        'FechaServicioDesde',
+        'fechaServicioDesde',
+        'FechaPrimerServicio',
+        'fechaPrimerServicio',
+        'FechaReserva',
+        'fechaReserva',
+        'FechaServicio',
+        'fechaServicio',
+    ];
+
+    private const SERVICE_END_KEYS = [
+        'FechaFinServicio',
+        'fechaFinServicio',
+        'FechaHasta',
+        'fechaHasta',
+        'FechaFin',
+        'fechaFin',
+        'FechaServicioHasta',
+        'fechaServicioHasta',
+        'FechaRegreso',
+        'fechaRegreso',
+        'FechaVuelta',
+        'fechaVuelta',
+        'FechaServicioFin',
+        'fechaServicioFin',
+        'FechaEntrega',
+        'fechaEntrega',
+    ];
+
+    /**
+     * Cache for client names to avoid redundant SOAP calls.
+     *
+     * @var array<int,string|null>
+     */
+    private $cliente_name_cache = [];
+
     /**
      * Builds the dashboard payload for a given year.
      *
@@ -23,9 +69,17 @@ class WP_Travel_GIAV_Dashboard_Service {
             return $expedientes;
         }
 
+        $expediente_ids = $this->extract_expediente_ids( $expedientes );
+        $reservas = $this->fetch_reservas_for_expedientes( $expediente_ids );
+        if ( is_wp_error( $reservas ) ) {
+            return $reservas;
+        }
+        $reservas_by_expediente = $this->group_reservas_by_expediente( $reservas );
+
         $models = [];
         foreach ( $expedientes as $expediente ) {
-            $row = $this->build_expediente_model( $expediente );
+            $exp_id = (int) ( $expediente->Id ?? $expediente->ID ?? 0 );
+            $row = $this->build_expediente_model( $expediente, $reservas_by_expediente[ $exp_id ] ?? [] );
             if ( $row !== null ) {
                 $models[] = $row;
             }
@@ -128,9 +182,119 @@ class WP_Travel_GIAV_Dashboard_Service {
     }
 
     /**
+     * Extracts unique expediente IDs from the raw SOAP objects.
+     *
+     * @param array $expedientes
+     * @return int[]
+     */
+    private function extract_expediente_ids( array $expedientes ): array {
+        $ids = [];
+        foreach ( $expedientes as $expediente ) {
+            $id = (int) ( $expediente->Id ?? $expediente->ID ?? 0 );
+            if ( $id > 0 ) {
+                $ids[ $id ] = $id;
+            }
+        }
+        return array_values( $ids );
+    }
+
+    /**
+     * Fetches reservas for a list of expedientes in paginated batches.
+     *
+     * @param int[] $expediente_ids
+     * @return array|WP_Error
+     */
+    private function fetch_reservas_for_expedientes( array $expediente_ids ): array|WP_Error {
+        $expediente_ids = array_values( array_filter( $expediente_ids, function( $value ) {
+            return $value > 0;
+        } ) );
+        if ( empty( $expediente_ids ) ) {
+            return [];
+        }
+
+        $page_size = 100;
+        $page = 0;
+        $all = [];
+
+        do {
+            $params = [
+                'idsExpediente'              => $this->build_array_of_int( $expediente_ids ),
+                'idsCliente'                 => null,
+                'idsProveedor'               => null,
+                'idsPrestatario'             => null,
+                'idsProducto'                => null,
+                'facturacionPendiente'       => 'NoAplicar',
+                'cobroPendiente'             => 'NoAplicar',
+                'prepagoPendiente'           => 'NoAplicar',
+                'modofiltroImporte'          => 'venta',
+                'importeDesde'               => 0,
+                'importeHasta'               => 9999999,
+                'recepcionCosteTotal'        => 'NoAplicar',
+                'fechaReserva'               => 'creacion',
+                'modoFiltroLocalizadorPedido' => 'LOCPED',
+                'pageSize'                   => $page_size,
+                'pageIndex'                  => $page,
+            ];
+
+            $trace = [];
+            $res = wp_travel_giav_call( 'Reservas_SEARCH', $params, $trace );
+            if ( is_wp_error( $res ) ) {
+                return $res;
+            }
+
+            $list = null;
+            if ( is_object( $res ) && isset( $res->Reservas_SEARCHResult ) ) {
+                $list = $res->Reservas_SEARCHResult;
+            } else {
+                $list = $res;
+            }
+
+            $items = [];
+            if ( is_object( $list ) && isset( $list->WsReserva ) ) {
+                $list = $list->WsReserva;
+            }
+
+            if ( is_array( $list ) ) {
+                $items = $list;
+            } elseif ( is_object( $list ) ) {
+                $items = [ $list ];
+            }
+
+            foreach ( $items as $it ) {
+                if ( is_object( $it ) ) {
+                    $all[] = $it;
+                }
+            }
+
+            $page++;
+            $done = count( $items ) < $page_size;
+        } while ( ! $done );
+
+        return $all;
+    }
+
+    /**
+     * Groups reservas by expediente ID.
+     *
+     * @param array $reservas
+     * @return array<int,array>
+     */
+    private function group_reservas_by_expediente( array $reservas ): array {
+        $grouped = [];
+        foreach ( $reservas as $reserva ) {
+            $id = (int) ( $reserva->IdExpediente ?? $reserva->idExpediente ?? 0 );
+            if ( $id <= 0 ) {
+                continue;
+            }
+            $grouped[ $id ][] = $reserva;
+        }
+        return $grouped;
+    }
+
+    /**
      * Builds a normalized expediente row or null if the entry should be skipped.
      */
-    private function build_expediente_model( $expediente ): ?array {
+    private function build_expediente_model( $expediente, array $reservas = [] ): ?array {
         $exp_id = (int) ( $expediente->Id ?? $expediente->ID ?? 0 );
         if ( $exp_id <= 0 ) {
             return null;
@@ -145,18 +309,37 @@ class WP_Travel_GIAV_Dashboard_Service {
             return null;
         }
 
+
         $fecha_inicio = $this->resolve_date_string( $expediente, [ 'FechaDesde', 'fechaDesde', 'fecha_inicio', 'start_date', 'fechaSalida', 'fecha_inicio_viaje' ] );
+        $fecha_fin = $this->resolve_date_string( $expediente, [ 'FechaHasta', 'fechaHasta', 'fecha_fin', 'end_date', 'fechaRegreso' ] );
+
+        if ( $fecha_fin && ! $fecha_inicio ) {
+            $fecha_inicio = $fecha_fin;
+        }
+
+        if ( ! $fecha_inicio || ! $fecha_fin ) {
+            $derived = $this->derive_dates_from_reservas( $reservas );
+            if ( ! $fecha_inicio && ! empty( $derived['start'] ) ) {
+                $fecha_inicio = $derived['start'];
+            }
+            if ( ! $fecha_fin && ! empty( $derived['end'] ) ) {
+                $fecha_fin = $derived['end'];
+            }
+        }
+
         if ( ! $fecha_inicio ) {
             return null;
         }
 
-        $fecha_fin = $this->resolve_date_string( $expediente, [ 'FechaHasta', 'fechaHasta', 'fecha_fin', 'end_date', 'fechaRegreso' ] );
         $fecha_fin = $fecha_fin ?: $fecha_inicio;
 
         $fecha_inicio_dt = $this->parse_date_value( $fecha_inicio );
         $timestamp = $fecha_inicio_dt ? (int) $fecha_inicio_dt->format( 'U' ) : null;
 
-        $total_pvp       = $this->extract_total_pvp( $info );
+        $total_pvp       = $this->calculate_reserva_total( $reservas );
+        if ( $total_pvp <= 0 ) {
+            $total_pvp = $this->extract_total_pvp( $info );
+        }
         $margen_estimado = $this->extract_margen_estimado( $info );
         $dias_hasta      = $this->calculate_days_until( $fecha_inicio );
 
@@ -164,7 +347,7 @@ class WP_Travel_GIAV_Dashboard_Service {
 
         return [
             'giav_id_humano'     => $this->resolve_human_id( $expediente ),
-            'cliente_nombre'     => $this->resolve_cliente_nombre( $expediente ),
+            'cliente_nombre'     => $this->resolve_cliente_nombre( $expediente, $reservas ),
             'agente_comercial'  => $this->resolve_agente_comercial( $expediente ),
             'nombre_viaje'       => $this->get_string_field( $expediente, [ 'Titulo', 'titulo', 'Nombre', 'nombre_viaje', 'Descripcion' ] ),
             'fecha_inicio'       => $fecha_inicio,
@@ -176,6 +359,41 @@ class WP_Travel_GIAV_Dashboard_Service {
             'riesgo'             => $pagos['riesgo'],
             'fecha_inicio_ts'    => $timestamp,
         ];
+    }
+
+    private function derive_dates_from_reservas( array $reservas ): array {
+        $min_start = null;
+        $max_end   = null;
+
+        foreach ( $reservas as $reserva ) {
+            $start = $this->extract_service_date( $reserva, self::SERVICE_START_KEYS );
+            if ( $start && ( $min_start === null || $start < $min_start ) ) {
+                $min_start = $start;
+            }
+
+            $end = $this->extract_service_date( $reserva, self::SERVICE_END_KEYS );
+            if ( $end && ( $max_end === null || $end > $max_end ) ) {
+                $max_end = $end;
+            }
+        }
+
+        return [
+            'start' => $min_start ? $min_start->format( 'Y-m-d' ) : null,
+            'end'   => $max_end ? $max_end->format( 'Y-m-d' ) : null,
+        ];
+    }
+
+    private function extract_service_date( $reserva, array $keys ): ?\DateTimeImmutable {
+        foreach ( $keys as $key ) {
+            $value = $this->get_value( $reserva, [ $key ], null );
+            if ( $value ) {
+                $date = $this->parse_date_value( $value );
+                if ( $date ) {
+                    return $date;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -252,12 +470,19 @@ class WP_Travel_GIAV_Dashboard_Service {
             $riesgo = 'ok';
         }
 
+        $pendiente_total = round( $pending, 2 );
+        $pagado_total = round( max( $total_pvp - $pending, 0.0 ), 2 );
+        $total_value = round( $total_pvp, 2 );
+
         return [
             'estado'             => $estado,
             'proximo_vencimiento' => $proximo_vencimiento,
             'dias_para_vencer'   => $dias_para_vencer,
             'tipo'               => $tipo,
-            'monto_pendiente'    => round( $pending, 2 ),
+            'monto_pendiente'    => $pendiente_total,
+            'pendiente_total'    => $pendiente_total,
+            'pagado_total'       => $pagado_total,
+            'total_pvp'          => $total_value,
             'riesgo'             => $riesgo,
         ];
     }
@@ -458,6 +683,33 @@ class WP_Travel_GIAV_Dashboard_Service {
     }
 
     /**
+     * Sums the estimated total across all reservas for an expediente.
+     */
+    private function calculate_reserva_total( array $reservas ): float {
+        $total = 0.0;
+        foreach ( $reservas as $reserva ) {
+            $total += $this->extract_reserva_price( $reserva );
+        }
+        return round( $total, 2 );
+    }
+
+    /**
+     * Extracts the sale price for a reserva.
+     */
+    private function extract_reserva_price( $reserva ): float {
+        $keys = [
+            'VentaComis',
+            'ventaComis',
+            'Venta',
+            'venta',
+            'PvpRecomendado',
+            'pvpRecomendado',
+        ];
+        $value = $this->get_value( $reserva, $keys, 0 );
+        return $this->convert_to_float( $value );
+    }
+
+    /**
      * Formats a date boundary with a time portion for SOAP filters.
      */
     /**
@@ -517,7 +769,20 @@ class WP_Travel_GIAV_Dashboard_Service {
     /**
      * Resolves the client name.
      */
-    private function resolve_cliente_nombre( $expediente ): string {
+    private function resolve_cliente_nombre( $expediente, array $reservas ): string {
+        $name = $this->resolve_cliente_from_reservas( $reservas );
+        if ( $name !== '' ) {
+            return $name;
+        }
+
+        $client_id = (int) ( $expediente->IdCliente ?? $expediente->idCliente ?? 0 );
+        if ( $client_id > 0 ) {
+            $cached = $this->get_cached_cliente_name( $client_id );
+            if ( $cached !== null && $cached !== '' ) {
+                return $cached;
+            }
+        }
+
         $client = $this->get_value( $expediente, [ 'Cliente', 'cliente', 'ClienteExpediente', 'clienteExpediente' ], null );
         if ( $client ) {
             $full_name = $this->build_person_name( $client );
@@ -526,6 +791,89 @@ class WP_Travel_GIAV_Dashboard_Service {
             }
         }
         return $this->get_string_field( $expediente, [ 'ClienteNombre', 'cliente_nombre', 'clienteName', 'customer_name', 'NombreCliente' ] );
+    }
+
+    /**
+     * Attempts to resolve the client name from associated reservas.
+     */
+    private function resolve_cliente_from_reservas( array $reservas ): string {
+        foreach ( $reservas as $reserva ) {
+            $datos = $this->get_value( $reserva, [ 'DatosExternos' ], null );
+            if ( $datos ) {
+                $name = $this->extract_cliente_name( $datos );
+                if ( $name !== '' ) {
+                    return $name;
+                }
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Returns a cached client name or fetches it from GIAV.
+     */
+    private function get_cached_cliente_name( int $client_id ): ?string {
+        if ( array_key_exists( $client_id, $this->cliente_name_cache ) ) {
+            return $this->cliente_name_cache[ $client_id ];
+        }
+
+        $name = $this->fetch_cliente_name( $client_id );
+        $this->cliente_name_cache[ $client_id ] = $name;
+        return $name;
+    }
+
+    /**
+     * Fetches a client record from GIAV and extracts the display name.
+     */
+    private function fetch_cliente_name( int $client_id ): ?string {
+        if ( $client_id <= 0 ) {
+            return null;
+        }
+
+        $trace = [];
+        $res = wp_travel_giav_call( 'Cliente_GET', [ 'id' => $client_id ], $trace );
+        if ( is_wp_error( $res ) ) {
+            return null;
+        }
+
+        $cliente = null;
+        if ( is_object( $res ) && isset( $res->Cliente_GETResult ) ) {
+            $cliente = $res->Cliente_GETResult;
+        } else {
+            $cliente = $res;
+        }
+
+        if ( ! is_object( $cliente ) ) {
+            return null;
+        }
+
+        $name = $this->extract_cliente_name( $cliente );
+        return $name !== '' ? $name : null;
+    }
+
+    /**
+     * Extracts a readable name from a client-like object.
+     */
+    private function extract_cliente_name( $object ): string {
+        return $this->get_string_field( $object, [ 'NombreCliente', 'nombreCliente', 'NombreClienteAlias', 'ApellidosNombreCliente' ] );
+    }
+
+    /**
+     * Builds a SOAP-friendly ArrayOfInt structure.
+     *
+     * @param int[] $values
+     * @return array|null
+     */
+    private function build_array_of_int( array $values ): ?array {
+        $unique = array_values( array_unique( array_filter( $values, function( $value ) {
+            return $value > 0;
+        } ) ) );
+
+        if ( empty( $unique ) ) {
+            return null;
+        }
+
+        return [ 'int' => $unique ];
     }
 
     /**
