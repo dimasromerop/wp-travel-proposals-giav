@@ -31,6 +31,16 @@ define( 'WP_TRAVEL_GIAV_TABLE_SYNC_LOG', $wpdb->prefix . 'travel_giav_sync_log' 
 define( 'WP_TRAVEL_GIAV_TABLE_RESERVAS', $wpdb->prefix . 'travel_giav_reservas' );
 define( 'WP_TRAVEL_GIAV_TABLE_REQUESTS', $wpdb->prefix . 'travel_giav_requests' );
 
+if ( ! function_exists( 'wp_travel_giav_clear_rest_output' ) ) {
+    function wp_travel_giav_clear_rest_output(): void {
+        while ( ob_get_level() ) {
+            ob_end_clean();
+        }
+    }
+}
+
+add_action( 'rest_pre_serve_request', 'wp_travel_giav_clear_rest_output', 0 );
+
 // Default supplier fallback in GIAV ("Proveedores varios").
 // Used when a service requires a supplier but no explicit mapping exists yet.
 define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_ID', '1734698' );

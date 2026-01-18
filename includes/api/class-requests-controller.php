@@ -69,6 +69,7 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
     }
 
     public function list_requests( WP_REST_Request $request ) {
+        wp_travel_giav_clear_rest_output();
         if ( ! wp_travel_giav_gf_is_active() ) {
             return $this->error( 'Gravity Forms no está activo.', 503 );
         }
@@ -127,6 +128,7 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
     }
 
     public function get_request( WP_REST_Request $request ) {
+        wp_travel_giav_clear_rest_output();
         if ( ! wp_travel_giav_gf_is_active() ) {
             return $this->error( 'Gravity Forms no está activo.', 503 );
         }
@@ -173,6 +175,7 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
     }
 
     public function update_request_status( WP_REST_Request $request ) {
+        wp_travel_giav_clear_rest_output();
         $data = $request->get_json_params();
         $status = sanitize_key( (string) ( $data['status'] ?? '' ) );
         if ( ! in_array( $status, WP_TRAVEL_GIAV_REQUEST_STATUSES, true ) ) {
@@ -197,6 +200,7 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
     }
 
     public function convert_request( WP_REST_Request $request ) {
+        wp_travel_giav_clear_rest_output();
         if ( ! wp_travel_giav_gf_is_active() ) {
             return $this->error( 'Gravity Forms no está activo.', 503 );
         }
@@ -270,6 +274,7 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
     }
 
     public function get_mapping_config() {
+        wp_travel_giav_clear_rest_output();
         if ( ! wp_travel_giav_gf_is_active() ) {
             return $this->error( 'Gravity Forms no está activo.', 503 );
         }
@@ -295,6 +300,7 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
     }
 
     public function save_mapping_config( WP_REST_Request $request ) {
+        wp_travel_giav_clear_rest_output();
         if ( ! wp_travel_giav_gf_is_active() ) {
             return $this->error( 'Gravity Forms no está activo.', 503 );
         }
@@ -311,6 +317,7 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
     }
 
     public function get_form_mapping( WP_REST_Request $request ) {
+        wp_travel_giav_clear_rest_output();
         if ( ! wp_travel_giav_gf_is_active() ) {
             return $this->error( 'Gravity Forms no está activo.', 503 );
         }
@@ -328,6 +335,7 @@ class WP_Travel_Requests_Controller extends WP_Travel_REST_Controller {
     }
 
     public function save_form_mapping( WP_REST_Request $request ) {
+        wp_travel_giav_clear_rest_output();
         if ( ! wp_travel_giav_gf_is_active() ) {
             return $this->error( 'Gravity Forms no está activo.', 503 );
         }

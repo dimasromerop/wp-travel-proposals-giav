@@ -69,6 +69,7 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
      * }
      */
     public function batch_upsert_mappings( WP_REST_Request $req ) {
+        wp_travel_giav_clear_rest_output();
         global $wpdb;
 
         $wp_object_type   = sanitize_text_field( $req->get_param('wp_object_type') );
@@ -203,6 +204,7 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
      * Buscar hoteles (CCT JetEngine) o campos de golf (CPT)
      */
     public function search(WP_REST_Request $req) {
+        wp_travel_giav_clear_rest_output();
         global $wpdb;
 
         $type = sanitize_text_field($req->get_param('type'));
@@ -258,6 +260,7 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
      * Mapeo GIAV
      */
     public function get_mapping(WP_REST_Request $req) {
+        wp_travel_giav_clear_rest_output();
         global $wpdb;
 
         $wp_object_type = sanitize_text_field($req->get_param('wp_object_type'));
@@ -300,6 +303,7 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
      * type=golf  -> CPT campos_de_golf
      */
     public function list_mappings( WP_REST_Request $req ) {
+        wp_travel_giav_clear_rest_output();
         global $wpdb;
 
         $type   = sanitize_text_field( (string) $req->get_param( 'type' ) );
@@ -440,7 +444,8 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
      * If giav_entity_type is 'supplier', we validate the supplier exists in GIAV via Proveedor_GET.
      */
     public function upsert_mapping(WP_REST_Request $req) {
-    global $wpdb;
+        wp_travel_giav_clear_rest_output();
+        global $wpdb;
 
     $wp_object_type   = sanitize_text_field($req->get_param('wp_object_type'));
     $wp_object_id     = (int) $req->get_param('wp_object_id');

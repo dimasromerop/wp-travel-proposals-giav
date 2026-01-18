@@ -11,10 +11,14 @@ abstract class WP_Travel_REST_Controller extends WP_REST_Controller {
 
 
     protected function response( $data, int $status = 200 ) {
-        return new WP_REST_Response( $data, $status );
+        wp_travel_giav_clear_rest_output();
+        $response = rest_ensure_response( $data );
+        $response->set_status( $status );
+        return $response;
     }
 
     protected function error( string $message, int $status = 400 ) {
+        wp_travel_giav_clear_rest_output();
         return new WP_Error( 'wp_travel_error', $message, [ 'status' => $status ] );
     }
 
