@@ -152,6 +152,8 @@ function MappingStatus({ status }) {
   return <span style={{ whiteSpace: 'nowrap' }}>{label}</span>;
 }
 
+const DEFAULT_SUPPLIER_ID = '1734698';
+
 export default function GiavMappingAdmin() {
   const [type, setType] = useState('hotel');
   const [q, setQ] = useState('');
@@ -163,11 +165,23 @@ export default function GiavMappingAdmin() {
   const [selected, setSelected] = useState({}); // key => true
   const [bulkProvider, setBulkProvider] = useState({ id: '', label: '' });
   const [bulkApplying, setBulkApplying] = useState(false);
+  const [savingMultiple, setSavingMultiple] = useState(false);
 
   const rows = useMemo(() => (data.items || []), [data]);
 
   const selectedKeys = useMemo(() => Object.keys(selected).filter((k) => selected[k]), [selected]);
   const allSelected = useMemo(() => rows.length > 0 && rows.every((r) => selected[keyFor(r)]), [rows, selected]);
+  const pendingEdits = useMemo(() => {
+    return rows.reduce((acc, row) => {
+      const key = keyFor(row);
+      const edit = edits[key];
+      if (edit?.providerId) {
+        acc.push({ key, row, edit });
+      }
+      return acc;
+    }, []);
+  }, [rows, edits]);
+  const pendingCount = pendingEdits.length;
 
   function keyFor(r) {
     return `${r.wp_object_type}:${r.wp_object_id}`;
@@ -189,15 +203,19 @@ export default function GiavMappingAdmin() {
     setEdits((prev) => ({ ...prev, [k]: { ...(prev[k] || {}), ...patch } }));
   }
 
-  async function refresh() {
+  async function refresh({ silent = false } = {}) {
     setLoading(true);
-    setNotice(null);
+    if (!silent) setNotice(null);
     try {
       const res = await API.listGiavMappings({ type, q });
       setData(res || { items: [], total: 0 });
+      return { ok: true };
     } catch (err) {
-      setNotice({ status: 'error', message: err?.message || 'No se pudo cargar el mapeo.' });
+      if (!silent) {
+        setNotice({ status: 'error', message: err?.message || 'No se pudo cargar el mapeo.' });
+      }
       setData({ items: [], total: 0 });
+      return { ok: false, error: err };
     } finally {
       setLoading(false);
     }
@@ -258,6 +276,89 @@ export default function GiavMappingAdmin() {
     }
   }
 
+  async function saveMultiple() {
+    if (pendingCount === 0) {
+      setNotice({ status: 'warning', message: 'Asigna al menos un proveedor antes de guardar.' });
+      return;
+    }
+
+    setSavingMultiple(true);
+    setNotice(null);
+
+    const successKeys = [];
+    const errors = [];
+
+    try {
+      for (const { key, row, edit } of pendingEdits) {
+        const isGeneric = String(edit.providerId) === DEFAULT_SUPPLIER_ID;
+        try {
+          await API.upsertGiavMapping({
+            wp_object_type: row.wp_object_type,
+            wp_object_id: row.wp_object_id,
+            giav_entity_type: 'supplier',
+            giav_entity_id: String(edit.providerId),
+            giav_supplier_id: String(edit.providerId),
+            giav_supplier_name: edit.providerName || null,
+            status: isGeneric ? 'needs_review' : 'active',
+            match_type: isGeneric ? 'auto_generic' : 'manual',
+          });
+          successKeys.push(key);
+        } catch (err) {
+          const title = row.title || `${row.wp_object_type} #${row.wp_object_id}`;
+          errors.push({
+            key,
+            title,
+            message: err?.message || 'No se pudo guardar el mapeo.',
+          });
+        }
+      }
+
+      setEdits((prev) => {
+        const copy = { ...prev };
+        successKeys.forEach((k) => {
+          delete copy[k];
+        });
+        return copy;
+      });
+
+      const refreshResult = await refresh({ silent: true });
+      const successCount = successKeys.length;
+      const errorCount = errors.length;
+      let status;
+      const messageParts = [];
+
+      if (errorCount === 0) {
+        status = 'success';
+        messageParts.push(`Guardado de ${successCount} fila${successCount === 1 ? '' : 's'} completado.`);
+      } else if (successCount === 0) {
+        status = 'error';
+        messageParts.push('No se pudo guardar ninguna fila.');
+      } else {
+        status = 'warning';
+        messageParts.push(`Guardado parcial: ${successCount} OK, ${errorCount} error(es).`);
+      }
+
+      if (errorCount > 0) {
+        const errorSummary = errors.map((err) => err.title).join(', ');
+        messageParts.push(`Errores: ${errorSummary}.`);
+      }
+
+      if (!refreshResult.ok) {
+        const tail = refreshResult.error?.message ? `: ${refreshResult.error.message}` : ' después del guardado';
+        messageParts.push(`Falló la recarga${tail}.`);
+        if (status === 'success') {
+          status = 'warning';
+        }
+      }
+
+      setNotice({ status, message: messageParts.join(' ') });
+    } catch (err) {
+      setNotice({ status: 'error', message: err?.message || 'No se pudieron guardar las asignaciones.' });
+    } finally {
+      setSavingMultiple(false);
+    }
+  }
+
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -273,7 +374,6 @@ export default function GiavMappingAdmin() {
 
     setSaving(k);
     setNotice(null);
-    const DEFAULT_SUPPLIER_ID = '1734698';
     const isGeneric = String(e.providerId) === DEFAULT_SUPPLIER_ID;
 
     try {
@@ -348,6 +448,14 @@ export default function GiavMappingAdmin() {
               disabled={bulkApplying}
             >
               Aplicar en lote ({selectedKeys.length})
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={saveMultiple}
+              isBusy={savingMultiple}
+              disabled={savingMultiple || pendingCount === 0}
+            >
+              Guardar asignaciones ({pendingCount})
             </Button>
           </div>
 
