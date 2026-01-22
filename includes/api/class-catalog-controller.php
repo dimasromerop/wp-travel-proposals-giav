@@ -123,6 +123,56 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
         $now     = current_time('mysql');
         $user_id = get_current_user_id();
 
+        // WPML: if we are mapping golf courses (CPT), propagate the supplier mapping to ALL translations
+        // of each selected course. This ensures proposals created in any language can resolve mappings.
+        if ( $wp_object_type === 'course' && defined('ICL_SITEPRESS_VERSION') && isset($GLOBALS['sitepress']) && is_object($GLOBALS['sitepress']) ) {
+            try {
+                $sitepress = $GLOBALS['sitepress'];
+                $element_type = 'post_campos_de_golf';
+
+                if ( method_exists($sitepress, 'get_element_trid') && method_exists($sitepress, 'get_element_translations') ) {
+                    $expanded = [];
+                    $seen = [];
+
+                    foreach ( $items as $it ) {
+                        $base_id = isset($it['wp_object_id']) ? (int) $it['wp_object_id'] : 0;
+                        if ( $base_id <= 0 ) {
+                            continue;
+                        }
+
+                        // Always include the base id.
+                        if ( ! isset($seen[$base_id]) ) {
+                            $seen[$base_id] = true;
+                            $expanded[] = [ 'wp_object_id' => $base_id ];
+                        }
+
+                        $trid = $sitepress->get_element_trid( $base_id, $element_type );
+                        if ( ! $trid ) {
+                            continue;
+                        }
+                        $translations = $sitepress->get_element_translations( $trid, $element_type );
+                        if ( ! is_array($translations) ) {
+                            continue;
+                        }
+                        foreach ( $translations as $t ) {
+                            $tid = isset($t->element_id) ? (int) $t->element_id : 0;
+                            if ( $tid <= 0 || isset($seen[$tid]) ) {
+                                continue;
+                            }
+                            $seen[$tid] = true;
+                            $expanded[] = [ 'wp_object_id' => $tid ];
+                        }
+                    }
+
+                    if ( ! empty($expanded) ) {
+                        $items = $expanded;
+                    }
+                }
+            } catch ( \Throwable $e ) {
+                // Silent: base items still get mapped.
+            }
+        }
+
         $results = [
             'ok' => true,
             'total' => count($items),
@@ -242,6 +292,9 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
                 's'              => $q,
                 'posts_per_page' => 20,
                 'post_status'    => 'publish',
+                // IMPORTANT: get_posts() defaults to suppress_filters=true which bypasses WPML
+                // language filtering and can produce duplicated results (one per translation).
+                'suppress_filters' => false,
             ]);
 
             return rest_ensure_response(array_map(function ($p) {
@@ -313,9 +366,21 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
 
         $map_table = $wpdb->prefix . 'giav_mapping';
 
+        // WPML support (avoid listing duplicated translations for CPTs).
+        $icl_table = $wpdb->prefix . 'icl_translations';
+        $has_wpml  = defined('ICL_SITEPRESS_VERSION') && ($wpdb->get_var( $wpdb->prepare("SHOW TABLES LIKE %s", $icl_table ) ) === $icl_table);
+        $wpml_element_type = 'post_campos_de_golf';
+
         if ( $type === 'hotel' ) {
             $cct_table = $wpdb->prefix . 'jet_cct_hoteles';
             $like      = '%' . $wpdb->esc_like( $q ) . '%';
+
+            $total = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$cct_table} h WHERE h.nombre_hotel LIKE %s",
+                    $like
+                )
+            );
 
             // LEFT JOIN so we can show missing mappings too.
             $sql = $wpdb->prepare(
@@ -371,11 +436,36 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
                 'items'  => $out,
                 'limit'  => $limit,
                 'offset' => $offset,
+                'total'  => $total,
             ] );
         }
 
         if ( $type === 'golf' ) {
             $like = '%' . $wpdb->esc_like( $q ) . '%';
+
+            // If WPML is active, show only the original element for each translation group.
+            // We still save mappings for ALL translations on write (see upsert/batch-upsert).
+            $join_wpml  = '';
+            $where_wpml = '';
+            if ( $has_wpml ) {
+                $join_wpml  = $wpdb->prepare(
+                    " LEFT JOIN {$icl_table} t ON t.element_id = p.ID AND t.element_type = %s ",
+                    $wpml_element_type
+                );
+                // Originals have source_language_code NULL. If a post isn't registered in WPML, include it too.
+                $where_wpml = " AND (t.source_language_code IS NULL OR t.element_id IS NULL) ";
+            }
+
+            $total_sql =
+                "SELECT COUNT(*)
+                 FROM {$wpdb->posts} p
+                 {$join_wpml}
+                 WHERE p.post_type = 'campos_de_golf'
+                   AND p.post_status = 'publish'
+                   AND p.post_title LIKE %s
+                   {$where_wpml}";
+
+            $total = (int) $wpdb->get_var( $wpdb->prepare( $total_sql, $like ) );
 
             $sql = $wpdb->prepare(
     "SELECT p.ID AS wp_object_id,
@@ -388,12 +478,14 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
             m.match_type,
             m.updated_at
      FROM {$wpdb->posts} p
+     {$join_wpml}
      LEFT JOIN {$map_table} m
        ON m.wp_object_type = 'course'
       AND m.wp_object_id = p.ID
      WHERE p.post_type = 'campos_de_golf'
        AND p.post_status = 'publish'
        AND p.post_title LIKE %s
+       {$where_wpml}
      ORDER BY p.post_title ASC
      LIMIT %d OFFSET %d",
     $like,
@@ -432,6 +524,7 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
                 'items'  => $out,
                 'limit'  => $limit,
                 'offset' => $offset,
+                'total'  => $total,
             ] );
         }
 
@@ -572,6 +665,58 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
 
     if ($ok === false) {
         return new WP_Error('db_error', 'No se pudo guardar el mapeo', ['status' => 500]);
+    }
+
+    // WPML: if the golf course CPT is translated, persist the SAME supplier mapping for all translations.
+    // We list only originals in /giav-mapping/list to avoid duplicates, but operationally any language
+    // can be used later when creating proposals, so mappings must exist for each translated post ID.
+    if ( $wp_object_type === 'course' && defined('ICL_SITEPRESS_VERSION') && isset($GLOBALS['sitepress']) && is_object($GLOBALS['sitepress']) ) {
+        try {
+            $sitepress = $GLOBALS['sitepress'];
+            $element_type = 'post_campos_de_golf';
+            if ( method_exists($sitepress, 'get_element_trid') && method_exists($sitepress, 'get_element_translations') ) {
+                $trid = $sitepress->get_element_trid( $wp_object_id, $element_type );
+                if ( $trid ) {
+                    $translations = $sitepress->get_element_translations( $trid, $element_type );
+                    if ( is_array($translations) ) {
+                        foreach ( $translations as $t ) {
+                            $tid = isset($t->element_id) ? (int) $t->element_id : 0;
+                            if ( $tid <= 0 || $tid === $wp_object_id ) {
+                                continue;
+                            }
+
+                            $data_t = $data;
+                            $data_t['wp_object_id'] = $tid;
+
+                            $existing_t = $wpdb->get_var(
+                                $wpdb->prepare(
+                                    "SELECT id FROM {$table} WHERE wp_object_type = %s AND wp_object_id = %d LIMIT 1",
+                                    $wp_object_type,
+                                    $tid
+                                )
+                            );
+                            if ( $existing_t ) {
+                                $wpdb->update(
+                                    $table,
+                                    $data_t,
+                                    ['id' => (int) $existing_t],
+                                    ['%s','%d','%s','%s','%s','%s','%s','%s','%s','%d'],
+                                    ['%d']
+                                );
+                            } else {
+                                $wpdb->insert(
+                                    $table,
+                                    $data_t,
+                                    ['%s','%d','%s','%s','%s','%s','%s','%s','%s','%d']
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        } catch ( \Throwable $e ) {
+            // Silent fail: the primary mapping is already saved; WPML propagation is best-effort.
+        }
     }
 
     return rest_ensure_response([

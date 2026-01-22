@@ -160,6 +160,8 @@ export default function GiavMappingAdmin() {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
   const [data, setData] = useState({ items: [], total: 0 });
+  const [pageSize, setPageSize] = useState(50);
+  const [pageIndex, setPageIndex] = useState(0);
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(null);
   const [selected, setSelected] = useState({}); // key => true
@@ -183,6 +185,13 @@ export default function GiavMappingAdmin() {
   }, [rows, edits]);
   const pendingCount = pendingEdits.length;
 
+  const total = Number(data?.total || 0);
+  const pageCount = total > 0 ? Math.ceil(total / pageSize) : 0;
+  const rangeStart = total === 0 ? 0 : pageIndex * pageSize + 1;
+  const rangeEnd = total === 0 ? 0 : Math.min(total, (pageIndex + 1) * pageSize);
+  const canPrev = pageIndex > 0;
+  const canNext = total > 0 && (pageIndex + 1) * pageSize < total;
+
   function keyFor(r) {
     return `${r.wp_object_type}:${r.wp_object_id}`;
   }
@@ -203,11 +212,13 @@ export default function GiavMappingAdmin() {
     setEdits((prev) => ({ ...prev, [k]: { ...(prev[k] || {}), ...patch } }));
   }
 
-  async function refresh({ silent = false } = {}) {
+  async function refresh({ silent = false, pageIndexOverride } = {}) {
     setLoading(true);
     if (!silent) setNotice(null);
     try {
-      const res = await API.listGiavMappings({ type, q });
+      const effectivePage = Number.isInteger(pageIndexOverride) ? pageIndexOverride : pageIndex;
+      const offset = effectivePage * pageSize;
+      const res = await API.listGiavMappings({ type, q, limit: pageSize, offset });
       setData(res || { items: [], total: 0 });
       return { ok: true };
     } catch (err) {
@@ -360,7 +371,9 @@ export default function GiavMappingAdmin() {
   }
 
   useEffect(() => {
-    refresh();
+    // Reset pagination when switching catalog type.
+    setPageIndex(0);
+    refresh({ pageIndexOverride: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type]);
 
@@ -423,12 +436,62 @@ export default function GiavMappingAdmin() {
             <TextControl
               label="Buscar"
               value={q}
-              onChange={(v) => setQ(v)}
+              onChange={(v) => {
+                setQ(v);
+                setPageIndex(0);
+              }}
               placeholder={type === 'hotel' ? 'Nombre del hotel…' : 'Nombre del campo…'}
             />
             <Button variant="secondary" onClick={() => refresh()} disabled={loading}>
               {loading ? <Spinner /> : 'Actualizar'}
             </Button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 12, justifyContent: 'space-between' }}>
+            <SelectControl
+              label="Por página"
+              value={String(pageSize)}
+              options={[
+                { label: '25', value: '25' },
+                { label: '50', value: '50' },
+                { label: '100', value: '100' },
+                { label: '200', value: '200' },
+              ]}
+              onChange={(v) => {
+                const nextSize = Math.max(1, Math.min(200, parseInt(v, 10) || 50));
+                setPageSize(nextSize);
+                setPageIndex(0);
+                refresh({ pageIndexOverride: 0 });
+              }}
+            />
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+                {total > 0 ? `Mostrando ${rangeStart}–${rangeEnd} de ${total}` : 'Sin resultados'}
+              </div>
+              <Button
+                variant="secondary"
+                disabled={loading || !canPrev}
+                onClick={() => {
+                  const next = Math.max(0, pageIndex - 1);
+                  setPageIndex(next);
+                  refresh({ pageIndexOverride: next });
+                }}
+              >
+                ←
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={loading || !canNext}
+                onClick={() => {
+                  const next = pageIndex + 1;
+                  setPageIndex(next);
+                  refresh({ pageIndexOverride: next });
+                }}
+              >
+                →
+              </Button>
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 12 }}>
