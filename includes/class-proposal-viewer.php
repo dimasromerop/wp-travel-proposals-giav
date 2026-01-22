@@ -1197,9 +1197,6 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                 <?php if ( $informative_room_extras ) : ?>
                     <div class="includes-block includes-block--informative">
                         <h3><?php echo esc_html__( 'Cotización informativa', 'wp-travel-giav' ); ?></h3>
-                        <p class="includes-block__note">
-                            <?php echo esc_html__( 'Estas opciones se muestran solo para ayudar a decidir. No están incluidas en el total salvo que se confirmen.', 'wp-travel-giav' ); ?>
-                        </p>
                         <ul class="includes-list">
                             <?php foreach ( $informative_room_extras as $extra_line ) : ?>
                                 <li><?php echo esc_html( $extra_line ); ?></li>
@@ -1398,6 +1395,11 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                                 $end_date = self::format_spanish_date( (string) ( $item['end_date'] ?? '' ) );
                                 $notes = trim( (string) ( $item['notes_public'] ?? '' ) );
                                 $components_text = trim( (string) ( $item['package_components_text'] ?? '' ) );
+                                $package_pricing_basis = (string) ( $item['package_pricing_basis'] ?? '' );
+                                $package_individual_mode = (string) ( $item['package_individual_mode'] ?? '' );
+                                $pp_double = (float) ( $item['package_pp_double'] ?? $item['unit_sell_price'] ?? 0 );
+                                $pp_single = (float) ( $item['package_pp_single'] ?? $item['unit_sell_price_individual'] ?? 0 );
+                                $supp_single = (float) ( $item['package_single_supplement'] ?? $item['package_single_supplement_sell'] ?? 0 );
                                 $meta_parts = [];
                                 if ( $start_date || $end_date ) {
                                     $meta_parts[] = trim( implode( ' → ', array_filter( [ $start_date, $end_date ] ) ) );
@@ -1409,6 +1411,29 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                                     <?php if ( $meta_line ) : ?>
                                         <div class="service-card__meta"><?php echo esc_html( $meta_line ); ?></div>
                                     <?php endif; ?>
+
+                                <?php if ( ( $item['service_type'] ?? '' ) === 'package' && ( $package_pricing_basis === 'per_person' || $package_pricing_basis === '' ) ) : ?>
+                                    <?php
+                                    $pp_double_label = self::format_currency_value( $pp_double, $currency );
+                                    $pricing_bits = [];
+                                    if ( $pp_double > 0 ) {
+                                        $pricing_bits[] = sprintf( /* translators: %s currency value */ __( 'Precio por persona (doble): %s', 'wp-travel-giav' ), $pp_double_label );
+                                    }
+                                    if ( $package_individual_mode === 'supplement' ) {
+                                        $supp = $supp_single > 0 ? $supp_single : max( 0, $pp_single - $pp_double );
+                                        if ( $supp > 0 ) {
+                                            $pricing_bits[] = sprintf( /* translators: %s currency value */ __( 'Suplemento individual: %s', 'wp-travel-giav' ), self::format_currency_value( $supp, $currency ) );
+                                        }
+                                    } else {
+                                        if ( $pp_single > 0 ) {
+                                            $pricing_bits[] = sprintf( /* translators: %s currency value */ __( 'Precio en individual: %s', 'wp-travel-giav' ), self::format_currency_value( $pp_single, $currency ) );
+                                        }
+                                    }
+                                    ?>
+                                    <?php if ( ! empty( $pricing_bits ) ) : ?>
+                                        <div class="service-card__meta"><?php echo esc_html( implode( ' · ', $pricing_bits ) ); ?></div>
+                                    <?php endif; ?>
+                                <?php endif; ?>
                                     <?php if ( $components_text ) : ?>
                                         <div class="service-card__details">
                                             <?php foreach ( array_filter( array_map( 'trim', explode( "\n", $components_text ) ) ) as $line ) : ?>

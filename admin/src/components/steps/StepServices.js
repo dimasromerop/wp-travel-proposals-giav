@@ -451,8 +451,12 @@ function defaultItem(basics, defaultMarkupPct = 0) {
     // Paquete: pricing
     package_pricing_basis: 'per_person', // 'per_person' | 'per_room'
     package_individual_count: 0,
+    // Individual pricing mode: 'price' (absolute) or 'supplement' over double.
+    package_individual_mode: 'price',
     unit_cost_net_individual: '',
     unit_sell_price_individual: '',
+    package_single_supplement_net: '',
+    package_single_supplement_sell: '',
 
     display_name: '',
     use_manual_entry: false,
@@ -511,12 +515,20 @@ function computeLine(item, basics, globalMarkupPct) {
 
   // Package individual pricing (optional)
   if (it.service_type === 'package') {
+    // Individual mode: either explicit per-person price (absolute) or supplement over double.
+    it.package_individual_mode = it.package_individual_mode === 'supplement' ? 'supplement' : 'price';
+
+    it.package_single_supplement_net = Math.max(0, toNumber(it.package_single_supplement_net));
+
     it.unit_cost_net_individual = Math.max(0, toNumber(it.unit_cost_net_individual));
     if (!it.lock_sell_price) {
       const base = it.unit_cost_net_individual > 0 ? it.unit_cost_net_individual : it.unit_cost_net;
       it.unit_sell_price_individual = computeUnitSellFromMarkup(base, effectiveMarkup);
+      // Supplement sell computed from supplement net
+      it.package_single_supplement_sell = computeUnitSellFromMarkup(it.package_single_supplement_net, effectiveMarkup);
     } else {
       it.unit_sell_price_individual = Math.max(0, toNumber(it.unit_sell_price_individual));
+      it.package_single_supplement_sell = Math.max(0, toNumber(it.package_single_supplement_sell));
     }
   }
 
@@ -569,22 +581,41 @@ function computeLine(item, basics, globalMarkupPct) {
     // Normalize numbers
     it.unit_cost_net = Math.max(0, toNumber(it.unit_cost_net));
     it.unit_cost_net_individual = Math.max(0, toNumber(it.unit_cost_net_individual));
+    it.package_individual_mode = it.package_individual_mode === 'supplement' ? 'supplement' : 'price';
+    it.package_single_supplement_net = Math.max(0, toNumber(it.package_single_supplement_net));
 
     if (!it.lock_sell_price) {
       it.unit_sell_price = computeUnitSellFromMarkup(it.unit_cost_net, effectiveMarkup);
       const baseIndivNet = it.unit_cost_net_individual > 0 ? it.unit_cost_net_individual : it.unit_cost_net;
       it.unit_sell_price_individual = computeUnitSellFromMarkup(baseIndivNet, effectiveMarkup);
+      it.package_single_supplement_sell = computeUnitSellFromMarkup(it.package_single_supplement_net, effectiveMarkup);
     } else {
       it.unit_sell_price = Math.max(0, toNumber(it.unit_sell_price));
       it.unit_sell_price_individual = Math.max(0, toNumber(it.unit_sell_price_individual));
+      it.package_single_supplement_sell = Math.max(0, toNumber(it.package_single_supplement_sell));
     }
 
     if (pricingBasis === 'per_person') {
       it.quantity = paxTotal; // read-only in UI
-      const baseIndivCost = it.unit_cost_net_individual > 0 ? it.unit_cost_net_individual : it.unit_cost_net;
-      const baseIndivSell = it.unit_sell_price_individual > 0 ? it.unit_sell_price_individual : it.unit_sell_price;
-      it.line_cost_net = round2(sharedCount * it.unit_cost_net + indivCount * baseIndivCost);
-      it.line_sell_price = round2(sharedCount * it.unit_sell_price + indivCount * baseIndivSell);
+      // Determine single per-person values either from explicit price or from supplement over double.
+      const singleMode = it.package_individual_mode;
+      const singlePpCost =
+        singleMode === 'supplement'
+          ? (it.unit_cost_net + it.package_single_supplement_net)
+          : (it.unit_cost_net_individual > 0 ? it.unit_cost_net_individual : it.unit_cost_net);
+      const supplementSell = it.package_single_supplement_sell || 0;
+      const singlePpSell =
+        singleMode === 'supplement'
+          ? (it.unit_sell_price + supplementSell)
+          : (it.unit_sell_price_individual > 0 ? it.unit_sell_price_individual : it.unit_sell_price);
+
+      it.line_cost_net = round2(sharedCount * it.unit_cost_net + indivCount * singlePpCost);
+      it.line_sell_price = round2(sharedCount * it.unit_sell_price + indivCount * singlePpSell);
+
+      // Keep derived numbers handy for preview/snapshot.
+      it.package_pp_double = it.unit_sell_price;
+      it.package_pp_single = singlePpSell;
+      it.package_single_supplement = singleMode === 'supplement' ? supplementSell : Math.max(0, singlePpSell - it.unit_sell_price);
     } else {
       // Per room/package: quantity stays user-provided
       it.quantity = Math.max(1, toInt(it.quantity, 1));
@@ -1297,13 +1328,25 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
 
       if (basis === 'per_person') {
         const indiv = Math.max(0, toInt(it.package_individual_count ?? 0, 0));
+        const indivMode = it.package_individual_mode === 'supplement' ? 'supplement' : 'price';
         if (indiv > paxTotal) {
           issues.push('Individual > pax');
           fieldErrors.packageIndiv = 'Personas en individual no puede superar pax total.';
         }
-        if (indiv > 0 && toNumber(it.unit_sell_price_individual || 0) <= 0) {
-          issues.push('PVP individual faltante');
-          fieldErrors.packageIndivPvp = 'Define PVP por persona (individual).';
+        if (indiv > 0) {
+          if (indivMode === 'supplement') {
+            const supplement = toNumber(it.package_single_supplement_sell || it.package_single_supplement_net || 0);
+            if (supplement <= 0) {
+              issues.push('Suplemento individual faltante');
+              fieldErrors.packageIndivPvp = 'Define suplemento individual (por persona).';
+            }
+          } else {
+            const pvpIndiv = toNumber(it.unit_sell_price_individual || it.unit_cost_net_individual || 0);
+            if (pvpIndiv <= 0) {
+              issues.push('PVP individual faltante');
+              fieldErrors.packageIndivPvp = 'Define precio por persona (individual).';
+            }
+          }
         }
       }
     }
@@ -2012,6 +2055,21 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                             )}
                           </div>
                         )}
+
+                        {it.package_pricing_basis !== 'per_room' && (
+                          <div className="service-card__field">
+                            <SelectControl
+                              label="Precio en individual"
+                              value={it.package_individual_mode || 'price'}
+                              options={[
+                                { label: 'Precio por persona (individual)', value: 'price' },
+                                { label: 'Suplemento sobre doble (por persona)', value: 'supplement' },
+                              ]}
+                              onChange={(v) => updateItem(idx, { package_individual_mode: v })}
+                              help="Indica si el hotel da un precio absoluto en individual o un suplemento sobre la doble."
+                            />
+                          </div>
+                        )}
                       </>
                     )}
 
@@ -2024,14 +2082,26 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                       />
                     </div>
 
-                    {it.service_type === 'package' && it.package_pricing_basis !== 'per_room' && (
+                    {it.service_type === 'package' && it.package_pricing_basis !== 'per_room' && it.package_individual_mode !== 'supplement' && (
                       <div className="service-card__field">
                         <TextControl
                           label="Coste neto (indiv.)"
                           value={String(it.unit_cost_net_individual ?? '')}
                           onChange={(v) => updateItem(idx, { unit_cost_net_individual: v })}
                           placeholder="150"
-                          help="Opcional. Si se deja vacío, se usará el neto unitario."
+                          help="Opcional. Precio absoluto en individual. Si se deja vacío, se usará el neto unitario."
+                        />
+                      </div>
+                    )}
+
+                    {it.service_type === 'package' && it.package_pricing_basis !== 'per_room' && it.package_individual_mode === 'supplement' && (
+                      <div className="service-card__field">
+                        <TextControl
+                          label="Suplemento neto (indiv.)"
+                          value={String(it.package_single_supplement_net ?? '')}
+                          onChange={(v) => updateItem(idx, { package_single_supplement_net: v })}
+                          placeholder="30"
+                          help="Opcional. Suplemento por persona en individual sobre el neto de doble."
                         />
                       </div>
                     )}
@@ -2075,7 +2145,7 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                       {fieldErrors.unitSell && <div className="service-card__field-error">{fieldErrors.unitSell}</div>}
                     </div>
 
-                    {it.service_type === 'package' && it.package_pricing_basis !== 'per_room' && (
+                    {it.service_type === 'package' && it.package_pricing_basis !== 'per_room' && it.package_individual_mode !== 'supplement' && (
                       <div className={`service-card__field ${fieldErrors.packageIndivPvp ? 'is-error' : ''}`}>
                         <TextControl
                           label="PVP (indiv.)"
@@ -2083,6 +2153,21 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                           onChange={(v) => updateItem(idx, { unit_sell_price_individual: v })}
                           placeholder="210"
                           disabled={!it.lock_sell_price}
+                          help="Informativo. Solo aplica si hay viajeros en individual."
+                        />
+                        {fieldErrors.packageIndivPvp && <div className="service-card__field-error">{fieldErrors.packageIndivPvp}</div>}
+                      </div>
+                    )}
+
+                    {it.service_type === 'package' && it.package_pricing_basis !== 'per_room' && it.package_individual_mode === 'supplement' && (
+                      <div className={`service-card__field ${fieldErrors.packageIndivPvp ? 'is-error' : ''}`}>
+                        <TextControl
+                          label="Suplemento PVP (indiv.)"
+                          value={String(it.package_single_supplement_sell ?? '')}
+                          onChange={(v) => updateItem(idx, { package_single_supplement_sell: v })}
+                          placeholder="45"
+                          disabled={!it.lock_sell_price}
+                          help="Informativo. Suplemento por persona en individual sobre la doble."
                         />
                         {fieldErrors.packageIndivPvp && <div className="service-card__field-error">{fieldErrors.packageIndivPvp}</div>}
                       </div>

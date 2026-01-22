@@ -648,6 +648,35 @@ export default function StepPreview({
                         </div>
                       ) : null}
 
+                      {it.service_type === 'package' && (it.package_pricing_basis || 'per_person') === 'per_person' ? (
+                        (() => {
+                          const currency = snapshotHeader.currency || 'EUR';
+                          const ppDouble = toNumber(it.package_pp_double ?? it.unit_sell_price ?? 0);
+                          const mode = it.package_individual_mode === 'supplement' ? 'supplement' : 'price';
+                          const rawSupp = toNumber(it.package_single_supplement ?? it.package_single_supplement_sell ?? 0);
+                          const ppSingle =
+                            mode === 'supplement'
+                              ? (ppDouble + rawSupp)
+                              : toNumber(it.package_pp_single ?? it.unit_sell_price_individual ?? 0);
+                          const hasSingle = ppSingle > 0 && (mode === 'supplement' ? rawSupp >= 0 : true);
+                          const supp = hasSingle ? Math.max(0, ppSingle - ppDouble) : null;
+
+                          return (
+                            <div className="preview-item__meta">
+                              Precio paquete por persona (doble): {currency} {round2(ppDouble).toFixed(2)}
+                              {hasSingle && (
+                                <>
+                                  {' · '}
+                                  {mode === 'supplement'
+                                    ? `Suplemento individual: ${currency} ${round2(supp || 0).toFixed(2)}`
+                                    : `Precio en individual: ${currency} ${round2(ppSingle).toFixed(2)}`}
+                                </>
+                              )}
+                            </div>
+                          );
+                        })()
+                      ) : null}
+
                       {hasBlocking && (
                         <div className="preview-item__blocking">
                           <span className="preview-item__badge preview-item__badge--error">Error</span>
@@ -688,9 +717,6 @@ export default function StepPreview({
               <div className="proposal-preview__informative-block">
                 <div className="proposal-preview__informative-title">
                   Cotización informativa
-                </div>
-                <div className="proposal-preview__informative-note">
-                  Estas opciones se muestran solo para ayudar a decidir. No están incluidas en el total salvo que se confirmen.
                 </div>
                 <div className="proposal-preview__informative-lines">
                   {informativeExtras.map((line) => (
