@@ -6,6 +6,7 @@ import {
   CardHeader,
   Notice,
   TextControl,
+  TextareaControl,
   SelectControl,
   ToggleControl,
 } from '@wordpress/components';
@@ -446,6 +447,13 @@ function defaultItem(basics, defaultMarkupPct = 0) {
 
     // Paquete: descripción de lo que incluye (solo texto, sin precios por línea)
     package_components_text: '',
+
+    // Paquete: pricing
+    package_pricing_basis: 'per_person', // 'per_person' | 'per_room'
+    package_individual_count: 0,
+    unit_cost_net_individual: '',
+    unit_sell_price_individual: '',
+
     display_name: '',
     use_manual_entry: false,
     // --- WP refs (catalog) ---
@@ -501,6 +509,17 @@ function computeLine(item, basics, globalMarkupPct) {
     it.unit_sell_price = Math.max(0, toNumber(it.unit_sell_price));
   }
 
+  // Package individual pricing (optional)
+  if (it.service_type === 'package') {
+    it.unit_cost_net_individual = Math.max(0, toNumber(it.unit_cost_net_individual));
+    if (!it.lock_sell_price) {
+      const base = it.unit_cost_net_individual > 0 ? it.unit_cost_net_individual : it.unit_cost_net;
+      it.unit_sell_price_individual = computeUnitSellFromMarkup(base, effectiveMarkup);
+    } else {
+      it.unit_sell_price_individual = Math.max(0, toNumber(it.unit_sell_price_individual));
+    }
+  }
+
   if (it.service_type === 'hotel') {
     const nights = computeNights(it, basics);
     it.hotel_nights = nights;
@@ -536,6 +555,42 @@ function computeLine(item, basics, globalMarkupPct) {
 
     it.line_cost_net = round2(totalGreenFees * it.unit_cost_net);
     it.line_sell_price = round2(totalGreenFees * it.unit_sell_price);
+  } else if (it.service_type === 'package') {
+    const paxTotal = Math.max(1, toInt(basics?.pax_total ?? 1, 1));
+    const pricingBasis = it.package_pricing_basis === 'per_room' ? 'per_room' : 'per_person';
+    it.package_pricing_basis = pricingBasis;
+
+    // Individual pax (single occupancy) optional breakdown
+    const rawIndiv = Math.max(0, toInt(it.package_individual_count ?? 0, 0));
+    const indivCount = clampNumber(rawIndiv, 0, paxTotal);
+    it.package_individual_count = indivCount;
+    const sharedCount = Math.max(0, paxTotal - indivCount);
+
+    // Normalize numbers
+    it.unit_cost_net = Math.max(0, toNumber(it.unit_cost_net));
+    it.unit_cost_net_individual = Math.max(0, toNumber(it.unit_cost_net_individual));
+
+    if (!it.lock_sell_price) {
+      it.unit_sell_price = computeUnitSellFromMarkup(it.unit_cost_net, effectiveMarkup);
+      const baseIndivNet = it.unit_cost_net_individual > 0 ? it.unit_cost_net_individual : it.unit_cost_net;
+      it.unit_sell_price_individual = computeUnitSellFromMarkup(baseIndivNet, effectiveMarkup);
+    } else {
+      it.unit_sell_price = Math.max(0, toNumber(it.unit_sell_price));
+      it.unit_sell_price_individual = Math.max(0, toNumber(it.unit_sell_price_individual));
+    }
+
+    if (pricingBasis === 'per_person') {
+      it.quantity = paxTotal; // read-only in UI
+      const baseIndivCost = it.unit_cost_net_individual > 0 ? it.unit_cost_net_individual : it.unit_cost_net;
+      const baseIndivSell = it.unit_sell_price_individual > 0 ? it.unit_sell_price_individual : it.unit_sell_price;
+      it.line_cost_net = round2(sharedCount * it.unit_cost_net + indivCount * baseIndivCost);
+      it.line_sell_price = round2(sharedCount * it.unit_sell_price + indivCount * baseIndivSell);
+    } else {
+      // Per room/package: quantity stays user-provided
+      it.quantity = Math.max(1, toInt(it.quantity, 1));
+      it.line_cost_net = round2(it.quantity * it.unit_cost_net);
+      it.line_sell_price = round2(it.quantity * it.unit_sell_price);
+    }
   } else {
     it.line_cost_net = round2(it.quantity * it.unit_cost_net);
     it.line_sell_price = round2(it.quantity * it.unit_sell_price);
@@ -1230,7 +1285,30 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
       }
     }
 
-    if (['transfer', 'extra', 'package'].includes(it.service_type)) {
+
+    if (it.service_type === 'package') {
+      const basis = it.package_pricing_basis === 'per_room' ? 'per_room' : 'per_person';
+      const paxTotal = Math.max(1, toInt(basics?.pax_total ?? pax, 1));
+
+      if (basis === 'per_room' && toInt(it.quantity, 1) < 1) {
+        issues.push('Cantidad inválida');
+        fieldErrors.quantity = 'Cantidad debe ser >= 1.';
+      }
+
+      if (basis === 'per_person') {
+        const indiv = Math.max(0, toInt(it.package_individual_count ?? 0, 0));
+        if (indiv > paxTotal) {
+          issues.push('Individual > pax');
+          fieldErrors.packageIndiv = 'Personas en individual no puede superar pax total.';
+        }
+        if (indiv > 0 && toNumber(it.unit_sell_price_individual || 0) <= 0) {
+          issues.push('PVP individual faltante');
+          fieldErrors.packageIndivPvp = 'Define PVP por persona (individual).';
+        }
+      }
+    }
+
+    if (['transfer', 'extra'].includes(it.service_type)) {
       if (toInt(it.quantity, 1) < 1) {
         issues.push('Cantidad inválida');
         fieldErrors.quantity = 'Cantidad debe ser >= 1.';
@@ -1272,7 +1350,16 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
       return `${dateLabel} · Pax: ${pax} · ${amountLabel}`;
     }
 
-    if (['transfer', 'extra', 'package'].includes(it.service_type)) {
+    if (['transfer', 'extra'].includes(it.service_type)) {
+      return `Cantidad: ${toInt(it.quantity ?? 1, 1)} · ${amountLabel}`;
+    }
+
+    if (it.service_type === 'package') {
+      const basis = it.package_pricing_basis === 'per_room' ? 'per_room' : 'per_person';
+      if (basis === 'per_person') {
+        const ind = Math.max(0, toInt(it.package_individual_count ?? 0, 0));
+        return `Pax: ${pax} · Individual: ${ind} · ${amountLabel}`;
+      }
       return `Cantidad: ${toInt(it.quantity ?? 1, 1)} · ${amountLabel}`;
     }
 
@@ -1649,7 +1736,7 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                             label={it.service_type === 'hotel' ? 'Hotel (manual) *' : 'Campo de golf (manual) *'}
                             value={it.display_name || ''}
                             onChange={(v) => updateItem(idx, { display_name: v, title: v })}
-                            placeholder={it.service_type === 'hotel' ? 'Ej: Hotel X (fuera de cat├ílogo)' : 'Ej: Campo Y (fuera de cat├ílogo)'}
+                            placeholder={it.service_type === 'hotel' ? 'Ej: Hotel X (fuera de catálogo)' : 'Ej: Campo Y (fuera de catálogo)'}
                           />
                           {fieldErrors.title && <div className="service-card__field-error">{fieldErrors.title}</div>}
                         </div>
@@ -1743,7 +1830,7 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                   ) : (
                     <div className={`service-card__field ${fieldErrors.title ? 'is-error' : ''}`}>
                       <TextControl
-                        label="T├¡tulo / descripci├│n *"
+                        label="Título / descripción *"
                         value={it.title}
                         onChange={(v) => updateItem(idx, { title: v })}
                       />
@@ -1828,52 +1915,51 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                         />
                       </div>
                     </>
-                  ) : (
-                    it.service_type === 'golf' ? (
-                      <>
-                        <div className="service-card__field">
-                          <TextControl
-                            label="Jugadores"
-                            type="number"
-                            min={1}
-                            value={String(playersCount || pax)}
-                            disabled
-                            help="Definido en Datos basicos"
-                          />
-                        </div>
-                        <div className={`service-card__field ${fieldErrors.greenFees ? 'is-error' : ''}`}>
-                          <TextControl
-                            label="Green-fees por jugador *"
-                            type="number"
-                            min={1}
-                            value={String(it.green_fees_per_person ?? '')}
-                            onChange={(v) => updateItem(idx, { green_fees_per_person: v })}
-                          />
-                          {fieldErrors.greenFees && <div className="service-card__field-error">{fieldErrors.greenFees}</div>}
-                        </div>
-                        <div className="service-card__golf-summary">
-                          Total green-fees (interno): {toInt(playersCount || pax, 1)} x {toInt(it.green_fees_per_person, 0)} ={' '}
-                          {toInt(it.total_green_fees, 0)}
-                        </div>
-                      </>
-                    ) : (
-                      <div className={`service-card__field ${fieldErrors.quantity ? 'is-error' : ''}`}>
+                  ) : it.service_type === 'golf' ? (
+                    <>
+                      <div className="service-card__field">
                         <TextControl
-                          label={
-                            it.service_type === 'transfer'
-                              ? 'Cantidad (servicios)'
-                              : it.service_type === 'package'
-                              ? 'Cantidad (paquetes)'
-                              : 'Cantidad'
-                          }
+                          label="Jugadores"
                           type="number"
                           min={1}
-                          value={String(it.quantity)}
-                          onChange={(v) => updateItem(idx, { quantity: v })}
+                          value={String(playersCount || pax)}
+                          disabled
+                          help="Definido en Datos basicos"
                         />
-                        {fieldErrors.quantity && <div className="service-card__field-error">{fieldErrors.quantity}</div>}
                       </div>
-                    )
+                      <div className={`service-card__field ${fieldErrors.greenFees ? 'is-error' : ''}`}>
+                        <TextControl
+                          label="Green-fees por jugador *"
+                          type="number"
+                          min={1}
+                          value={String(it.green_fees_per_person ?? '')}
+                          onChange={(v) => updateItem(idx, { green_fees_per_person: v })}
+                        />
+                        {fieldErrors.greenFees && <div className="service-card__field-error">{fieldErrors.greenFees}</div>}
+                      </div>
+                      <div className="service-card__golf-summary">
+                        Total green-fees (interno): {toInt(playersCount || pax, 1)} x {toInt(it.green_fees_per_person, 0)} ={' '}
+                        {toInt(it.total_green_fees, 0)}
+                      </div>
+                    </>
+                  ) : (
+                    <div className={`service-card__field ${fieldErrors.quantity ? 'is-error' : ''}`}>
+                      <TextControl
+                        label={
+                          it.service_type === 'transfer'
+                            ? 'Cantidad (servicios)'
+                            : it.service_type === 'package'
+                            ? (it.package_pricing_basis === 'per_person' ? 'Personas (auto)' : 'Cantidad (habitaciones/paquetes)')
+                            : 'Cantidad'
+                        }
+                        type="number"
+                        min={1}
+                        value={String(it.quantity)}
+                        onChange={(v) => updateItem(idx, { quantity: v })}
+                        disabled={it.service_type === 'package' && it.package_pricing_basis === 'per_person'}
+                      />
+                      {fieldErrors.quantity && <div className="service-card__field-error">{fieldErrors.quantity}</div>}
+                    </div>
                   )}
                 </div>
               </div>
@@ -1897,6 +1983,38 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                   />
                 ) : (
                   <div className="service-card__pricing">
+                    {it.service_type === 'package' && (
+                      <>
+                        <div className="service-card__field">
+                          <SelectControl
+                            label="Precio del paquete"
+                            value={it.package_pricing_basis || 'per_person'}
+                            options={[
+                              { label: 'Por persona', value: 'per_person' },
+                              { label: 'Por habitación / paquete', value: 'per_room' },
+                            ]}
+                            onChange={(v) => updateItem(idx, { package_pricing_basis: v })}
+                          />
+                        </div>
+
+                        {it.package_pricing_basis !== 'per_room' && (
+                          <div className={"service-card__field " + (fieldErrors.packageIndiv ? 'is-error' : '')}>
+                            <TextControl
+                              label="Personas en individual"
+                              type="number"
+                              min={0}
+                              value={String(it.package_individual_count ?? 0)}
+                              onChange={(v) => updateItem(idx, { package_individual_count: v })}
+                              help="Solo si hay viajeros en habitación individual."
+                            />
+                            {fieldErrors.packageIndiv && (
+                              <div className="service-card__field-error">{fieldErrors.packageIndiv}</div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+
                     <div className="service-card__field">
                       <TextControl
                         label="Coste neto (unit.)"
@@ -1905,6 +2023,18 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                         placeholder="120"
                       />
                     </div>
+
+                    {it.service_type === 'package' && it.package_pricing_basis !== 'per_room' && (
+                      <div className="service-card__field">
+                        <TextControl
+                          label="Coste neto (indiv.)"
+                          value={String(it.unit_cost_net_individual ?? '')}
+                          onChange={(v) => updateItem(idx, { unit_cost_net_individual: v })}
+                          placeholder="150"
+                          help="Opcional. Si se deja vacío, se usará el neto unitario."
+                        />
+                      </div>
+                    )}
 
                     <div className="service-card__field">
                       <ToggleControl
@@ -1944,19 +2074,33 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                       />
                       {fieldErrors.unitSell && <div className="service-card__field-error">{fieldErrors.unitSell}</div>}
                     </div>
+
+                    {it.service_type === 'package' && it.package_pricing_basis !== 'per_room' && (
+                      <div className={`service-card__field ${fieldErrors.packageIndivPvp ? 'is-error' : ''}`}>
+                        <TextControl
+                          label="PVP (indiv.)"
+                          value={String(it.unit_sell_price_individual ?? '')}
+                          onChange={(v) => updateItem(idx, { unit_sell_price_individual: v })}
+                          placeholder="210"
+                          disabled={!it.lock_sell_price}
+                        />
+                        {fieldErrors.packageIndivPvp && <div className="service-card__field-error">{fieldErrors.packageIndivPvp}</div>}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* Paquete: detalle de qu├® incluye */}
+              {/* Paquete: detalle de qué incluye */}
               {it.service_type === 'package' && (
                 <div className="service-card__section service-card__section--package">
                   <div className="service-card__section-title">Detalle del paquete</div>
                   <div className="service-card__package">
-                    <TextControl
-                      label="Incluye (una l├¡nea por item)"
+                    <TextareaControl
+                      label="Incluye (una línea por ítem)"
                       value={it.package_components_text || ''}
                       onChange={(v) => updateItem(idx, { package_components_text: v })}
+                      rows={4}
                       placeholder={`3 noches\n2 green-fees\nDesayuno incluido`}
                     />
                   </div>
