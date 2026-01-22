@@ -43,9 +43,9 @@ add_action( 'rest_pre_serve_request', 'wp_travel_giav_clear_rest_output', 0 );
 
 // Default supplier fallback in GIAV ("Proveedores varios").
 // Used when a service requires a supplier but no explicit mapping exists yet.
-define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_ID', '1734698' );
+define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_ID', '1249826' );
 define( 'WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_NAME', 'Proveedores varios' );
-define( 'WP_TRAVEL_GIAV_PQ_SUPPLIER_ID', '1734698' );
+define( 'WP_TRAVEL_GIAV_PQ_SUPPLIER_ID', '1249826' );
 define( 'WP_TRAVEL_GIAV_PORTAL_SLUG', 'gestion-reservas' );
 define( 'WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESERVAS', 'casanova_manage_reservas' );
 define( 'WP_TRAVEL_GIAV_CAPABILITY_MANAGE_PROPOSALS', 'manage_travel_proposals' );
