@@ -660,11 +660,17 @@ function computeLine(item, basics, globalMarkupPct) {
         toNumber(isPerRoom ? it.package_single_room_supplement_sell ?? 0 : it.package_single_supplement_sell ?? 0)
       );
       const indivNetInput = toNumber(
-        isPerRoom ? it.unit_cost_net_single_room ?? '' : it.unit_cost_net_individual ?? ''
+        isPerRoom
+          ? it.unit_cost_net_single_room ?? ''
+          : it.package_unit_cost_net_individual ?? it.unit_cost_net_individual ?? ''
       );
       const indivSellInput = Math.max(
         0,
-        toNumber(isPerRoom ? it.unit_sell_price_single_room ?? 0 : it.unit_sell_price_individual ?? 0)
+        toNumber(
+          isPerRoom
+            ? it.unit_sell_price_single_room ?? 0
+            : it.package_unit_sell_price_individual ?? it.unit_sell_price_individual ?? 0
+        )
       );
 
       if (mode === 'supplement') {
