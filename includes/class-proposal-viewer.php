@@ -1414,8 +1414,10 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                                 }
                                 if ( $package_pricing_basis === 'per_room' ) {
                                     $room_double = (float) ( $item['package_room_double'] ?? $item['unit_sell_price'] ?? 0 );
+
                                     $room_single = (float) ( $item['package_room_single'] ?? $item['unit_sell_price_single_room'] ?? 0 );
                                     $room_supp = (float) ( $item['package_room_single_supplement'] ?? $item['package_single_room_supplement_sell'] ?? 0 );
+
                                     if ( $room_double > 0 ) {
                                         $pricing_bits[] = sprintf(
                                             __( 'Precio por habitación (doble): %s', 'wp-travel-giav' ),
@@ -1442,7 +1444,10 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                                     }
                                 } else {
                                     $pp_double = (float) ( $item['package_pp_double'] ?? $item['unit_sell_price'] ?? 0 );
+
                                     $pp_single = (float) ( $item['package_pp_single'] ?? $item['package_unit_sell_price_individual'] ?? $item['unit_sell_price_individual'] ?? 0 );
+                                   
+
                                     $supp_single = (float) ( $item['package_single_supplement_pvp'] ?? $item['package_single_supplement'] ?? 0 );
                                     if ( $pp_double > 0 ) {
                                         $pricing_bits[] = sprintf(
