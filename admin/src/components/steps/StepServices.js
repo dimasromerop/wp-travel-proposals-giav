@@ -460,6 +460,8 @@ function defaultItem(basics, defaultMarkupPct = 0) {
     package_quote_individual: false, // cotizar individual (informativo)
     package_individual_mode: 'absolute', // 'absolute' | 'supplement'
     package_individual_qty: 0,
+    package_individual_use_markup: true,
+    package_individual_markup_pct: defaultMarkupPct,
     package_unit_cost_net_individual: '',
     package_unit_sell_price_individual: '',
     package_single_supplement_net: '',
@@ -575,6 +577,13 @@ function computeLine(item, basics, globalMarkupPct) {
     const discountPctRaw = clampNumber(toNumber(it.package_discount_percent ?? 0), 0, 100);
     const discountFactor = 1 - discountPctRaw / 100;
     it.package_discount_percent = discountPctRaw;
+    const individualUseMarkup =
+      typeof it.package_individual_use_markup === 'boolean' ? it.package_individual_use_markup : it.use_markup;
+    const individualMarkup = individualUseMarkup
+      ? Math.max(0, toNumber(it.package_individual_markup_pct ?? it.markup_pct ?? globalMarkupPct ?? 0))
+      : 0;
+    it.package_individual_use_markup = individualUseMarkup;
+    it.package_individual_markup_pct = individualMarkup;
 
     // Quantity rules
     if (basis === 'per_person') {
@@ -590,6 +599,7 @@ function computeLine(item, basics, globalMarkupPct) {
     it.unit_cost_net = baseNet;
 
     const computeSell = (netVal) => computeUnitSellFromMarkup(netVal, effectiveMarkup);
+    const computeIndividualSell = (netVal) => computeUnitSellFromMarkup(netVal, individualMarkup);
 
     // Double sell (per-person or per-room)
     let doubleSell;
@@ -663,7 +673,7 @@ function computeLine(item, basics, globalMarkupPct) {
 
         let indivSell;
         if (!it.lock_sell_price) {
-          indivSell = computeSell(indivNet);
+          indivSell = computeIndividualSell(indivNet);
         } else if (suppSellInput > 0) {
           indivSell = round2(doubleSell + round2(suppSellInput * discountFactor));
         } else if (indivSellInput > 0) {
@@ -688,7 +698,7 @@ function computeLine(item, basics, globalMarkupPct) {
 
         let indivSell;
         if (!it.lock_sell_price) {
-          indivSell = computeSell(indivNet);
+          indivSell = computeIndividualSell(indivNet);
         } else if (indivSellInput > 0) {
           indivSell = round2(indivSellInput * discountFactor);
         } else {
@@ -1117,6 +1127,10 @@ function PackagePricingPanel({ item, idx, updateItem, currency, pax, globalMarku
   };
 
   const isManualPvp = !!item.lock_sell_price;
+  const individualUseMarkup =
+    typeof item.package_individual_use_markup === 'boolean' ? item.package_individual_use_markup : item.use_markup;
+  const individualMarkupPct =
+    item.package_individual_markup_pct ?? item.markup_pct ?? globalMarkupPct;
   const individualEnabled = !!item.package_quote_individual || (basis === 'per_room' && !!item.package_quote_single_rooms);
   const individualMode =
     basis === 'per_room'
@@ -1252,12 +1266,14 @@ function PackagePricingPanel({ item, idx, updateItem, currency, pax, globalMarku
                 <TextControl
                   label={basis === 'per_person' ? 'Coste neto (indiv. por persona)' : 'Coste neto (hab. indiv.)'}
                   value={String(
-                    basis === 'per_person' ? item.unit_cost_net_individual ?? '' : item.unit_cost_net_single_room ?? ''
+                    basis === 'per_person'
+                      ? item.package_unit_cost_net_individual ?? item.unit_cost_net_individual ?? ''
+                      : item.unit_cost_net_single_room ?? ''
                   )}
                   onChange={(v) =>
                     updateItem(idx, {
                       ...(basis === 'per_person'
-                        ? { unit_cost_net_individual: v }
+                        ? { package_unit_cost_net_individual: v, unit_cost_net_individual: v }
                         : { unit_cost_net_single_room: v }),
                     })
                   }
@@ -1287,16 +1303,18 @@ function PackagePricingPanel({ item, idx, updateItem, currency, pax, globalMarku
                 <div className="service-card__hotel-mode-details-grid">
                   <ToggleControl
                     label="Usar margen"
-                    checked={!!item.use_markup}
-                    onChange={() => updateItem(idx, { use_markup: !item.use_markup })}
+                    checked={!!individualUseMarkup}
+                    onChange={() =>
+                      updateItem(idx, { package_individual_use_markup: !individualUseMarkup })
+                    }
                   />
-                  {item.use_markup && (
+                  {individualUseMarkup && (
                     <TextControl
                       label="Margen (%)"
                       type="number"
                       min={0}
-                      value={String(item.markup_pct ?? globalMarkupPct)}
-                      onChange={(v) => updateItem(idx, { markup_pct: v })}
+                      value={String(individualMarkupPct)}
+                      onChange={(v) => updateItem(idx, { package_individual_markup_pct: v })}
                     />
                   )}
                   <ToggleControl
@@ -1308,12 +1326,14 @@ function PackagePricingPanel({ item, idx, updateItem, currency, pax, globalMarku
                     <TextControl
                       label={basis === 'per_person' ? 'PVP (indiv. por persona)' : 'PVP (hab. indiv.)'}
                       value={String(
-                        basis === 'per_person' ? item.unit_sell_price_individual ?? '' : item.unit_sell_price_single_room ?? ''
+                        basis === 'per_person'
+                          ? item.package_unit_sell_price_individual ?? item.unit_sell_price_individual ?? ''
+                          : item.unit_sell_price_single_room ?? ''
                       )}
                       onChange={(v) =>
                         updateItem(idx, {
                           ...(basis === 'per_person'
-                            ? { unit_sell_price_individual: v }
+                            ? { package_unit_sell_price_individual: v, unit_sell_price_individual: v }
                             : { unit_sell_price_single_room: v }),
                         })
                       }
@@ -1325,13 +1345,13 @@ function PackagePricingPanel({ item, idx, updateItem, currency, pax, globalMarku
                       label={basis === 'per_person' ? 'Suplemento PVP (por persona)' : 'Suplemento PVP (hab. indiv.)'}
                       value={String(
                         basis === 'per_person'
-                          ? item.package_single_supplement_sell ?? ''
+                          ? item.package_single_supplement_pvp ?? item.package_single_supplement_sell ?? ''
                           : item.package_single_room_supplement_sell ?? ''
                       )}
                       onChange={(v) =>
                         updateItem(idx, {
                           ...(basis === 'per_person'
-                            ? { package_single_supplement_sell: v }
+                            ? { package_single_supplement_pvp: v, package_single_supplement_sell: v }
                             : { package_single_room_supplement_sell: v }),
                         })
                       }

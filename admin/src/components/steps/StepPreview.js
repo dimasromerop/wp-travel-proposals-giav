@@ -190,6 +190,8 @@ export default function StepPreview({
       package_quote_individual: !!it.package_quote_individual,
       package_individual_mode: it.package_individual_mode ?? null,
       package_individual_qty: toInt(it.package_individual_qty ?? 0, 0),
+      package_individual_use_markup: !!it.package_individual_use_markup,
+      package_individual_markup_pct: round2(it.package_individual_markup_pct ?? 0),
       package_unit_cost_net_individual: round2(it.package_unit_cost_net_individual ?? 0),
       package_unit_sell_price_individual: round2(it.package_unit_sell_price_individual ?? 0),
       package_single_supplement_net: round2(it.package_single_supplement_net ?? 0),
