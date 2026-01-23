@@ -185,6 +185,21 @@ export default function StepPreview({
       // Package (descriptivo)
       package_components: Array.isArray(it.package_components) ? it.package_components : [],
       package_components_text: it.package_components_text ?? '',
+      package_pricing_basis: it.package_pricing_basis ?? null,
+      package_discount_percent: round2(it.package_discount_percent ?? 0),
+      package_quote_individual: !!it.package_quote_individual,
+      package_individual_mode: it.package_individual_mode ?? null,
+      package_individual_qty: toInt(it.package_individual_qty ?? 0, 0),
+      package_unit_cost_net_individual: round2(it.package_unit_cost_net_individual ?? 0),
+      package_unit_sell_price_individual: round2(it.package_unit_sell_price_individual ?? 0),
+      package_single_supplement_net: round2(it.package_single_supplement_net ?? 0),
+      package_single_supplement_pvp: round2(it.package_single_supplement_pvp ?? 0),
+      package_pp_double: round2(it.package_pp_double ?? 0),
+      package_room_double: round2(it.package_room_double ?? 0),
+      package_pp_single: round2(it.package_pp_single ?? 0),
+      package_room_single: round2(it.package_room_single ?? 0),
+      package_single_supplement: round2(it.package_single_supplement ?? 0),
+      package_room_single_supplement: round2(it.package_room_single_supplement ?? 0),
 
       // Golf-specific
       green_fees_per_person: it.green_fees_per_person ?? null,

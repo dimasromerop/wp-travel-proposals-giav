@@ -344,9 +344,12 @@ class WP_Travel_Proposal_Viewer {
         $golf_items = array_values( array_filter( $items, function ( $item ) {
             return ( $item['service_type'] ?? '' ) === 'golf';
         } ) );
+        $package_items = array_values( array_filter( $items, function ( $item ) {
+            return ( $item['service_type'] ?? '' ) === 'package';
+        } ) );
         $other_items = array_values( array_filter( $items, function ( $item ) {
             $type = $item['service_type'] ?? '';
-            return $type !== 'hotel' && $type !== 'golf';
+            return $type !== 'hotel' && $type !== 'golf' && $type !== 'package';
         } ) );
 
         $includes_hotel = [];
@@ -461,7 +464,7 @@ class WP_Travel_Proposal_Viewer {
         }
 
         $other_includes = [];
-        foreach ( $other_items as $other_item ) {
+        foreach ( array_merge( $package_items, $other_items ) as $other_item ) {
             $label = trim( (string) ( $other_item['display_name'] ?? '' ) );
             if ( $label !== '' ) {
                 $other_includes[] = $label;
@@ -1384,6 +1387,119 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                     </div>
                 <?php endif; ?>
 
+                <?php if ( $package_items ) : ?>
+                    <div class="service-group">
+                        <h3><?php echo esc_html__( 'Paquete', 'wp-travel-giav' ); ?></h3>
+                        <div class="service-group__grid">
+                            <?php foreach ( $package_items as $item ) : ?>
+                                <?php
+                                $display_name = esc_html( $item['display_name'] ?? __( 'Paquete', 'wp-travel-giav' ) );
+                                $start_date = self::format_spanish_date( (string) ( $item['start_date'] ?? '' ) );
+                                $end_date = self::format_spanish_date( (string) ( $item['end_date'] ?? '' ) );
+                                $notes = trim( (string) ( $item['notes_public'] ?? '' ) );
+                                $components_text = trim( (string) ( $item['package_components_text'] ?? '' ) );
+                                $package_pricing_basis = (string) ( $item['package_pricing_basis'] ?? '' );
+                                $package_individual_mode = (string) ( $item['package_individual_mode'] ?? $item['package_single_room_mode'] ?? '' );
+                                $package_quote_individual = ! empty( $item['package_quote_individual'] ) || ! empty( $item['package_quote_single_rooms'] );
+                                $package_discount = (float) ( $item['package_discount_percent'] ?? 0 );
+                                $meta_parts = [];
+                                if ( $start_date || $end_date ) {
+                                    $meta_parts[] = trim( implode( ' → ', array_filter( [ $start_date, $end_date ] ) ) );
+                                }
+                                $meta_line = implode( ' · ', $meta_parts );
+                                $pricing_bits = [];
+                                $discount_label = '';
+                                if ( $package_discount > 0 ) {
+                                    $discount_label = rtrim( rtrim( number_format( $package_discount, 2, '.', '' ), '0' ), '.' );
+                                }
+                                if ( $package_pricing_basis === 'per_room' ) {
+                                    $room_double = (float) ( $item['package_room_double'] ?? $item['unit_sell_price'] ?? 0 );
+                                    $room_single = (float) ( $item['package_unit_sell_price_individual'] ?? $item['package_room_single'] ?? 0 );
+                                    $room_supp = (float) ( $item['package_single_supplement_pvp'] ?? $item['package_room_single_supplement'] ?? 0 );
+                                    if ( $room_double > 0 ) {
+                                        $pricing_bits[] = sprintf(
+                                            __( 'Precio por habitación (doble): %s', 'wp-travel-giav' ),
+                                            self::format_currency_value( $room_double, $currency )
+                                        );
+                                    }
+                                    if ( $package_quote_individual ) {
+                                        if ( $package_individual_mode === 'supplement' ) {
+                                            $supp = $room_supp > 0 ? $room_supp : max( 0, $room_single - $room_double );
+                                            if ( $supp > 0 ) {
+                                                $pricing_bits[] = sprintf(
+                                                    __( 'Suplemento individual: %s (informativo)', 'wp-travel-giav' ),
+                                                    self::format_currency_value( $supp, $currency )
+                                                );
+                                            }
+                                        } else {
+                                            if ( $room_single > 0 ) {
+                                                $pricing_bits[] = sprintf(
+                                                    __( 'Precio por habitación (individual): %s (informativo)', 'wp-travel-giav' ),
+                                                    self::format_currency_value( $room_single, $currency )
+                                                );
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    $pp_double = (float) ( $item['package_pp_double'] ?? $item['unit_sell_price'] ?? 0 );
+                                    $pp_single = (float) ( $item['package_unit_sell_price_individual'] ?? $item['package_pp_single'] ?? 0 );
+                                    $supp_single = (float) ( $item['package_single_supplement_pvp'] ?? $item['package_single_supplement'] ?? 0 );
+                                    if ( $pp_double > 0 ) {
+                                        $pricing_bits[] = sprintf(
+                                            __( 'Precio por persona (doble): %s', 'wp-travel-giav' ),
+                                            self::format_currency_value( $pp_double, $currency )
+                                        );
+                                    }
+                                    if ( $package_quote_individual ) {
+                                        if ( $package_individual_mode === 'supplement' ) {
+                                            $supp = $supp_single > 0 ? $supp_single : max( 0, $pp_single - $pp_double );
+                                            if ( $supp > 0 ) {
+                                                $pricing_bits[] = sprintf(
+                                                    __( 'Suplemento individual: %s (informativo)', 'wp-travel-giav' ),
+                                                    self::format_currency_value( $supp, $currency )
+                                                );
+                                            }
+                                        } else {
+                                            if ( $pp_single > 0 ) {
+                                                $pricing_bits[] = sprintf(
+                                                    __( 'Precio por persona (individual): %s (informativo)', 'wp-travel-giav' ),
+                                                    self::format_currency_value( $pp_single, $currency )
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+                                if ( $discount_label !== '' ) {
+                                    $pricing_bits[] = sprintf(
+                                        __( 'Descuento aplicado: -%s%%', 'wp-travel-giav' ),
+                                        $discount_label
+                                    );
+                                }
+                                ?>
+                                <div class="service-card">
+                                    <div class="service-card__title"><?php echo $display_name; ?></div>
+                                    <?php if ( $meta_line ) : ?>
+                                        <div class="service-card__meta"><?php echo esc_html( $meta_line ); ?></div>
+                                    <?php endif; ?>
+                                    <?php if ( ! empty( $pricing_bits ) ) : ?>
+                                        <div class="service-card__meta"><?php echo esc_html( implode( ' · ', $pricing_bits ) ); ?></div>
+                                    <?php endif; ?>
+                                    <?php if ( $components_text ) : ?>
+                                        <div class="service-card__details">
+                                            <?php foreach ( array_filter( array_map( 'trim', explode( "\n", $components_text ) ) ) as $line ) : ?>
+                                                <div><?php echo esc_html( $line ); ?></div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if ( $notes ) : ?>
+                                        <div class="service-card__note"><?php echo esc_html( $notes ); ?></div>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <?php if ( $other_items ) : ?>
                     <div class="service-group">
                         <h3><?php echo esc_html__( 'Extras y transfers', 'wp-travel-giav' ); ?></h3>
@@ -1551,8 +1667,6 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
         <?php
         if ( ! empty( $pricing['has_single_supplement'] ) ) {
             echo esc_html__( 'Precios por persona. El suplemento individual aplica por persona alojada en habitación individual.', 'wp-travel-giav' );
-        } elseif ( ! empty( $pricing['has_informative_single_option'] ) ) {
-            echo esc_html__( 'Precios por persona. La opción individual es una cotización informativa y no está incluida en el total salvo confirmación.', 'wp-travel-giav' );
         } else {
             echo esc_html( ( ! empty( $pricing['base_room_type'] ) && 'single' === $pricing['base_room_type'] ) ? __( 'Precios por persona en habitación individual.', 'wp-travel-giav' ) : __( 'Precios por persona en habitación doble.', 'wp-travel-giav' ) );
         }
