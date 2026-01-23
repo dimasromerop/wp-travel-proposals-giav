@@ -651,6 +651,30 @@ export default function StepPreview({
                       {it.service_type === 'package' && (it.package_pricing_basis || 'per_person') === 'per_person' ? (
                         (() => {
                           const currency = snapshotHeader.currency || 'EUR';
+                          const basis = it.package_pricing_basis === 'per_room' ? 'per_room' : 'per_person';
+
+                          if (basis === 'per_room') {
+                            const roomDouble = toNumber(it.package_room_double ?? it.unit_sell_price ?? 0);
+                            const modeRoom = it.package_single_room_mode === 'supplement' ? 'supplement' : 'price';
+                            const roomSingle = toNumber(it.package_room_single ?? it.unit_sell_price_single_room ?? 0);
+                            const rawSuppRoom = toNumber(it.package_room_single_supplement ?? it.package_single_room_supplement_sell ?? 0);
+                            const hasSingleRoom = (roomSingle > 0) || (modeRoom === 'supplement' && rawSuppRoom > 0);
+
+                            return (
+                              <div className="preview-item__meta">
+                                Precio paquete por habitación (doble): {currency} {round2(roomDouble).toFixed(2)}
+                                {hasSingleRoom && (
+                                  <>
+                                    {' · '}
+                                    {modeRoom === 'supplement'
+                                      ? `Suplemento habitación individual: ${currency} ${round2(rawSuppRoom).toFixed(2)}`
+                                      : `Precio habitación individual: ${currency} ${round2(roomSingle).toFixed(2)}`}
+                                  </>
+                                )}
+                              </div>
+                            );
+                          }
+
                           const ppDouble = toNumber(it.package_pp_double ?? it.unit_sell_price ?? 0);
                           const mode = it.package_individual_mode === 'supplement' ? 'supplement' : 'price';
                           const rawSupp = toNumber(it.package_single_supplement ?? it.package_single_supplement_sell ?? 0);
