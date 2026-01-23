@@ -557,34 +557,137 @@ function computeLine(item, basics, globalMarkupPct) {
     it.line_cost_net = round2(totalGreenFees * it.unit_cost_net);
     it.line_sell_price = round2(totalGreenFees * it.unit_sell_price);
   } else if (it.service_type === 'package') {
-    const basis = it.package_pricing_basis === 'per_person' ? 'per_person' : 'per_room';
+    const basis = it.package_pricing_basis === 'per_room' ? 'per_room' : 'per_person';
     const paxTotal = Math.max(1, toInt(basics?.pax_total ?? 1, 1));
-    const discountPct = clampNumber(toNumber(it.discounts?.discount_pct ?? 0), 0, 50) / 100;
+    const discountPctRaw = clampNumber(toNumber(it.discounts?.discount_pct ?? 0), 0, 50);
+    const discountFactor = 1 - discountPctRaw / 100;
 
+    // Quantity rules
     if (basis === 'per_person') {
       it.quantity = paxTotal;
     } else {
       it.quantity = Math.max(1, toInt(it.quantity, 1));
     }
 
-    const baseNet = Math.max(0, toNumber(it.unit_cost_net));
-    const discountedNet = round2(baseNet * (1 - discountPct));
-    const sellFromMarkup = computeUnitSellFromMarkup(discountedNet, effectiveMarkup);
+    // Base (double) net & sell (discount applied)
+    const baseNetInput = Math.max(0, toNumber(it.unit_cost_net));
+    const baseNet = round2(baseNetInput * discountFactor);
+    it.unit_cost_net = baseNet;
 
-    it.unit_cost_net = discountedNet;
+    const computeSell = (netVal) => computeUnitSellFromMarkup(netVal, effectiveMarkup);
 
+    // Double sell (per-person or per-room)
+    let doubleSell;
     if (!it.lock_sell_price) {
-      it.unit_sell_price = sellFromMarkup;
+      doubleSell = computeSell(baseNet);
     } else {
-      const baseSell = Math.max(0, toNumber(it.unit_sell_price));
-      it.unit_sell_price = round2(baseSell * (1 - discountPct));
+      const baseSellInput = Math.max(0, toNumber(it.unit_sell_price));
+      doubleSell = round2(baseSellInput * discountFactor);
     }
+    it.unit_sell_price = doubleSell;
 
+    // Totals (only include the confirmed/base quote, NOT the informative individual option)
     it.line_cost_net = round2(it.quantity * it.unit_cost_net);
     it.line_sell_price = round2(it.quantity * it.unit_sell_price);
 
+    // Persist derived pricing for snapshot/viewer (so client can see both prices)
+    // Per-person
+    it.package_pp_double = basis === 'per_person' ? doubleSell : it.package_pp_double;
+    // Per-room
+    it.package_room_double = basis === 'per_room' ? doubleSell : it.package_room_double;
+
+    // Individual quote (informative / optional)
+    const quoteIndividual = !!it.package_quote_individual;
+    const mode = it.package_individual_mode === 'supplement' ? 'supplement' : 'price';
+    const roomMode = it.package_single_room_mode === 'supplement' ? 'supplement' : 'price';
+
+    // Counts (kept for UI and snapshot)
     it.package_individual_count = Math.max(0, toInt(it.package_individual_count ?? 0, 0));
     it.package_single_rooms = Math.max(0, toInt(it.package_single_rooms ?? 0, 0));
+
+    if (quoteIndividual) {
+      if (basis === 'per_person') {
+        // Individual is per person
+        if (mode === 'supplement') {
+          const suppNetInput = Math.max(0, toNumber(it.package_single_supplement_net ?? 0));
+          const suppNet = round2(suppNetInput * discountFactor);
+          const indivNet = round2(baseNet + suppNet);
+
+          let indivSell;
+          if (!it.lock_sell_price) {
+            indivSell = computeSell(indivNet);
+          } else {
+            // If manual, allow explicit supplement sell; otherwise derive from explicit indiv price if present
+            const suppSellInput = Math.max(0, toNumber(it.package_single_supplement_sell ?? 0));
+            if (suppSellInput > 0) {
+              indivSell = round2(doubleSell + round2(suppSellInput * discountFactor));
+            } else {
+              const indivSellInput = Math.max(0, toNumber(it.unit_sell_price_individual ?? 0));
+              indivSell = indivSellInput > 0 ? round2(indivSellInput * discountFactor) : doubleSell;
+            }
+          }
+
+          it.package_single_supplement = round2(indivSell - doubleSell);
+          it.package_pp_single = indivSell;
+        } else {
+          // Absolute individual price per person (optional net override)
+          const indivNetInput = toNumber(it.unit_cost_net_individual ?? '');
+          const indivNetRaw = indivNetInput !== '' && !Number.isNaN(indivNetInput) ? Math.max(0, indivNetInput) : baseNetInput;
+          const indivNet = round2(indivNetRaw * discountFactor);
+
+          let indivSell;
+          if (!it.lock_sell_price) {
+            indivSell = computeSell(indivNet);
+          } else {
+            const indivSellInput = Math.max(0, toNumber(it.unit_sell_price_individual ?? 0));
+            indivSell = indivSellInput > 0 ? round2(indivSellInput * discountFactor) : doubleSell;
+          }
+
+          it.unit_cost_net_individual = indivNetRaw;
+          it.package_pp_single = indivSell;
+          it.package_single_supplement = round2(Math.max(0, indivSell - doubleSell));
+        }
+      } else {
+        // per_room: individual is per room
+        if (roomMode === 'supplement') {
+          const suppNetInput = Math.max(0, toNumber(it.package_single_room_supplement_net ?? 0));
+          const suppNet = round2(suppNetInput * discountFactor);
+          const indivNet = round2(baseNet + suppNet);
+
+          let indivSell;
+          if (!it.lock_sell_price) {
+            indivSell = computeSell(indivNet);
+          } else {
+            const suppSellInput = Math.max(0, toNumber(it.package_single_room_supplement_sell ?? 0));
+            if (suppSellInput > 0) {
+              indivSell = round2(doubleSell + round2(suppSellInput * discountFactor));
+            } else {
+              const indivSellInput = Math.max(0, toNumber(it.unit_sell_price_single_room ?? 0));
+              indivSell = indivSellInput > 0 ? round2(indivSellInput * discountFactor) : doubleSell;
+            }
+          }
+
+          it.package_room_single_supplement = round2(indivSell - doubleSell);
+          it.package_room_single = indivSell;
+        } else {
+          const indivNetInput = toNumber(it.unit_cost_net_single_room ?? '');
+          const indivNetRaw = indivNetInput !== '' && !Number.isNaN(indivNetInput) ? Math.max(0, indivNetInput) : baseNetInput;
+          const indivNet = round2(indivNetRaw * discountFactor);
+
+          let indivSell;
+          if (!it.lock_sell_price) {
+            indivSell = computeSell(indivNet);
+          } else {
+            const indivSellInput = Math.max(0, toNumber(it.unit_sell_price_single_room ?? 0));
+            indivSell = indivSellInput > 0 ? round2(indivSellInput * discountFactor) : doubleSell;
+          }
+
+          it.unit_cost_net_single_room = indivNetRaw;
+          it.package_room_single = indivSell;
+          it.package_room_single_supplement = round2(Math.max(0, indivSell - doubleSell));
+        }
+      }
+    }
   } else {
     it.line_cost_net = round2(it.quantity * it.unit_cost_net);
     it.line_sell_price = round2(it.quantity * it.unit_sell_price);
