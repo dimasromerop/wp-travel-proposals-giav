@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from '@wordpress/element';
+import { __ } from '@wordpress/i18n';
 import {
   Button,
   Card,
@@ -218,6 +219,11 @@ function buildDiscountSummary(discounts = {}) {
     parts.push(`+${freeCount} gratis cada ${freeEvery}`);
   }
   return parts.length > 0 ? parts.join(' ') : 'Sin descuentos';
+}
+
+function buildPackageDiscountSummary(discountPct = 0) {
+  const pct = clampNumber(toNumber(discountPct), 0, 100);
+  return pct > 0 ? `-${round2(pct)}%` : 'Sin descuentos';
 }
 
 function computeHotelPricing(item, basics, defaultMarkupPct) {
@@ -448,23 +454,32 @@ function defaultItem(basics, defaultMarkupPct = 0) {
     // Paquete: descripción de lo que incluye (solo texto, sin precios por línea)
     package_components_text: '',
 
-// Paquete: pricing (similar a hotel)
-package_pricing_basis: 'per_room', // 'per_room' | 'per_person'
-package_quote_individual: false, // per_person: cotizar individual (informativo)
-package_individual_count: 0, // per_person: nº personas en individual
-package_individual_mode: 'absolute', // 'absolute' | 'supplement'
-unit_cost_net_individual: '',
-unit_sell_price_individual: '',
-package_single_supplement_net: '',
-package_single_supplement_sell: '',
+    // Paquete: pricing (similar a hotel)
+    package_pricing_basis: 'per_room', // 'per_room' | 'per_person'
+    package_discount_percent: 0,
+    package_quote_individual: false, // cotizar individual (informativo)
+    package_individual_mode: 'absolute', // 'absolute' | 'supplement'
+    package_individual_qty: 0,
+    package_individual_use_markup: true,
+    package_individual_markup_pct: defaultMarkupPct,
+    package_unit_cost_net_individual: '',
+    package_unit_sell_price_individual: '',
+    package_single_supplement_net: '',
+    package_single_supplement_pvp: '',
 
-package_quote_single_rooms: false, // per_room: cotizar hab. indiv. (informativo)
-package_single_rooms: 0,
-package_single_room_mode: 'absolute', // 'absolute' | 'supplement'
-unit_cost_net_single_room: '',
-unit_sell_price_single_room: '',
-package_single_room_supplement_net: '',
-package_single_room_supplement_sell: '',
+    // Backward-compatible package fields (legacy)
+    package_individual_count: 0, // per_person: nº personas en individual
+    unit_cost_net_individual: '',
+    unit_sell_price_individual: '',
+    package_single_supplement_sell: '',
+
+    package_quote_single_rooms: false, // per_room: cotizar hab. indiv. (informativo)
+    package_single_rooms: 0,
+    package_single_room_mode: 'absolute', // 'absolute' | 'supplement'
+    unit_cost_net_single_room: '',
+    unit_sell_price_single_room: '',
+    package_single_room_supplement_net: '',
+    package_single_room_supplement_sell: '',
 
     display_name: '',
     use_manual_entry: false,
@@ -559,12 +574,21 @@ function computeLine(item, basics, globalMarkupPct) {
   } else if (it.service_type === 'package') {
     const basis = it.package_pricing_basis === 'per_room' ? 'per_room' : 'per_person';
     const paxTotal = Math.max(1, toInt(basics?.pax_total ?? 1, 1));
-    const discountPctRaw = clampNumber(toNumber(it.discounts?.discount_pct ?? 0), 0, 50);
+    const discountPctRaw = clampNumber(toNumber(it.package_discount_percent ?? 0), 0, 100);
     const discountFactor = 1 - discountPctRaw / 100;
+    it.package_discount_percent = discountPctRaw;
+    const individualUseMarkup =
+      typeof it.package_individual_use_markup === 'boolean' ? it.package_individual_use_markup : it.use_markup;
+    const individualMarkup = individualUseMarkup
+      ? Math.max(0, toNumber(it.package_individual_markup_pct ?? it.markup_pct ?? globalMarkupPct ?? 0))
+      : 0;
+    it.package_individual_use_markup = individualUseMarkup;
+    it.package_individual_markup_pct = individualMarkup;
 
     // Quantity rules
     if (basis === 'per_person') {
-      it.quantity = paxTotal;
+      const fallbackQty = paxTotal > 0 ? paxTotal : 1;
+      it.quantity = Math.max(1, toInt(it.quantity ?? fallbackQty, fallbackQty));
     } else {
       it.quantity = Math.max(1, toInt(it.quantity, 1));
     }
@@ -575,6 +599,7 @@ function computeLine(item, basics, globalMarkupPct) {
     it.unit_cost_net = baseNet;
 
     const computeSell = (netVal) => computeUnitSellFromMarkup(netVal, effectiveMarkup);
+    const computeIndividualSell = (netVal) => computeUnitSellFromMarkup(netVal, individualMarkup);
 
     // Double sell (per-person or per-room)
     let doubleSell;
@@ -597,94 +622,105 @@ function computeLine(item, basics, globalMarkupPct) {
     it.package_room_double = basis === 'per_room' ? doubleSell : it.package_room_double;
 
     // Individual quote (informative / optional)
-    const quoteIndividual = !!it.package_quote_individual;
-    const mode = it.package_individual_mode === 'supplement' ? 'supplement' : 'price';
-    const roomMode = it.package_single_room_mode === 'supplement' ? 'supplement' : 'price';
+    const quoteIndividual =
+      !!it.package_quote_individual || (basis === 'per_room' && !!it.package_quote_single_rooms);
+    const modeSource =
+      it.package_individual_mode ||
+      (basis === 'per_room' ? it.package_single_room_mode : '') ||
+      'absolute';
+    const mode = modeSource === 'supplement' ? 'supplement' : 'absolute';
 
     // Counts (kept for UI and snapshot)
-    it.package_individual_count = Math.max(0, toInt(it.package_individual_count ?? 0, 0));
-    it.package_single_rooms = Math.max(0, toInt(it.package_single_rooms ?? 0, 0));
+    const individualQtyRaw =
+      basis === 'per_person'
+        ? it.package_individual_qty ?? it.package_individual_count
+        : it.package_individual_qty ?? it.package_single_rooms;
+    const individualQty = Math.max(0, toInt(individualQtyRaw ?? 0, 0));
+    it.package_individual_qty = individualQty;
+    it.package_individual_count = basis === 'per_person' ? individualQty : it.package_individual_count;
+    it.package_single_rooms = basis === 'per_room' ? individualQty : it.package_single_rooms;
+
+    it.package_quote_individual = quoteIndividual;
+    if (basis === 'per_room') {
+      it.package_quote_single_rooms = quoteIndividual;
+    }
+    it.package_individual_mode = mode;
+    if (basis === 'per_room') {
+      it.package_single_room_mode = mode;
+    }
 
     if (quoteIndividual) {
-      if (basis === 'per_person') {
-        // Individual is per person
-        if (mode === 'supplement') {
-          const suppNetInput = Math.max(0, toNumber(it.package_single_supplement_net ?? 0));
-          const suppNet = round2(suppNetInput * discountFactor);
-          const indivNet = round2(baseNet + suppNet);
+      const isPerRoom = basis === 'per_room';
+      const suppNetInput = Math.max(
+        0,
+        toNumber(isPerRoom ? it.package_single_room_supplement_net ?? 0 : it.package_single_supplement_net ?? 0)
+      );
+      const suppSellInput = Math.max(
+        0,
+        toNumber(isPerRoom ? it.package_single_room_supplement_sell ?? 0 : it.package_single_supplement_sell ?? 0)
+      );
+      const indivNetInput = toNumber(
+        isPerRoom
+          ? it.unit_cost_net_single_room ?? ''
+          : it.package_unit_cost_net_individual ?? it.unit_cost_net_individual ?? ''
+      );
+      const indivSellInput = Math.max(
+        0,
+        toNumber(
+          isPerRoom
+            ? it.unit_sell_price_single_room ?? 0
+            : it.package_unit_sell_price_individual ?? it.unit_sell_price_individual ?? 0
+        )
+      );
 
-          let indivSell;
-          if (!it.lock_sell_price) {
-            indivSell = computeSell(indivNet);
-          } else {
-            // If manual, allow explicit supplement sell; otherwise derive from explicit indiv price if present
-            const suppSellInput = Math.max(0, toNumber(it.package_single_supplement_sell ?? 0));
-            if (suppSellInput > 0) {
-              indivSell = round2(doubleSell + round2(suppSellInput * discountFactor));
-            } else {
-              const indivSellInput = Math.max(0, toNumber(it.unit_sell_price_individual ?? 0));
-              indivSell = indivSellInput > 0 ? round2(indivSellInput * discountFactor) : doubleSell;
-            }
-          }
+      if (mode === 'supplement') {
+        const suppNet = round2(suppNetInput * discountFactor);
+        const indivNet = round2(baseNet + suppNet);
 
-          it.package_single_supplement = round2(indivSell - doubleSell);
-          it.package_pp_single = indivSell;
+        let indivSell;
+        if (!it.lock_sell_price) {
+          indivSell = computeIndividualSell(indivNet);
+        } else if (suppSellInput > 0) {
+          indivSell = round2(doubleSell + round2(suppSellInput * discountFactor));
+        } else if (indivSellInput > 0) {
+          indivSell = round2(indivSellInput * discountFactor);
         } else {
-          // Absolute individual price per person (optional net override)
-          const indivNetInput = toNumber(it.unit_cost_net_individual ?? '');
-          const indivNetRaw = indivNetInput !== '' && !Number.isNaN(indivNetInput) ? Math.max(0, indivNetInput) : baseNetInput;
-          const indivNet = round2(indivNetRaw * discountFactor);
-
-          let indivSell;
-          if (!it.lock_sell_price) {
-            indivSell = computeSell(indivNet);
-          } else {
-            const indivSellInput = Math.max(0, toNumber(it.unit_sell_price_individual ?? 0));
-            indivSell = indivSellInput > 0 ? round2(indivSellInput * discountFactor) : doubleSell;
-          }
-
-          it.unit_cost_net_individual = indivNetRaw;
-          it.package_pp_single = indivSell;
-          it.package_single_supplement = round2(Math.max(0, indivSell - doubleSell));
+          indivSell = doubleSell;
         }
-      } else {
-        // per_room: individual is per room
-        if (roomMode === 'supplement') {
-          const suppNetInput = Math.max(0, toNumber(it.package_single_room_supplement_net ?? 0));
-          const suppNet = round2(suppNetInput * discountFactor);
-          const indivNet = round2(baseNet + suppNet);
 
-          let indivSell;
-          if (!it.lock_sell_price) {
-            indivSell = computeSell(indivNet);
-          } else {
-            const suppSellInput = Math.max(0, toNumber(it.package_single_room_supplement_sell ?? 0));
-            if (suppSellInput > 0) {
-              indivSell = round2(doubleSell + round2(suppSellInput * discountFactor));
-            } else {
-              const indivSellInput = Math.max(0, toNumber(it.unit_sell_price_single_room ?? 0));
-              indivSell = indivSellInput > 0 ? round2(indivSellInput * discountFactor) : doubleSell;
-            }
-          }
-
+        it.package_single_supplement = round2(indivSell - doubleSell);
+        it.package_single_supplement_net = suppNetInput;
+        it.package_single_supplement_pvp = round2(Math.max(0, indivSell - doubleSell));
+        if (isPerRoom) {
           it.package_room_single_supplement = round2(indivSell - doubleSell);
           it.package_room_single = indivSell;
         } else {
-          const indivNetInput = toNumber(it.unit_cost_net_single_room ?? '');
-          const indivNetRaw = indivNetInput !== '' && !Number.isNaN(indivNetInput) ? Math.max(0, indivNetInput) : baseNetInput;
-          const indivNet = round2(indivNetRaw * discountFactor);
+          it.package_pp_single = indivSell;
+        }
+      } else {
+        const indivNetRaw =
+          indivNetInput !== '' && !Number.isNaN(indivNetInput) ? Math.max(0, indivNetInput) : baseNetInput;
+        const indivNet = round2(indivNetRaw * discountFactor);
 
-          let indivSell;
-          if (!it.lock_sell_price) {
-            indivSell = computeSell(indivNet);
-          } else {
-            const indivSellInput = Math.max(0, toNumber(it.unit_sell_price_single_room ?? 0));
-            indivSell = indivSellInput > 0 ? round2(indivSellInput * discountFactor) : doubleSell;
-          }
+        let indivSell;
+        if (!it.lock_sell_price) {
+          indivSell = computeIndividualSell(indivNet);
+        } else if (indivSellInput > 0) {
+          indivSell = round2(indivSellInput * discountFactor);
+        } else {
+          indivSell = doubleSell;
+        }
 
+        it.package_unit_cost_net_individual = indivNetRaw;
+        it.package_unit_sell_price_individual = indivSell;
+        if (isPerRoom) {
           it.unit_cost_net_single_room = indivNetRaw;
           it.package_room_single = indivSell;
           it.package_room_single_supplement = round2(Math.max(0, indivSell - doubleSell));
+        } else {
+          it.unit_cost_net_individual = indivNetRaw;
+          it.package_pp_single = indivSell;
+          it.package_single_supplement = round2(Math.max(0, indivSell - doubleSell));
         }
       }
     }
@@ -1084,7 +1120,8 @@ export function syncServiceDatesFromBasics(services = [], basics = {}) {
 
 function PackagePricingPanel({ item, idx, updateItem, currency, pax, globalMarkupPct }) {
   const basis = item.package_pricing_basis === 'per_person' ? 'per_person' : 'per_room';
-  const discountPct = clampNumber(toNumber(item.discounts?.discount_pct ?? 0), 0, 50);
+  const discountPct = clampNumber(toNumber(item.package_discount_percent ?? 0), 0, 100);
+  const discountSummary = buildPackageDiscountSummary(discountPct);
 
   const setBasis = (v) => {
     const nextBasis = v === 'per_person' ? 'per_person' : 'per_room';
@@ -1096,233 +1133,265 @@ function PackagePricingPanel({ item, idx, updateItem, currency, pax, globalMarku
   };
 
   const isManualPvp = !!item.lock_sell_price;
+  const individualUseMarkup =
+    typeof item.package_individual_use_markup === 'boolean' ? item.package_individual_use_markup : item.use_markup;
+  const individualMarkupPct =
+    item.package_individual_markup_pct ?? item.markup_pct ?? globalMarkupPct;
+  const individualEnabled = !!item.package_quote_individual || (basis === 'per_room' && !!item.package_quote_single_rooms);
+  const individualMode =
+    basis === 'per_room'
+      ? (item.package_single_room_mode === 'supplement' ? 'supplement' : 'absolute')
+      : (item.package_individual_mode === 'supplement' ? 'supplement' : 'absolute');
+  const individualQty = basis === 'per_person'
+    ? item.package_individual_qty ?? item.package_individual_count ?? 0
+    : item.package_individual_qty ?? item.package_single_rooms ?? 0;
+
+  const updateIndividualQty = (v) => {
+    const patch = { package_individual_qty: v };
+    if (basis === 'per_person') {
+      patch.package_individual_count = v;
+    } else {
+      patch.package_single_rooms = v;
+    }
+    updateItem(idx, patch);
+  };
+
+  const updateIndividualMode = (v) => {
+    const patch = { package_individual_mode: v };
+    if (basis === 'per_room') {
+      patch.package_single_room_mode = v;
+    }
+    updateItem(idx, patch);
+  };
+
+  const updateIndividualToggle = () => {
+    const next = !individualEnabled;
+    const patch = { package_quote_individual: next };
+    if (basis === 'per_room') {
+      patch.package_quote_single_rooms = next;
+    }
+    updateItem(idx, patch);
+  };
 
   return (
-    <div className="service-card__pricing service-card__pricing--package">
-      <div className="service-card__field">
-        <SelectControl
-          label="Precio del paquete"
-          value={basis}
-          options={[
-            { label: 'Por habitación/paquete', value: 'per_room' },
-            { label: 'Por persona (en doble)', value: 'per_person' },
-          ]}
-          onChange={setBasis}
-        />
-      </div>
-
-      <div className="service-card__field">
-        <TextControl
-          label={basis === 'per_person' ? 'Personas (auto)' : 'Cantidad (habitaciones/paquetes)'}
-          type="number"
-          min={1}
-          value={String(item.quantity ?? 1)}
-          onChange={(v) => updateItem(idx, { quantity: v })}
-          disabled={basis === 'per_person'}
-          help={basis === 'per_person' ? 'Se calcula desde Datos básicos (pax total).' : ''}
-        />
-      </div>
-
-      <div className="service-card__field">
-        <TextControl
-          label={basis === 'per_person' ? 'Coste neto (por persona en doble)' : 'Coste neto (hab./paquete doble)'}
-          value={String(item.unit_cost_net ?? '')}
-          onChange={(v) => updateItem(idx, { unit_cost_net: v })}
-          placeholder="120"
-        />
-      </div>
-
-      <div className="service-card__field">
-        <ToggleControl
-          label="Usar margen"
-          checked={!!item.use_markup}
-          onChange={() => updateItem(idx, { use_markup: !item.use_markup })}
-        />
-      </div>
-
-      {item.use_markup && (
-        <div className="service-card__field">
-          <TextControl
-            label="Margen (%)"
-            type="number"
-            min={0}
-            value={String(item.markup_pct ?? globalMarkupPct)}
-            onChange={(v) => updateItem(idx, { markup_pct: v })}
-          />
-        </div>
-      )}
-
-      <div className="service-card__field">
-        <ToggleControl
-          label="PVP manual"
-          checked={!!item.lock_sell_price}
-          onChange={() => updateItem(idx, { lock_sell_price: !item.lock_sell_price })}
-        />
-      </div>
-
-      <div className="service-card__field">
-        <TextControl
-          label={basis === 'per_person' ? 'PVP (por persona en doble)' : 'PVP (hab./paquete doble)'}
-          value={String(item.unit_sell_price ?? '')}
-          onChange={(v) => updateItem(idx, { unit_sell_price: v })}
-          placeholder="165"
-          disabled={!item.lock_sell_price}
-          help={discountPct > 0 ? `Descuento aplicado: -${discountPct}%` : ''}
-        />
-      </div>
-
-      {basis === 'per_person' ? (
-        <div className="service-card__subcard">
-          <details className="service-card__hotel-discounts-collapse">
-            <summary className="service-card__section-summary">
-              <span className="service-card__section-summary-title">Individual (informativo)</span>
-              <span className="service-card__section-summary-meta">
-                {item.package_quote_individual ? 'Activado' : ''}
-              </span>
-            </summary>
-            <div className="service-card__hotel-discounts">
-              <div className="service-card__hotel-discounts-grid">
+    <div className="service-card__hotel-panel service-card__package-panel">
+      <div className="service-card__hotel-occupancy">
+        <div className="service-card__hotel-occupancy-card">
+          <div className="service-card__hotel-occupancy-header">
+            <span className="service-card__hotel-occupancy-label">Doble</span>
+          </div>
+          <div className="service-card__hotel-occupancy-body">
+            <SelectControl
+              label="Precio del paquete"
+              value={basis}
+              options={[
+                { label: 'Por habitación/paquete', value: 'per_room' },
+                { label: 'Por persona (en doble)', value: 'per_person' },
+              ]}
+              onChange={setBasis}
+            />
+            <TextControl
+              label={basis === 'per_person' ? __('Personas en doble', 'wp-travel-giav') : 'Cantidad (habitaciones/paquetes)'}
+              type="number"
+              min={1}
+              value={String(item.quantity ?? 1)}
+              onChange={(v) => updateItem(idx, { quantity: v })}
+              help={basis === 'per_person' ? `${__('Pax total:', 'wp-travel-giav')} ${pax}` : ''}
+            />
+            <TextControl
+              label={basis === 'per_person' ? 'Coste neto (por persona en doble)' : 'Coste neto (hab./paquete doble)'}
+              value={String(item.unit_cost_net ?? '')}
+              onChange={(v) => updateItem(idx, { unit_cost_net: v })}
+              placeholder="120"
+            />
+            <details className="service-card__hotel-mode-details">
+              <summary>Margen y PVP</summary>
+              <div className="service-card__hotel-mode-details-grid">
                 <ToggleControl
-                  label="Cotizar individual"
-                  checked={!!item.package_quote_individual}
-                  onChange={() => updateItem(idx, { package_quote_individual: !item.package_quote_individual })}
+                  label="Usar margen"
+                  checked={!!item.use_markup}
+                  onChange={() => updateItem(idx, { use_markup: !item.use_markup })}
                 />
+                {item.use_markup && (
+                  <TextControl
+                    label="Margen (%)"
+                    type="number"
+                    min={0}
+                    value={String(item.markup_pct ?? globalMarkupPct)}
+                    onChange={(v) => updateItem(idx, { markup_pct: v })}
+                  />
+                )}
+                <ToggleControl
+                  label="PVP manual"
+                  checked={!!item.lock_sell_price}
+                  onChange={() => updateItem(idx, { lock_sell_price: !item.lock_sell_price })}
+                />
+                <TextControl
+                  label={basis === 'per_person' ? 'PVP (por persona en doble)' : 'PVP (hab./paquete doble)'}
+                  value={String(item.unit_sell_price ?? '')}
+                  onChange={(v) => updateItem(idx, { unit_sell_price: v })}
+                  placeholder="165"
+                  disabled={!item.lock_sell_price}
+                  help={discountPct > 0 ? `Descuento aplicado: -${discountPct}%` : ''}
+                />
+              </div>
+            </details>
+          </div>
+        </div>
 
-                {item.package_quote_individual && (
-                  <>
+        <div className="service-card__hotel-occupancy-card">
+          <div className="service-card__hotel-occupancy-header">
+            <ToggleControl
+              label={__('Cotizar individual (informativo)', 'wp-travel-giav')}
+              checked={individualEnabled}
+              onChange={updateIndividualToggle}
+            />
+            <span className="service-card__hotel-occupancy-label">Individual</span>
+          </div>
+
+          {individualEnabled && (
+            <div className="service-card__hotel-occupancy-body">
+              <TextControl
+                label={basis === 'per_person' ? 'Personas en individual' : 'Habitaciones individuales'}
+                type="number"
+                min={0}
+                value={String(individualQty ?? 0)}
+                onChange={updateIndividualQty}
+              />
+              <SelectControl
+                label="Modo"
+                value={individualMode}
+                options={[
+                  { label: 'Precio absoluto', value: 'absolute' },
+                  { label: 'Suplemento sobre doble', value: 'supplement' },
+                ]}
+                onChange={updateIndividualMode}
+              />
+
+              {individualMode !== 'supplement' ? (
+                <TextControl
+                  label={basis === 'per_person' ? 'Coste neto (indiv. por persona)' : 'Coste neto (hab. indiv.)'}
+                  value={String(
+                    basis === 'per_person'
+                      ? item.package_unit_cost_net_individual ?? item.unit_cost_net_individual ?? ''
+                      : item.unit_cost_net_single_room ?? ''
+                  )}
+                  onChange={(v) =>
+                    updateItem(idx, {
+                      ...(basis === 'per_person'
+                        ? { package_unit_cost_net_individual: v, unit_cost_net_individual: v }
+                        : { unit_cost_net_single_room: v }),
+                    })
+                  }
+                  placeholder="150"
+                />
+              ) : (
+                <TextControl
+                  label={basis === 'per_person' ? 'Suplemento neto (por persona)' : 'Suplemento neto (hab. indiv.)'}
+                  value={String(
+                    basis === 'per_person'
+                      ? item.package_single_supplement_net ?? ''
+                      : item.package_single_room_supplement_net ?? ''
+                  )}
+                  onChange={(v) =>
+                    updateItem(idx, {
+                      ...(basis === 'per_person'
+                        ? { package_single_supplement_net: v }
+                        : { package_single_room_supplement_net: v }),
+                    })
+                  }
+                  placeholder="30"
+                />
+              )}
+
+              <details className="service-card__hotel-mode-details">
+                <summary>Margen y PVP</summary>
+                <div className="service-card__hotel-mode-details-grid">
+                  <ToggleControl
+                    label="Usar margen"
+                    checked={!!individualUseMarkup}
+                    onChange={() =>
+                      updateItem(idx, { package_individual_use_markup: !individualUseMarkup })
+                    }
+                  />
+                  {individualUseMarkup && (
                     <TextControl
-                      label="Personas en individual"
+                      label="Margen (%)"
                       type="number"
                       min={0}
-                      max={pax}
-                      value={String(item.package_individual_count ?? 0)}
-                      onChange={(v) => updateItem(idx, { package_individual_count: v })}
+                      value={String(individualMarkupPct)}
+                      onChange={(v) => updateItem(idx, { package_individual_markup_pct: v })}
                     />
-                    <SelectControl
-                      label="Modo"
-                      value={item.package_individual_mode === 'supplement' ? 'supplement' : 'absolute'}
-                      options={[
-                        { label: 'Precio absoluto', value: 'absolute' },
-                        { label: 'Suplemento sobre doble', value: 'supplement' },
-                      ]}
-                      onChange={(v) => updateItem(idx, { package_individual_mode: v })}
-                    />
-
-                    {item.package_individual_mode !== 'supplement' ? (
-                      <>
-                        <TextControl
-                          label="Coste neto (indiv. por persona)"
-                          value={String(item.unit_cost_net_individual ?? '')}
-                          onChange={(v) => updateItem(idx, { unit_cost_net_individual: v })}
-                          placeholder="150"
-                        />
-                        <TextControl
-                          label="PVP (indiv. por persona)"
-                          value={String(item.unit_sell_price_individual ?? '')}
-                          onChange={(v) => updateItem(idx, { unit_sell_price_individual: v })}
-                          placeholder="210"
-                          disabled={!isManualPvp}
-                        />
-                      </>
-                    ) : (
-                      <>
-                        <TextControl
-                          label="Suplemento neto (por persona)"
-                          value={String(item.package_single_supplement_net ?? '')}
-                          onChange={(v) => updateItem(idx, { package_single_supplement_net: v })}
-                          placeholder="30"
-                        />
-                        <TextControl
-                          label="Suplemento PVP (por persona)"
-                          value={String(item.package_single_supplement_sell ?? '')}
-                          onChange={(v) => updateItem(idx, { package_single_supplement_sell: v })}
-                          placeholder="45"
-                          disabled={!isManualPvp}
-                        />
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </details>
-        </div>
-      ) : (
-        <div className="service-card__subcard">
-          <details className="service-card__hotel-discounts-collapse">
-            <summary className="service-card__section-summary">
-              <span className="service-card__section-summary-title">Habitación individual (informativo)</span>
-              <span className="service-card__section-summary-meta">
-                {item.package_quote_single_rooms ? 'Activado' : ''}
-              </span>
-            </summary>
-            <div className="service-card__hotel-discounts">
-              <div className="service-card__hotel-discounts-grid">
-                <ToggleControl
-                  label="Cotizar hab. individual"
-                  checked={!!item.package_quote_single_rooms}
-                  onChange={() => updateItem(idx, { package_quote_single_rooms: !item.package_quote_single_rooms })}
-                />
-
-                {item.package_quote_single_rooms && (
-                  <>
+                  )}
+                  <ToggleControl
+                    label="PVP manual"
+                    checked={!!item.lock_sell_price}
+                    onChange={() => updateItem(idx, { lock_sell_price: !item.lock_sell_price })}
+                  />
+                  {individualMode !== 'supplement' ? (
                     <TextControl
-                      label="Habitaciones individuales"
-                      type="number"
-                      min={0}
-                      value={String(item.package_single_rooms ?? 0)}
-                      onChange={(v) => updateItem(idx, { package_single_rooms: v })}
+                      label={basis === 'per_person' ? 'PVP (indiv. por persona)' : 'PVP (hab. indiv.)'}
+                      value={String(
+                        basis === 'per_person'
+                          ? item.package_unit_sell_price_individual ?? item.unit_sell_price_individual ?? ''
+                          : item.unit_sell_price_single_room ?? ''
+                      )}
+                      onChange={(v) =>
+                        updateItem(idx, {
+                          ...(basis === 'per_person'
+                            ? { package_unit_sell_price_individual: v, unit_sell_price_individual: v }
+                            : { unit_sell_price_single_room: v }),
+                        })
+                      }
+                      placeholder="210"
+                      disabled={!isManualPvp}
                     />
-                    <SelectControl
-                      label="Modo"
-                      value={item.package_single_room_mode === 'supplement' ? 'supplement' : 'absolute'}
-                      options={[
-                        { label: 'Precio absoluto', value: 'absolute' },
-                        { label: 'Suplemento sobre doble', value: 'supplement' },
-                      ]}
-                      onChange={(v) => updateItem(idx, { package_single_room_mode: v })}
+                  ) : (
+                    <TextControl
+                      label={basis === 'per_person' ? 'Suplemento PVP (por persona)' : 'Suplemento PVP (hab. indiv.)'}
+                      value={String(
+                        basis === 'per_person'
+                          ? item.package_single_supplement_pvp ?? item.package_single_supplement_sell ?? ''
+                          : item.package_single_room_supplement_sell ?? ''
+                      )}
+                      onChange={(v) =>
+                        updateItem(idx, {
+                          ...(basis === 'per_person'
+                            ? { package_single_supplement_pvp: v, package_single_supplement_sell: v }
+                            : { package_single_room_supplement_sell: v }),
+                        })
+                      }
+                      placeholder="45"
+                      disabled={!isManualPvp}
                     />
-
-                    {item.package_single_room_mode !== 'supplement' ? (
-                      <>
-                        <TextControl
-                          label="Coste neto (hab. indiv.)"
-                          value={String(item.unit_cost_net_single_room ?? '')}
-                          onChange={(v) => updateItem(idx, { unit_cost_net_single_room: v })}
-                          placeholder="150"
-                        />
-                        <TextControl
-                          label="PVP (hab. indiv.)"
-                          value={String(item.unit_sell_price_single_room ?? '')}
-                          onChange={(v) => updateItem(idx, { unit_sell_price_single_room: v })}
-                          placeholder="210"
-                          disabled={!isManualPvp}
-                        />
-                      </>
-                    ) : (
-                      <>
-                        <TextControl
-                          label="Suplemento neto (hab. indiv.)"
-                          value={String(item.package_single_room_supplement_net ?? '')}
-                          onChange={(v) => updateItem(idx, { package_single_room_supplement_net: v })}
-                          placeholder="30"
-                        />
-                        <TextControl
-                          label="Suplemento PVP (hab. indiv.)"
-                          value={String(item.package_single_room_supplement_sell ?? '')}
-                          onChange={(v) => updateItem(idx, { package_single_room_supplement_sell: v })}
-                          placeholder="45"
-                          disabled={!isManualPvp}
-                        />
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
+                  )}
+                </div>
+              </details>
             </div>
-          </details>
+          )}
         </div>
-      )}
+      </div>
+
+      <div className="service-card__subcard">
+        <details className="service-card__hotel-discounts-collapse">
+          <summary className="service-card__section-summary">
+            <span className="service-card__section-summary-title">Descuentos</span>
+            <span className="service-card__section-summary-meta">{discountSummary}</span>
+          </summary>
+          <div className="service-card__hotel-discounts">
+            <div className="service-card__hotel-discounts-grid">
+              <TextControl
+                label="Descuento (%)"
+                type="number"
+                min={0}
+                max={100}
+                value={String(item.package_discount_percent ?? 0)}
+                onChange={(v) => updateItem(idx, { package_discount_percent: v })}
+              />
+            </div>
+          </div>
+        </details>
+      </div>
     </div>
   );
 }
