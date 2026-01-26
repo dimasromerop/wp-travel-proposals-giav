@@ -29,6 +29,31 @@ const formatDate = (value) => {
   });
 };
 
+const parseDateValue = (value) => {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch;
+    return Date.UTC(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+  }
+
+  const slashMatch = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+  if (slashMatch) {
+    const [, d, m, yRaw] = slashMatch;
+    const year = yRaw.length === 2 ? 2000 + parseInt(yRaw, 10) : parseInt(yRaw, 10);
+    return Date.UTC(year, parseInt(m, 10) - 1, parseInt(d, 10));
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.getTime();
+  }
+  return null;
+};
+
 const getCustomerName = (mapped = {}) => {
   const first = mapped.first_name || mapped.nombre || '';
   const last = mapped.last_name || mapped.apellido || '';
@@ -65,6 +90,7 @@ const RequestsListAdmin = () => {
   const [filters, setFilters] = useState({ status: '', lang: '', q: '', page: 1 });
   const [pagination, setPagination] = useState({ total_pages: 1, page: 1, total: 0 });
   const [convertingId, setConvertingId] = useState(null);
+  const [arrivalOrder, setArrivalOrder] = useState('asc');
   const filtersRef = useRef(filters);
 
   const hasConfiguredForms = Boolean(forms.es_form_id || forms.en_form_id);
@@ -208,6 +234,20 @@ const RequestsListAdmin = () => {
     loadRequests();
   };
 
+  const sortedRequests = useMemo(() => {
+    const copy = [...requests];
+    copy.sort((a, b) => {
+      const aValue = parseDateValue(a?.mapped?.fecha_llegada);
+      const bValue = parseDateValue(b?.mapped?.fecha_llegada);
+
+      if (aValue === null && bValue === null) return 0;
+      if (aValue === null) return 1;
+      if (bValue === null) return -1;
+      return arrivalOrder === 'asc' ? aValue - bValue : bValue - aValue;
+    });
+    return copy;
+  }, [requests, arrivalOrder]);
+
   return (
     <div className="wp-travel-giav-app">
       <div className="requests-list-admin">
@@ -295,7 +335,21 @@ const RequestsListAdmin = () => {
                 <span>Cliente</span>
                 <span>Paquete</span>
                 <span>Email</span>
-                <span>Fechas</span>
+                <button
+                  type="button"
+                  className="requests-list-admin__sort-button is-active"
+                  onClick={() => setArrivalOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                  aria-pressed="true"
+                  aria-label={`Llegada ${arrivalOrder === 'asc' ? 'orden ascendente' : 'orden descendente'}`}
+                >
+                  <span className="requests-list-admin__sort-label">Llegada</span>
+                  <span className="requests-list-admin__sort-icon" data-order={arrivalOrder}>
+                    <svg viewBox="0 0 12 14" role="presentation" focusable="false">
+                      <path className="requests-list-admin__sort-arrow requests-list-admin__sort-arrow--up" d="M3 8.5L6 5l3 3.5" />
+                      <path className="requests-list-admin__sort-arrow requests-list-admin__sort-arrow--down" d="M3 5.5L6 9l3-3.5" />
+                    </svg>
+                  </span>
+                </button>
                 <span>PAX</span>
                 <span>Idioma / Estado</span>
                 <span>Acciones</span>
@@ -315,7 +369,7 @@ const RequestsListAdmin = () => {
               )}
 
               {!loadingRequests &&
-                requests.map((request) => {
+                sortedRequests.map((request) => {
                   const mapped = request.mapped || {};
                   const status = request.status || 'new';
                   const pax =

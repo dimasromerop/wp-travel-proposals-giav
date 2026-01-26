@@ -627,6 +627,58 @@
   text-transform: uppercase;
 }
 
+.requests-list-admin__sort-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  gap: 6px;
+  cursor: pointer;
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+
+.requests-list-admin__sort-label {
+  flex: 0;
+  text-align: left;
+}
+
+.requests-list-admin__sort-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.requests-list-admin__sort-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.requests-list-admin__sort-arrow {
+  fill: #d1d5db;
+  transition: fill 0.2s ease;
+}
+
+.requests-list-admin__sort-icon[data-order='asc'] .requests-list-admin__sort-arrow--up,
+.requests-list-admin__sort-icon[data-order='desc'] .requests-list-admin__sort-arrow--down {
+  fill: #0f172a;
+}
+
+.requests-list-admin__sort-arrow--up {
+  transform: translateY(-2px);
+}
+
+.requests-list-admin__sort-arrow--down {
+  transform: translateY(2px);
+}
+
 .requests-list-admin__row--loading {
   justify-content: center;
   border: none;

@@ -32,6 +32,31 @@ const formatDate = (value) => {
   return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
+const parseDateValue = (value) => {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch;
+    return Date.UTC(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+  }
+
+  const slashMatch = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+  if (slashMatch) {
+    const [, d, m, yRaw] = slashMatch;
+    const year = yRaw.length === 2 ? 2000 + parseInt(yRaw, 10) : parseInt(yRaw, 10);
+    return Date.UTC(year, parseInt(m, 10) - 1, parseInt(d, 10));
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.getTime();
+  }
+  return null;
+};
+
 const getCustomerFullName = (mapped = {}) => {
   const first = mapped.first_name || mapped.nombre || '';
   const last = mapped.last_name || mapped.apellido || '';
@@ -45,6 +70,8 @@ export default function RequestsList() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [arrivalOrder, setArrivalOrder] = useState('asc');
+  const [updatingStatus, setUpdatingStatus] = useState({});
   const [filters, setFilters] = useState({
     search: '',
     status: '',
@@ -113,6 +140,47 @@ export default function RequestsList() {
     }
   }, [loadRequests]);
 
+  const handleInlineStatusChange = useCallback(async (requestId, nextStatus) => {
+    if (!requestId || !nextStatus) {
+      return;
+    }
+
+    const current = requests.find((req) => req.id === requestId);
+    const previousStatus = current?.status || 'new';
+    if (previousStatus === nextStatus) {
+      return;
+    }
+
+    setNotice(null);
+    setRequests((prev) =>
+      prev.map((req) => (req.id === requestId ? { ...req, status: nextStatus } : req))
+    );
+    setUpdatingStatus((prev) => ({ ...prev, [requestId]: true }));
+
+    try {
+      const updated = await API.updateRequestStatus(requestId, { status: nextStatus });
+      if (updated?.id) {
+        setRequests((prev) =>
+          prev.map((req) => (req.id === requestId ? { ...req, ...updated } : req))
+        );
+      }
+    } catch (err) {
+      setRequests((prev) =>
+        prev.map((req) => (req.id === requestId ? { ...req, status: previousStatus } : req))
+      );
+      setNotice({
+        type: 'error',
+        message: err.message || 'No se pudo actualizar el estado.',
+      });
+    } finally {
+      setUpdatingStatus((prev) => {
+        const next = { ...prev };
+        delete next[requestId];
+        return next;
+      });
+    }
+  }, [requests]);
+
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({
       ...prev,
@@ -121,8 +189,22 @@ export default function RequestsList() {
     }));
   };
 
+  const sortedRequests = useMemo(() => {
+    const copy = [...requests];
+    copy.sort((a, b) => {
+      const aValue = parseDateValue(a?.mapped?.fecha_llegada);
+      const bValue = parseDateValue(b?.mapped?.fecha_llegada);
+
+      if (aValue === null && bValue === null) return 0;
+      if (aValue === null) return 1;
+      if (bValue === null) return -1;
+      return arrivalOrder === 'asc' ? aValue - bValue : bValue - aValue;
+    });
+    return copy;
+  }, [requests, arrivalOrder]);
+
   const rows = useMemo(() => {
-    return requests.map((req) => {
+    return sortedRequests.map((req) => {
       const mapped = req.mapped || {};
       const intentions = req.intentions || {};
       const name = getCustomerFullName(mapped);
@@ -140,16 +222,26 @@ export default function RequestsList() {
           <span>{name}</span>
           <span>{mapped.package || '—'}</span>
           <span>{mapped.email || '—'}</span>
-          <span>
-            {formatDate(mapped.fecha_llegada) || '—'} - {formatDate(mapped.fecha_regreso) || '—'}
-          </span>
+          <span>{formatDate(mapped.fecha_llegada) || '—'}</span>
+          <span>{formatDate(mapped.fecha_regreso) || '—'}</span>
           <span>{pax}</span>
           <span>
-            <span
-              className={`status-chip status-chip--${(req.status || 'new').replace(/[^a-z0-9_-]/gi, '-')}`}
+            <select
+              className="casanova-portal-table__status-select"
+              value={req.status || 'new'}
+              onChange={(event) => handleInlineStatusChange(req.id, event.target.value)}
+              disabled={!!updatingStatus[req.id]}
+              aria-label="Actualizar estado"
             >
-              {STATUS_LABELS[req.status] || req.status || 'Nueva'}
-            </span>
+              {statusOptions.filter((opt) => opt.value).map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            {updatingStatus[req.id] ? (
+              <div className="casanova-portal-table__status-saving">Guardando...</div>
+            ) : null}
           </span>
           <span>
             {gf ? `${gf} GF/jug` : '—'}
@@ -170,7 +262,7 @@ export default function RequestsList() {
         </div>
       );
     });
-  }, [requests, converting, handleConvert]);
+  }, [sortedRequests, converting, handleConvert, updatingStatus, handleInlineStatusChange]);
 
   return (
     <div className="casanova-portal-section">
@@ -232,13 +324,28 @@ export default function RequestsList() {
         </div>
       ) : null}
 
-      <div className="casanova-portal-table">
+      <div className="casanova-portal-table casanova-portal-table--requests">
         <div className="casanova-portal-table__row casanova-portal-table__row--header">
           <span>Fecha</span>
           <span>Nombre</span>
           <span>Paquete</span>
           <span>Email</span>
-          <span>Fechas</span>          
+          <button
+            type="button"
+            className="dashboard-table__sort-button is-active"
+            onClick={() => setArrivalOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+            aria-pressed="true"
+            aria-label={`Llegada ${arrivalOrder === 'asc' ? 'orden ascendente' : 'orden descendente'}`}
+          >
+            <span className="dashboard-table__sort-label">Llegada</span>
+            <span className="dashboard-table__sort-icon" data-order={arrivalOrder}>
+              <svg viewBox="0 0 12 14" role="presentation" focusable="false">
+                <path className="dashboard-table__sort-arrow dashboard-table__sort-arrow--up" d="M3 8.5L6 5l3 3.5" />
+                <path className="dashboard-table__sort-arrow dashboard-table__sort-arrow--down" d="M3 5.5L6 9l3-3.5" />
+              </svg>
+            </span>
+          </button>
+          <span>Regreso</span>
           <span>PAX</span>
           <span>Estado</span>
           <span>Intenciones</span>
