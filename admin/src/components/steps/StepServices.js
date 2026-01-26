@@ -579,8 +579,11 @@ function computeLine(item, basics, globalMarkupPct) {
     it.package_discount_percent = discountPctRaw;
     const individualUseMarkup =
       typeof it.package_individual_use_markup === 'boolean' ? it.package_individual_use_markup : it.use_markup;
+    const rawIndividualMarkup = it.package_individual_markup_pct;
+    const hasIndividualMarkup =
+      rawIndividualMarkup !== undefined && rawIndividualMarkup !== null && rawIndividualMarkup !== '';
     const individualMarkup = individualUseMarkup
-      ? Math.max(0, toNumber(it.package_individual_markup_pct ?? it.markup_pct ?? globalMarkupPct ?? 0))
+      ? Math.max(0, toNumber(hasIndividualMarkup ? rawIndividualMarkup : (it.markup_pct ?? globalMarkupPct ?? 0)))
       : 0;
     it.package_individual_use_markup = individualUseMarkup;
     it.package_individual_markup_pct = individualMarkup;
@@ -694,8 +697,10 @@ function computeLine(item, basics, globalMarkupPct) {
         if (isPerRoom) {
           it.package_room_single_supplement = round2(indivSell - doubleSell);
           it.package_room_single = indivSell;
+          it.unit_sell_price_single_room = indivSell;
         } else {
           it.package_pp_single = indivSell;
+          it.unit_sell_price_individual = indivSell;
         }
       } else {
         const indivNetRaw =
@@ -717,10 +722,12 @@ function computeLine(item, basics, globalMarkupPct) {
           it.unit_cost_net_single_room = indivNetRaw;
           it.package_room_single = indivSell;
           it.package_room_single_supplement = round2(Math.max(0, indivSell - doubleSell));
+          it.unit_sell_price_single_room = indivSell;
         } else {
           it.unit_cost_net_individual = indivNetRaw;
           it.package_pp_single = indivSell;
           it.package_single_supplement = round2(Math.max(0, indivSell - doubleSell));
+          it.unit_sell_price_individual = indivSell;
         }
       }
     }
