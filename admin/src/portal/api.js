@@ -90,6 +90,7 @@ export const getDashboard = async ({
   paymentDueDays,
   tripDueDays,
   expediente,
+  showCompleted,
 } = {}) => {
   const y = year || new Date().getFullYear();
   const search = new URLSearchParams();
@@ -126,6 +127,9 @@ export const getDashboard = async ({
   }
   if (expediente) {
     search.set('expediente', expediente);
+  }
+  if (showCompleted) {
+    search.set('show_completed', '1');
   }
   return fetchJSON(`dashboard?${search.toString()}`);
 };

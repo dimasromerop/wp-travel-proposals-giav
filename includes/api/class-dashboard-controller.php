@@ -106,6 +106,11 @@ class WP_Travel_GIAV_Dashboard_Controller extends WP_Travel_REST_Controller {
                             'required'          => false,
                             'sanitize_callback' => 'absint',
                         ],
+                        'show_completed' => [
+                            'type'              => 'boolean',
+                            'required'          => false,
+                            'sanitize_callback' => 'rest_sanitize_boolean',
+                        ],
                         'force' => [
                             'type'              => 'boolean',
                             'required'          => false,
@@ -179,12 +184,13 @@ class WP_Travel_GIAV_Dashboard_Controller extends WP_Travel_REST_Controller {
         $payment_due_days = $this->sanitize_positive_int( $request->get_param( 'payment_due_days' ) );
         $trip_due_days    = $this->sanitize_positive_int( $request->get_param( 'trip_due_days' ) );
         $expedienteFilter = trim( (string) $request->get_param( 'expediente' ) );
+        $show_completed   = rest_sanitize_boolean( $request->get_param( 'show_completed' ) );
 
         if ( $payment_status && ! in_array( $payment_status, self::PAYMENT_STATUS, true ) ) {
             $payment_status = '';
         }
 
-        return array_values( array_filter( $items, function( $item ) use ( $agent, $clientFilter, $expedienteFilter, $payment_status, $payment_due_days ) {
+        return array_values( array_filter( $items, function( $item ) use ( $agent, $clientFilter, $expedienteFilter, $payment_status, $payment_due_days, $trip_due_days, $show_completed ) {
             if ( $agent !== '' && $item['agente_comercial'] ) {
                 if ( stripos( $item['agente_comercial'], $agent ) === false ) {
                     return false;
@@ -222,8 +228,55 @@ class WP_Travel_GIAV_Dashboard_Controller extends WP_Travel_REST_Controller {
                 }
             }
 
+            if ( ! $show_completed && $this->is_expediente_completed( $item ) ) {
+                return false;
+            }
+
             return true;
         } ) );
+    }
+
+    /**
+     * Determines if an expediente should be considered completed.
+     */
+    private function is_expediente_completed( array $item ): bool {
+        $dias = isset( $item['dias_hasta_viaje'] ) ? (int) $item['dias_hasta_viaje'] : null;
+        $start = isset( $item['fecha_inicio'] ) ? $this->parse_date_utc( $item['fecha_inicio'] ) : null;
+        $end = isset( $item['fecha_fin'] ) ? $this->parse_date_utc( $item['fecha_fin'] ) : null;
+        $now = new \DateTimeImmutable( 'now', new \DateTimeZone( 'UTC' ) );
+
+        if ( $start && $end ) {
+            $start = $start->setTime( 0, 0, 0 );
+            $end = $end->setTime( 23, 59, 59 );
+            if ( $now >= $start && $now <= $end ) {
+                return false;
+            }
+        }
+
+        if ( $dias !== null && $dias < 0 ) {
+            return true;
+        }
+
+        if ( $end ) {
+            $end = $end->setTime( 23, 59, 59 );
+            return $now > $end;
+        }
+
+        return false;
+    }
+
+    /**
+     * Parses a date string as UTC.
+     */
+    private function parse_date_utc( $value ): ?\DateTimeImmutable {
+        if ( empty( $value ) ) {
+            return null;
+        }
+        try {
+            return new \DateTimeImmutable( (string) $value, new \DateTimeZone( 'UTC' ) );
+        } catch ( \Exception $e ) {
+            return null;
+        }
     }
 
     /**

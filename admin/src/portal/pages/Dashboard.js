@@ -224,6 +224,7 @@ const Dashboard = () => {
     paymentStatus: '',
     paymentDueDays: null,
     tripDueDays: null,
+    showCompleted: false,
   });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -247,6 +248,7 @@ const Dashboard = () => {
         paymentStatus: filters.paymentStatus || undefined,
         paymentDueDays: filters.paymentDueDays ?? undefined,
         tripDueDays: filters.tripDueDays ?? undefined,
+        showCompleted: filters.showCompleted,
       });
         setData(payload);
       } catch (err) {
@@ -369,6 +371,7 @@ const Dashboard = () => {
           agent: '',
           client: '',
           expediente: '',
+          showCompleted: false,
           page: 1,
         };
       }
@@ -382,7 +385,17 @@ const Dashboard = () => {
     filters.expediente ||
       filters.paymentStatus ||
       filters.paymentDueDays !== null ||
-      filters.tripDueDays !== null
+      filters.tripDueDays !== null ||
+      filters.showCompleted
+  );
+
+  const hasInputFilters = Boolean(
+    filters.agent ||
+    filters.client ||
+    filters.expediente ||
+    filters.paymentStatus ||
+    filters.paymentDueDays !== null ||
+    filters.tripDueDays !== null
   );
 
   const handleAgentChange = (value) => {
@@ -395,6 +408,10 @@ const Dashboard = () => {
 
   const handleExpedienteChange = (value) => {
     setFilters((prev) => ({ ...prev, expediente: value, page: 1 }));
+  };
+
+  const handleToggleCompleted = () => {
+    setFilters((prev) => ({ ...prev, showCompleted: !prev.showCompleted, page: 1 }));
   };
 
   const navigatePage = (delta) => {
@@ -753,6 +770,14 @@ const Dashboard = () => {
             </button>
             <button
               type="button"
+              className={`dashboard-chip ${filters.showCompleted ? 'is-active' : ''}`}
+              onClick={handleToggleCompleted}
+              aria-pressed={filters.showCompleted}
+            >
+              {filters.showCompleted ? 'Ocultar finalizados' : 'Ver finalizados'}
+            </button>
+            <button
+              type="button"
               className={`dashboard-chip ${hasFiltersActive ? 'is-active' : ''}`}
               onClick={() => handleQuickFilter('clear')}
             >
@@ -841,7 +866,11 @@ const Dashboard = () => {
               {!loading && expedientes.length === 0 && (
                 <tr>
                   <td colSpan={12} className="dashboard-table__status">
-                    No hay expedientes registrados para este año.
+                    {hasInputFilters
+                      ? 'No hay expedientes que coincidan con los filtros actuales.'
+                      : filters.showCompleted
+                        ? 'No hay expedientes registrados para este año.'
+                        : 'No hay expedientes activos para este año. Activa "Ver finalizados" para ver viajes cerrados.'}
                   </td>
                 </tr>
               )}
@@ -943,3 +972,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+
