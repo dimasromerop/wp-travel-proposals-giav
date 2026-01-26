@@ -111,6 +111,52 @@ const SummaryTile = ({ icon, label, value, helper }) => (
   </article>
 );
 
+const SkeletonBlock = ({ className = '', style = {} }) => (
+  <span className={`dashboard-skeleton ${className}`.trim()} style={style} aria-hidden="true" />
+);
+
+const SummaryTileSkeleton = () => (
+  <article className="dashboard-summary-card dashboard-summary-card--skeleton" aria-hidden="true">
+    <SkeletonBlock className="dashboard-skeleton--icon" />
+    <div className="dashboard-summary-card__body">
+      <SkeletonBlock className="dashboard-skeleton--label" />
+      <SkeletonBlock className="dashboard-skeleton--value" />
+      <SkeletonBlock className="dashboard-skeleton--helper" />
+    </div>
+  </article>
+);
+
+const ChartSkeleton = () => (
+  <div className="dashboard-chart-skeleton" aria-hidden="true">
+    <div className="dashboard-chart-skeleton__axis">
+      {Array.from({ length: 5 }).map((_, idx) => (
+        <SkeletonBlock key={`axis-${idx}`} className="dashboard-skeleton--axis" />
+      ))}
+    </div>
+    <div className="dashboard-chart-skeleton__plot">
+      <div className="dashboard-chart-skeleton__grid">
+        {[0, 1, 2].map((idx) => (
+          <span key={`grid-${idx}`} className="dashboard-chart-skeleton__grid-line" />
+        ))}
+      </div>
+      <SkeletonBlock className="dashboard-chart-skeleton__line" />
+      <div className="dashboard-chart-skeleton__dots">
+        {Array.from({ length: 8 }).map((_, idx) => (
+          <SkeletonBlock key={`dot-${idx}`} className="dashboard-chart-skeleton__dot" />
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+const ChartLabelsSkeleton = () => (
+  <div className="dashboard-chart-skeleton__labels" aria-hidden="true">
+    {Array.from({ length: 12 }).map((_, idx) => (
+      <SkeletonBlock key={`label-${idx}`} className="dashboard-skeleton--label-xs" />
+    ))}
+  </div>
+);
+
 const SortButton = ({ label, onClick, isActive, order }) => (
   <button
     type="button"
@@ -210,6 +256,46 @@ const MonthlyChart = ({ data, currency }) => {
     </div>
   );
 };
+
+const TableRowSkeleton = ({ index }) => (
+  <tr key={`row-skel-${index}`} className="dashboard-table__row is-skeleton" aria-hidden="true">
+    <td><SkeletonBlock className="dashboard-skeleton--text dashboard-skeleton--short" /></td>
+    <td><SkeletonBlock className="dashboard-skeleton--text dashboard-skeleton--long" /></td>
+    <td><SkeletonBlock className="dashboard-skeleton--text dashboard-skeleton--medium" /></td>
+    <td><SkeletonBlock className="dashboard-skeleton--text dashboard-skeleton--long" /></td>
+    <td><SkeletonBlock className="dashboard-skeleton--text dashboard-skeleton--medium" /></td>
+    <td><SkeletonBlock className="dashboard-skeleton--text dashboard-skeleton--medium" /></td>
+    <td>
+      <div className="dashboard-day-status">
+        <SkeletonBlock className="dashboard-skeleton--pill" />
+        <SkeletonBlock className="dashboard-skeleton--subline" />
+      </div>
+    </td>
+    <td>
+      <div className="dashboard-payments">
+        <SkeletonBlock className="dashboard-skeleton--pill" />
+        <SkeletonBlock className="dashboard-skeleton--subline" />
+        <SkeletonBlock className="dashboard-skeleton--subline dashboard-skeleton--subline-short" />
+      </div>
+    </td>
+    <td className="dashboard-table__align-right">
+      <SkeletonBlock className="dashboard-skeleton--text dashboard-skeleton--short" />
+    </td>
+    <td className="dashboard-table__align-right">
+      <div className="dashboard-margin-cell">
+        <SkeletonBlock className="dashboard-skeleton--text dashboard-skeleton--short" />
+        <SkeletonBlock className="dashboard-skeleton--pill dashboard-skeleton--pill-small" />
+      </div>
+    </td>
+    <td><SkeletonBlock className="dashboard-skeleton--text dashboard-skeleton--short" /></td>
+    <td>
+      <div className="dashboard-actions is-skeleton">
+        <SkeletonBlock className="dashboard-skeleton--button" />
+        <SkeletonBlock className="dashboard-skeleton--button" />
+      </div>
+    </td>
+  </tr>
+);
 
 const Dashboard = () => {
   const nowYear = new Date().getFullYear();
@@ -607,12 +693,23 @@ const Dashboard = () => {
         <div className="dashboard-chart-summary">
           <div className="dashboard-chart-summary__layout">
             <div className="dashboard-chart-summary__chart">
-              <MonthlyChart data={normalizedChartData} currency={data?.currency} />
+              {loading ? (
+                <>
+                  <ChartSkeleton />
+                  <ChartLabelsSkeleton />
+                </>
+              ) : (
+                <MonthlyChart data={normalizedChartData} currency={data?.currency} />
+              )}
             </div>
             <div className="dashboard-chart-summary__cards">
-              {summaryTiles.map((tile) => (
-                <SummaryTile key={tile.label} {...tile} />
-              ))}
+              {loading
+                ? Array.from({ length: 4 }).map((_, idx) => (
+                    <SummaryTileSkeleton key={`summary-skel-${idx}`} />
+                  ))
+                : summaryTiles.map((tile) => (
+                    <SummaryTile key={tile.label} {...tile} />
+                  ))}
             </div>
           </div>
         </div>
@@ -856,13 +953,9 @@ const Dashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={12} className="dashboard-table__status">
-                    Cargando expedientes...
-                  </td>
-                </tr>
-              )}
+              {loading && Array.from({ length: 6 }).map((_, idx) => (
+                <TableRowSkeleton key={`table-skel-${idx}`} index={idx} />
+              ))}
               {!loading && expedientes.length === 0 && (
                 <tr>
                   <td colSpan={12} className="dashboard-table__status">
