@@ -138,6 +138,7 @@ export default function RequestsList() {
         >
           <span>{formatDate(req.created_at)}</span>
           <span>{name}</span>
+          <span>{mapped.package || '—'}</span>
           <span>{mapped.email || '—'}</span>
           <span>
             {mapped.fecha_llegada || '—'} - {mapped.fecha_regreso || '—'}
@@ -235,8 +236,9 @@ export default function RequestsList() {
         <div className="casanova-portal-table__row casanova-portal-table__row--header">
           <span>Fecha</span>
           <span>Nombre</span>
+          <span>Paquete</span>
           <span>Email</span>
-          <span>Fechas</span>
+          <span>Fechas</span>          
           <span>PAX</span>
           <span>Estado</span>
           <span>Intenciones</span>

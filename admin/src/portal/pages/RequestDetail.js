@@ -216,6 +216,7 @@ export default function RequestDetail() {
           <p>
             Fechas: {request.mapped?.fecha_llegada || '—'} – {request.mapped?.fecha_regreso || '—'}
           </p>
+          <p>Paquete: {request.mapped?.package || '—'}</p>
           <p>Jugadores: {request.mapped?.jugadores || 0}</p>
           <p>No jugadores: {request.mapped?.no_jugadores || 0}</p>
           <p>Green-fees por jugador: {request.mapped?.green_fees_per_player || '—'}</p>

@@ -293,6 +293,7 @@ const RequestsListAdmin = () => {
               <div className="requests-list-admin__row requests-list-admin__row--header">
                 <span>Fecha</span>
                 <span>Cliente</span>
+                <span>Paquete</span>
                 <span>Email</span>
                 <span>Fechas</span>
                 <span>PAX</span>
@@ -328,11 +329,12 @@ const RequestsListAdmin = () => {
                         <br />
                         <small>ID GF #{request.entry_id}</small>
                       </span>
+                      <span>{mapped.package || '—'}</span>
                       <span>{mapped.email || '—'}</span>
                       <span>
                         {mapped.fecha_llegada || '—'} – {mapped.fecha_regreso || '—'}
                       </span>
-                      <span>{pax}</span>
+                                            <span>{pax}</span>
                       <span>
                         <span className={`requests-list-admin__status requests-list-admin__status--${status}`}>
                           {STATUS_LABELS[status] || status}
