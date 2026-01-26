@@ -332,7 +332,7 @@ const RequestsListAdmin = () => {
                       <span>{mapped.package || '—'}</span>
                       <span>{mapped.email || '—'}</span>
                       <span>
-                        {mapped.fecha_llegada || '—'} – {mapped.fecha_regreso || '—'}
+                        {formatDate(mapped.fecha_llegada) || '—'} - {formatDate(mapped.fecha_regreso) || '—'}
                       </span>
                                             <span>{pax}</span>
                       <span>
