@@ -350,7 +350,7 @@ class WP_Travel_GIAV_Dashboard_Service {
         $margen_estimado = $this->extract_margen_estimado( $info );
         $dias_hasta      = $this->calculate_days_until( $fecha_inicio );
 
-        $pagos = $this->build_payment_data( $fecha_inicio_dt, $info, $total_pvp );
+        $pagos = $this->build_payment_data( $fecha_inicio_dt, $info, $total_pvp, $reservas );
 
         return [
             'giav_id_humano'     => $this->resolve_human_id( $expediente ),
@@ -442,13 +442,13 @@ class WP_Travel_GIAV_Dashboard_Service {
     /**
      * Builds payment metadata for an expediente.
      */
-    private function build_payment_data( ?\DateTimeImmutable $fecha_inicio_dt, $info, float $total_pvp ): array {
+    private function build_payment_data( ?\DateTimeImmutable $fecha_inicio_dt, $info, float $total_pvp, array $reservas ): array {
         $now = new \DateTimeImmutable( 'now', new \DateTimeZone( 'UTC' ) );
         $pending = $this->convert_to_float( $this->get_value( $info, [ 'PendienteCobrar', 'pendienteCobrar', 'PendienteCobro', 'pendiente_cobro', 'Pendiente', 'pendiente' ], 0 ) );
         $is_paid = $pending <= 0.0;
 
-        $candidates = $this->gather_due_candidates( $fecha_inicio_dt, $info );
-        $next = $this->select_next_due_candidate( $candidates, $now );
+        $candidates = $this->gather_due_candidates( $fecha_inicio_dt, $reservas, $info );
+        $next = $is_paid ? null : $this->select_next_due_candidate( $candidates, $now );
 
         $dias_para_vencer = null;
         $proximo_vencimiento = null;
@@ -497,7 +497,7 @@ class WP_Travel_GIAV_Dashboard_Service {
     /**
      * Gathers due date candidates (deposit + final) in chronological order.
      */
-    private function gather_due_candidates( ?\DateTimeImmutable $fecha_inicio_dt, $info ): array {
+    private function gather_due_candidates( ?\DateTimeImmutable $fecha_inicio_dt, array $reservas, $info ): array {
         $candidates = [];
 
         if ( $fecha_inicio_dt ) {
@@ -509,14 +509,7 @@ class WP_Travel_GIAV_Dashboard_Service {
             }
         }
 
-        $deposit = $this->resolve_deposit_due_from_info( $info );
-        if ( ! $deposit && $fecha_inicio_dt ) {
-            try {
-                $deposit = $fecha_inicio_dt->sub( new \DateInterval( 'P45D' ) );
-            } catch ( \Exception $e ) {
-                $deposit = null;
-            }
-        }
+        $deposit = $this->resolve_first_service_deadline( $reservas, $info );
 
         if ( $deposit ) {
             $candidates[] = [ 'label' => 'deposito', 'date' => $deposit ];
@@ -527,6 +520,44 @@ class WP_Travel_GIAV_Dashboard_Service {
         } );
 
         return $candidates;
+    }
+
+    /**
+     * Resolves the payment deadline for the first service (usually PQ).
+     */
+    private function resolve_first_service_deadline( array $reservas, $info ): ?\DateTimeImmutable {
+        $keys = [
+            'FechaLimiteServicio',
+            'fechaLimiteServicio',
+            'FechaLimite',
+            'fechaLimite',
+            'FechaLimitePago',
+            'fechaLimitePago',
+            'FechaLimiteCobro',
+            'fechaLimiteCobro',
+        ];
+
+        $candidates = [];
+        foreach ( $reservas as $reserva ) {
+            foreach ( $keys as $key ) {
+                $value = $this->get_value( $reserva, [ $key ], null );
+                if ( $value ) {
+                    $date = $this->parse_date_value( $value );
+                    if ( $date ) {
+                        $candidates[] = $date;
+                    }
+                }
+            }
+        }
+
+        if ( ! empty( $candidates ) ) {
+            usort( $candidates, function( $a, $b ) {
+                return $a <=> $b;
+            } );
+            return $candidates[0];
+        }
+
+        return $this->resolve_deposit_due_from_info( $info );
     }
 
     /**

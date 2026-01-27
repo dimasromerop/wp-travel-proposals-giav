@@ -42,9 +42,9 @@ const PortalLayout = ( { children, config } ) => (
     <div className="casanova-portal__body">
       <aside className="casanova-portal__sidebar">
         <div className="casanova-portal__branding">
-          <span className="casanova-portal__branding-icon">CG</span>
+          <span className="casanova-portal__branding-icon"></span>
           <div>
-            <strong>Casanova</strong>
+            <strong>Casanova Golf</strong>
             <small>Gestión premium</small>
           </div>
         </div>

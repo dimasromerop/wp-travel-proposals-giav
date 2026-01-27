@@ -279,9 +279,6 @@ const TableRowSkeleton = ({ index }) => (
       </div>
     </td>
     <td className="dashboard-table__align-right">
-      <SkeletonBlock className="dashboard-skeleton--text dashboard-skeleton--short" />
-    </td>
-    <td className="dashboard-table__align-right">
       <div className="dashboard-margin-cell">
         <SkeletonBlock className="dashboard-skeleton--text dashboard-skeleton--short" />
         <SkeletonBlock className="dashboard-skeleton--pill dashboard-skeleton--pill-small" />
@@ -607,7 +604,10 @@ const Dashboard = () => {
     );
   };
 
-  const renderNextPaymentDate = (pagos) => {
+  const renderNextPaymentDate = (pagos, isPaid) => {
+    if (isPaid) {
+      return null;
+    }
     const nextDate = pagos?.proximo_vencimiento;
     if (!nextDate) {
       return null;
@@ -939,7 +939,6 @@ const Dashboard = () => {
                   />
                 </th>
                 <th>Pagos</th>
-                <th>Pendiente</th>
                 <th>Margen est.</th>
                 <th>
                   <SortButton
@@ -958,7 +957,7 @@ const Dashboard = () => {
               ))}
               {!loading && expedientes.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="dashboard-table__status">
+                  <td colSpan={11} className="dashboard-table__status">
                     {hasInputFilters
                       ? 'No hay expedientes que coincidan con los filtros actuales.'
                       : filters.showCompleted
@@ -971,6 +970,15 @@ const Dashboard = () => {
                 expedientes.map((row) => {
                   const riskLevel = (row.riesgo || 'ok').toString().toLowerCase();
                   const paymentState = (row.pagos?.estado || 'pendiente').toString().toLowerCase();
+                  const pendingAmount = Number(row.pagos?.pendiente_total ?? row.pagos?.monto_pendiente ?? 0);
+                  const hasPendingAmount = Number.isFinite(pendingAmount) && pendingAmount > 0.01;
+                  const totalAmount = Number(row.total_pvp ?? 0);
+                  const paidAmount = Number(row.pagos?.pagado_total ?? 0);
+                  const isPaid = paymentState === 'pagado' || (Number.isFinite(totalAmount) && Number.isFinite(paidAmount) && paidAmount >= totalAmount);
+                  let paymentLabel = capitalize(paymentState);
+                  if ((paymentState === 'pendiente' || paymentState === 'vencido') && hasPendingAmount) {
+                    paymentLabel = `${capitalize(paymentState)}: ${formatMoney(pendingAmount, data?.currency)}`;
+                  }
                   const isLowMargin =
                     typeof row.margen_estimado === 'number' &&
                     typeof row.total_pvp === 'number' &&
@@ -997,14 +1005,11 @@ const Dashboard = () => {
                       <td>
                         <div className="dashboard-payments">
                           <span className={`dashboard-badge dashboard-badge--${paymentState}`}>
-                            {capitalize(paymentState)}
+                            {paymentLabel}
                           </span>
-                          {renderNextPaymentDate(row.pagos)}
+                          {renderNextPaymentDate(row.pagos, isPaid)}
                           {renderPaidAmount(row.pagos)}
                         </div>
-                      </td>
-                      <td className="dashboard-table__align-right">
-                        {formatMoney(row.pagos?.pendiente_total ?? 0, data?.currency)}
                       </td>
                       <td className="dashboard-table__align-right">
                         <div className="dashboard-margin-cell">

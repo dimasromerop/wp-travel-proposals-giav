@@ -143,13 +143,14 @@
   &__branding-icon {
     width: 42px;
     height: 42px;
-    background: var(--casanova-green);
+   /* background: var(--casanova-green);*/
     border-radius: 12px;
     color: #fff;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
+    background: no-repeat center / 100% url(https://www.casanova.golf/wp-content/uploads/2025/12/logo-bola-112.jpg);
   }
 
   &__nav {

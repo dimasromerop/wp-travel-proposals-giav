@@ -3,7 +3,7 @@
  * Plugin Name: WP Travel Proposals & GIAV Connector
  * Plugin URI:  https://example.com
  * Description: Sistema interno para creación de propuestas de viaje, versionado y sincronización con GIAV.
- * Version:     0.2.13
+ * Version:     0.2.14
  * Author:      Casanova Golf
  * Author URI:  https://www.casanova.golf
  * License:     GPLv2 or later
@@ -19,7 +19,7 @@ global $wpdb;
 /**
  * Plugin constants
  */
-define( 'WP_TRAVEL_GIAV_VERSION', '0.2.13' );
+define( 'WP_TRAVEL_GIAV_VERSION', '0.2.14' );
 define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.9.0' );
 define( 'WP_TRAVEL_GIAV_PLUGIN_FILE', __FILE__ );
 define( 'WP_TRAVEL_GIAV_TABLE_PROPOSALS', $wpdb->prefix . 'travel_proposals' );
