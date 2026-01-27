@@ -209,6 +209,7 @@ function wp_travel_giav_cliente_search_por_dni( string $dni, array &$trace = nul
         return null;
     }
 
+    // Required fields according to WSDL (api_2_05.xml). Missing any of these throws SOAP encoding errors.
     $params = [
         'documento'             => $dni,
         'documentoModo'         => 'Solo_NIF',
@@ -219,28 +220,12 @@ function wp_travel_giav_cliente_search_por_dni( string $dni, array &$trace = nul
         'fechaHoraHasta'        => null,
         'edadDesde'             => null,
         'edadHasta'             => null,
+        'rgpdSigned'            => 'NoAplicar',
         'pageSize'              => 50,
         'pageIndex'             => 0,
     ];
 
     $response = wp_travel_giav_call( 'Cliente_SEARCH', $params, $trace );
-
-    if ( is_wp_error( $response ) ) {
-        $fallback_params = [
-            'documento'             => $dni,
-            'documentoModo'         => 'Solo_NIF',
-            'documentoExacto'       => true,
-            'incluirDeshabilitados' => false,
-            'modoFecha'             => 'Creacion',
-            'fechaHoraDesde'        => null,
-            'fechaHoraHasta'        => null,
-            'edadDesde'             => null,
-            'edadHasta'             => null,
-            'pageSize'              => 50,
-            'pageIndex'             => 0,
-        ];
-        $response = wp_travel_giav_call( 'Cliente_SEARCH', $fallback_params, $trace );
-    }
 
     if ( is_wp_error( $response ) ) {
         return null;
@@ -752,15 +737,29 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
         );
 
         if ( is_wp_error( $client_response ) ) {
-            $proposal_repo->update_giav_sync_status( $proposal_id, 'error', $client_response->get_error_message() );
-            wp_travel_giav_send_error_notification( $proposal, $client_response->get_error_message(), $trace );
-            return $client_response;
-        }
+            $error_message = $client_response->get_error_message();
+            if ( $dni !== '' ) {
+                $giav_client_id = wp_travel_giav_cliente_search_por_dni( $dni, $trace ) ?: 0;
+                if ( $giav_client_id > 0 && wp_travel_giav_debug_enabled() ) {
+                    error_log( sprintf(
+                        '[WP Travel GIAV] Cliente existente encontrado tras error al crear: %d (proposal #%d)',
+                        $giav_client_id,
+                        $proposal_id
+                    ) );
+                }
+            }
 
-        $giav_client_id = wp_travel_giav_extract_id_from_response(
-            $client_response,
-            [ 'Cliente_POSTResult' ]
-        ) ?: 0;
+            if ( $giav_client_id <= 0 ) {
+                $proposal_repo->update_giav_sync_status( $proposal_id, 'error', $error_message );
+                wp_travel_giav_send_error_notification( $proposal, $error_message, $trace );
+                return $client_response;
+            }
+        } else {
+            $giav_client_id = wp_travel_giav_extract_id_from_response(
+                $client_response,
+                [ 'Cliente_POSTResult' ]
+            ) ?: 0;
+        }
     }
 
     if ( $giav_client_id <= 0 ) {

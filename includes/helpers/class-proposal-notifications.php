@@ -41,8 +41,9 @@ function wp_travel_giav_notify_proposal_acceptance( array $proposal, array $vers
 
     $customer_name = trim( (string) ( $proposal['customer_name'] ?? '' ) );
     $client_email = sanitize_email( $proposal['customer_email'] ?? '' );
+    $send_client_email = ( $accepted_by === 'client' );
 
-    if ( is_email( $client_email ) ) {
+    if ( $send_client_email && is_email( $client_email ) ) {
         $subject = 'Hemos recibido tu aceptación';
         $message = sprintf(
             "Hola%s,\n\nHemos recibido tu aceptación de la propuesta #%d.\n\nGracias. Estamos confirmando disponibilidad con proveedores.\nTe avisaremos por email cuando tu reserva esté confirmada y puedas acceder al portal para pagos y gestión.\n\nPuedes revisar la propuesta en este enlace:\n%s\n",
@@ -67,10 +68,16 @@ function wp_travel_giav_notify_proposal_acceptance( array $proposal, array $vers
                 ) );
             }
         }
-    } elseif ( $should_log ) {
+    } elseif ( $send_client_email && $should_log ) {
         error_log( sprintf(
             '[WP Travel GIAV] Cliente sin email válido para propuesta #%d; se omite notificación.',
             (int) ( $proposal['id'] ?? 0 )
+        ) );
+    } elseif ( $should_log ) {
+        error_log( sprintf(
+            '[WP Travel GIAV] Skipping client email for proposal #%d (accepted_by=%s).',
+            (int) ( $proposal['id'] ?? 0 ),
+            $accepted_by
         ) );
     }
 
