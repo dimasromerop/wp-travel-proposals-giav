@@ -40,15 +40,17 @@ function wp_travel_giav_notify_proposal_acceptance( array $proposal, array $vers
     $public_url_display = $public_url ?: 'No disponible';
 
     $customer_name = trim( (string) ( $proposal['customer_name'] ?? '' ) );
+    $proposal_title = trim( (string) ( $proposal['proposal_title'] ?? $proposal['display_title'] ?? '' ) );
+    $proposal_label = $proposal_title !== '' ? $proposal_title : ( '#' . (int) ( $proposal['id'] ?? 0 ) );
     $client_email = sanitize_email( $proposal['customer_email'] ?? '' );
     $send_client_email = ( $accepted_by === 'client' );
 
     if ( $send_client_email && is_email( $client_email ) ) {
         $subject = 'Hemos recibido tu aceptación';
         $message = sprintf(
-            "Hola%s,\n\nHemos recibido tu aceptación de la propuesta #%d.\n\nGracias. Estamos confirmando disponibilidad con proveedores.\nTe avisaremos por email cuando tu reserva esté confirmada y puedas acceder al portal para pagos y gestión.\n\nPuedes revisar la propuesta en este enlace:\n%s\n",
+            "Hola%s,\n\nHemos recibido tu aceptación de la propuesta %s.\n\nGracias. Estamos confirmando disponibilidad con proveedores.\nTe avisaremos por email cuando tu reserva esté confirmada y puedas acceder al portal para pagos y gestión.\n\nPuedes revisar la propuesta en este enlace:\n%s\n",
             $customer_name ? ' ' . $customer_name : '',
-            (int) ( $proposal['id'] ?? 0 ),
+            $proposal_label,
             $public_url_display
         );
         $headers = [ 'Content-Type: text/plain; charset=UTF-8' ];
