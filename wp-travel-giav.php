@@ -924,12 +924,20 @@ function wp_travel_giav_admin_assets( $hook ) {
             'dependencies' => [ 'wp-element', 'wp-components', 'wp-api-fetch' ],
             'version'      => WP_TRAVEL_GIAV_VERSION,
         ];
+    $index_js  = plugin_dir_path( __FILE__ ) . 'admin/build/index.js';
+    $index_css = plugin_dir_path( __FILE__ ) . 'admin/build/index.css';
+    $asset_version = $asset['version'];
+    $index_js_mtime = file_exists( $index_js ) ? (string) filemtime( $index_js ) : '';
+    $index_css_mtime = file_exists( $index_css ) ? (string) filemtime( $index_css ) : '';
+    if ( $index_js_mtime !== '' || $index_css_mtime !== '' ) {
+        $asset_version = max( $index_js_mtime, $index_css_mtime, (string) $asset_version );
+    }
 
     wp_enqueue_script(
         'wp-travel-giav-admin', // 👈 ESTE HANDLE ES CLAVE
         plugins_url( 'admin/build/index.js', __FILE__ ),
         $asset['dependencies'],
-        $asset['version'],
+        $asset_version,
         true
     );
 
@@ -940,7 +948,7 @@ function wp_travel_giav_admin_assets( $hook ) {
             'wp-travel-giav-admin-style',
             plugins_url( 'admin/build/index.css', __FILE__ ),
             [ 'wp-components' ],
-            $asset['version']
+            $asset_version
         );
     }
 
@@ -1077,12 +1085,20 @@ function wp_travel_giav_enqueue_portal_assets() {
             'dependencies' => [ 'wp-element' ],
             'version'      => WP_TRAVEL_GIAV_VERSION,
         ];
+    $portal_js  = plugin_dir_path( __FILE__ ) . 'admin/build/portal.js';
+    $portal_css = plugin_dir_path( __FILE__ ) . 'admin/build/portal.css';
+    $portal_version = $asset['version'];
+    $portal_js_mtime = file_exists( $portal_js ) ? (string) filemtime( $portal_js ) : '';
+    $portal_css_mtime = file_exists( $portal_css ) ? (string) filemtime( $portal_css ) : '';
+    if ( $portal_js_mtime !== '' || $portal_css_mtime !== '' ) {
+        $portal_version = max( $portal_js_mtime, $portal_css_mtime, (string) $portal_version );
+    }
 
     wp_enqueue_script(
         $handle,
         plugins_url( 'admin/build/portal.js', __FILE__ ),
         $asset['dependencies'],
-        $asset['version'],
+        $portal_version,
         true
     );
 
@@ -1092,7 +1108,7 @@ function wp_travel_giav_enqueue_portal_assets() {
             'wp-travel-giav-portal-style',
             plugins_url( 'admin/build/portal.css', __FILE__ ),
             [ 'wp-components' ],
-            $asset['version']
+            $portal_version
         );
     }
 
