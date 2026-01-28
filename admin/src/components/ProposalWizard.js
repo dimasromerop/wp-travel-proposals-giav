@@ -152,6 +152,7 @@ export default function ProposalWizard({
       start_date: header.start_date || initialProposal?.start_date || '',
       end_date: header.end_date || initialProposal?.end_date || '',
       pax_total: header.pax_total || initialProposal?.pax_total || 1,
+      giav_agent_id: header.giav_agent_id || initialProposal?.giav_agent_id || '',
       currency: header.currency || initialProposal?.currency || 'EUR',
     };
   }, [initialProposal, initialSnapshot]);

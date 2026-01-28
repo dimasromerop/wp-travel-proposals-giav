@@ -3,7 +3,7 @@
  * Plugin Name: WP Travel Proposals & GIAV Connector
  * Plugin URI:  https://example.com
  * Description: Sistema interno para creación de propuestas de viaje, versionado y sincronización con GIAV.
- * Version:     0.2.14
+ * Version:     0.2.15
  * Author:      Casanova Golf
  * Author URI:  https://www.casanova.golf
  * License:     GPLv2 or later
@@ -19,8 +19,8 @@ global $wpdb;
 /**
  * Plugin constants
  */
-define( 'WP_TRAVEL_GIAV_VERSION', '0.2.14' );
-define( 'WP_TRAVEL_GIAV_DB_VERSION', '0.9.0' );
+define( 'WP_TRAVEL_GIAV_VERSION', '0.2.15 );
+define( 'WP_TRAVEL_GIAV_DB_VERSION', '1.0.0' );
 define( 'WP_TRAVEL_GIAV_PLUGIN_FILE', __FILE__ );
 define( 'WP_TRAVEL_GIAV_TABLE_PROPOSALS', $wpdb->prefix . 'travel_proposals' );
 define( 'WP_TRAVEL_GIAV_TABLE_VERSIONS', $wpdb->prefix . 'travel_proposal_versions' );
@@ -245,6 +245,7 @@ if ( $shop_role && ! $shop_role->has_cap( WP_TRAVEL_GIAV_CAPABILITY_MANAGE_RESER
         traveler_full_name VARCHAR(255) NULL,
         traveler_dni VARCHAR(20) NULL,
         giav_client_id BIGINT(20) UNSIGNED NULL,
+        giav_agent_id BIGINT(20) UNSIGNED NULL,
         giav_expediente_id BIGINT(20) UNSIGNED NULL,
         giav_pq_reserva_id BIGINT(20) UNSIGNED NULL,
         giav_sync_status ENUM('none','pending','ok','error') DEFAULT 'none',
@@ -446,6 +447,10 @@ function wp_travel_giav_maybe_upgrade_schema() {
         wp_travel_giav_upgrade_proposals_to_0_9_0();
     }
 
+    if ( version_compare( $current ?: '0.0.0', '1.0.0', '<' ) ) {
+        wp_travel_giav_upgrade_proposals_to_1_0_0();
+    }
+
     update_option( 'wp_travel_giav_db_version', WP_TRAVEL_GIAV_DB_VERSION );
 }
 
@@ -629,6 +634,17 @@ function wp_travel_giav_upgrade_proposals_to_0_9_0() {
     }
 }
 
+function wp_travel_giav_upgrade_proposals_to_1_0_0() {
+    global $wpdb;
+
+    $table = WP_TRAVEL_GIAV_TABLE_PROPOSALS;
+    if ( ! wp_travel_giav_table_has_column( $table, 'giav_agent_id' ) ) {
+        $wpdb->query(
+            "ALTER TABLE {$table} ADD COLUMN giav_agent_id BIGINT(20) UNSIGNED NULL"
+        );
+    }
+}
+
 function wp_travel_giav_table_has_column( $table, $column ) {
     global $wpdb;
 
@@ -742,6 +758,7 @@ require_once __DIR__ . '/includes/helpers/class-giav-sync-logger.php';
 require_once __DIR__ . '/includes/helpers/class-proposal-dates.php';
 require_once __DIR__ . '/includes/api/class-catalog-controller.php';
 require_once __DIR__ . '/includes/api/class-giav-providers-controller.php';
+require_once __DIR__ . '/includes/api/class-giav-agents-controller.php';
 
 // --- Catalog controller (CPT/CCT search + GIAV mapping) ---
 add_action('rest_api_init', function () {
@@ -753,6 +770,10 @@ add_action('rest_api_init', function () {
     // GIAV Providers (SOAP-backed search/get)
     if (class_exists('WP_Travel_GIAV_Providers_Controller')) {
         (new WP_Travel_GIAV_Providers_Controller())->register_routes();
+    }
+
+    if (class_exists('WP_Travel_GIAV_Agents_Controller')) {
+        (new WP_Travel_GIAV_Agents_Controller())->register_routes();
     }
 }, 20);
 
@@ -952,6 +973,8 @@ function wp_travel_giav_admin_assets( $hook ) {
         );
     }
 
+    $current_user = wp_get_current_user();
+
     wp_localize_script(
         'wp-travel-giav-admin', // 👈 TIENE QUE SER EL MISMO
         'WP_TRAVEL_GIAV',
@@ -961,6 +984,12 @@ function wp_travel_giav_admin_assets( $hook ) {
             'dbHealthy' => wp_travel_giav_db_is_healthy(),
               'dbIssues' => wp_travel_giav_db_check(),
               'requestStatuses' => WP_TRAVEL_GIAV_REQUEST_STATUSES,
+            'currentUser' => [
+                'id'          => (int) $current_user->ID,
+                'email'       => $current_user->user_email,
+                'displayName' => $current_user->display_name,
+                'roles'       => $current_user->roles,
+            ],
         ]
     );
 
@@ -1202,7 +1231,7 @@ function wp_travel_giav_db_check() {
     global $wpdb;
 
     $required = [
-        WP_TRAVEL_GIAV_TABLE_PROPOSALS => [ 'id', 'proposal_token', 'source_type', 'first_name', 'last_name' ],
+        WP_TRAVEL_GIAV_TABLE_PROPOSALS => [ 'id', 'proposal_token', 'source_type', 'first_name', 'last_name', 'giav_agent_id' ],
         WP_TRAVEL_GIAV_TABLE_VERSIONS  => [ 'id', 'public_token' ],
         WP_TRAVEL_GIAV_TABLE_ITEMS     => [ 'id', 'version_id' ],
         WP_TRAVEL_GIAV_TABLE_MAPPING   => [ 'id' ],

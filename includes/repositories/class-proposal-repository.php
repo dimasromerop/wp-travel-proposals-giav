@@ -115,6 +115,7 @@ class WP_Travel_Proposal_Repository extends WP_Travel_GIAV_DB {
             'players_count'     => 'players_count',
             'currency'          => 'currency',
             'proposal_title'    => 'proposal_title',
+            'giav_agent_id'     => 'giav_agent_id',
         ];
 
         foreach ( $fields as $source => $target ) {
@@ -122,7 +123,7 @@ class WP_Travel_Proposal_Repository extends WP_Travel_GIAV_DB {
                 continue;
             }
             $value = $header[ $source ];
-            if ( in_array( $source, [ 'pax_total', 'players_count' ], true ) ) {
+            if ( in_array( $source, [ 'pax_total', 'players_count', 'giav_agent_id' ], true ) ) {
                 $data[ $target ] = (int) $value;
             } else {
                 $data[ $target ] = is_string( $value ) ? sanitize_text_field( $value ) : $value;

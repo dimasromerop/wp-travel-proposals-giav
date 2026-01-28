@@ -131,6 +131,7 @@ export default function StepPreview({
       end_date: basics.end_date,
       pax_total: basics.pax_total,
       players_count: basics.players_count,
+      giav_agent_id: basics.giav_agent_id,
       currency: basics.currency,
       status: 'sent',
     };
@@ -483,6 +484,10 @@ export default function StepPreview({
       pax_total: Math.max(1, toInt(basics.pax_total ?? 1, 1)),
       players_count: Math.max(0, toInt(basics.players_count ?? 0, 0)),
       customer_country: basics.customer_country ? String(basics.customer_country).toUpperCase() : '',
+      giav_agent_id: (() => {
+        const agentId = parseInt(basics.giav_agent_id, 10);
+        return Number.isFinite(agentId) && agentId > 0 ? agentId : null;
+      })(),
     };
   };
 

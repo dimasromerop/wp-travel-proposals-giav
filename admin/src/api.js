@@ -216,6 +216,60 @@ const API = {
     return { items };
   },
 
+  searchGiavAgents: async ({
+    q,
+    email,
+    pageSize = 20,
+    pageIndex = 0,
+    includeLinked = true,
+    includeBlocked = false,
+  }) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (email) params.set('email', email);
+    params.set('pageSize', pageSize);
+    params.set('pageIndex', pageIndex);
+    params.set('includeLinked', includeLinked ? '1' : '0');
+    params.set('includeBlocked', includeBlocked ? '1' : '0');
+
+    const res = await apiFetch({
+      path: `/travel/v1/giav/agents/search?${params.toString()}`,
+      method: 'GET',
+    });
+
+    const list = Array.isArray(res) ? res : Array.isArray(res?.items) ? res.items : [];
+    const items = list
+      .map((x) => ({
+        id: String(x.id ?? x.ID ?? x.Id ?? ''),
+        label: String(x.label ?? x.title ?? x.Nombre ?? x.AliasAgente ?? ''),
+        email: String(x.email ?? x.Correo ?? ''),
+        raw: x,
+      }))
+      .filter((x) => x.id && x.label);
+
+    return { items };
+  },
+
+  getGiavAgent: async (id) => {
+    if (!id) {
+      return null;
+    }
+    const res = await apiFetch({
+      path: `/travel/v1/giav/agents/${encodeURIComponent(id)}`,
+      method: 'GET',
+    });
+    if (!res) {
+      return null;
+    }
+    const label = String(res.label ?? res.title ?? res.Nombre ?? res.AliasAgente ?? '');
+    return {
+      id: String(res.id ?? res.ID ?? res.Id ?? id),
+      label,
+      email: String(res.email ?? res.Correo ?? ''),
+      raw: res,
+    };
+  },
+
   giavPreflight: (versionId) =>
     apiFetch({
       path: `/travel/v1/versions/${versionId}/giav-preflight`,

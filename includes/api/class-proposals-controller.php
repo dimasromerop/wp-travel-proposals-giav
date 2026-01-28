@@ -150,6 +150,14 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
             'proposal_title'    => sanitize_text_field( (string) $request->get_param( 'proposal_title' ) ),
         ];
 
+        $agent_id = (int) $request->get_param( 'giav_agent_id' );
+        if ( $agent_id <= 0 ) {
+            $agent_id = (int) $request->get_param( 'agent_id' );
+        }
+        if ( $agent_id > 0 ) {
+            $data['giav_agent_id'] = $agent_id;
+        }
+
         if ( $customer_name === '' || empty( $data['start_date'] ) ) {
             return $this->error( 'Missing required fields' );
         }
@@ -195,6 +203,13 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
         }
         if ( $request->has_param( 'players_count' ) ) {
             $data['players_count'] = (int) $request->get_param( 'players_count' );
+        }
+        if ( $request->has_param( 'giav_agent_id' ) || $request->has_param( 'agent_id' ) ) {
+            $raw = $request->has_param( 'giav_agent_id' )
+                ? $request->get_param( 'giav_agent_id' )
+                : $request->get_param( 'agent_id' );
+            $agent_id = is_numeric( $raw ) ? (int) $raw : 0;
+            $data['giav_agent_id'] = $agent_id > 0 ? $agent_id : null;
         }
 
         if ( empty( $data ) ) {

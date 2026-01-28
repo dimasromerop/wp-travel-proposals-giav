@@ -392,6 +392,7 @@ const defaults = useMemo(() => {
     currency: 'EUR',
     first_name: initialValues.first_name ?? '',
     last_name: initialValues.last_name ?? '',
+    giav_agent_id: initialValues.giav_agent_id ?? initialValues.agent_id ?? '',
     ...initialValues,
   };
 
@@ -402,6 +403,9 @@ const defaults = useMemo(() => {
   base.first_name = firstName;
   base.last_name = lastName;
   base.customer_name = buildCustomerFullName(firstName, lastName, fallbackName);
+  if (base.giav_agent_id !== undefined && base.giav_agent_id !== null) {
+    base.giav_agent_id = String(base.giav_agent_id);
+  }
 
   return base;
 }, [initialValues]);
@@ -412,7 +416,13 @@ const defaults = useMemo(() => {
   const [saved, setSaved] = useState('');
   const [fieldError, setFieldError] = useState('');
   const [countryQuery, setCountryQuery] = useState('');
+  const [agentOptions, setAgentOptions] = useState([]);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [agentError, setAgentError] = useState('');
+  const [selectedAgent, setSelectedAgent] = useState(null);
   const fieldRefs = useRef({});
+  const agentSearchTimer = useRef(null);
+  const agentAutofillDone = useRef(false);
   const isCreating = !proposalId;
 
   // ✅ FIX: al volver atrás, rehidratar el formulario con initialValues
@@ -435,6 +445,8 @@ const defaults = useMemo(() => {
         const split = splitCustomerFullName(nameValue);
         const firstName = typeof data.first_name === 'string' ? data.first_name : split.firstName || prev.first_name;
         const lastName = typeof data.last_name === 'string' ? data.last_name : split.lastName || prev.last_name;
+        const rawAgentId = data.giav_agent_id ?? data.agent_id ?? data.agente_comercial_id ?? null;
+        const agentId = rawAgentId !== null && rawAgentId !== undefined ? String(rawAgentId) : prev.giav_agent_id;
         return {
           ...prev,
           proposal_title: typeof data.title === 'string' ? data.title : prev.proposal_title,
@@ -446,6 +458,7 @@ const defaults = useMemo(() => {
             typeof data.country === 'string' ? data.country.toUpperCase() : prev.customer_country,
           customer_language:
             typeof data.language === 'string' ? data.language : prev.customer_language,
+          giav_agent_id: agentId,
         };
       });
     };
@@ -454,6 +467,163 @@ const defaults = useMemo(() => {
       delete window.fillProposalBasics;
     };
   }, []);
+
+  const currentUserEmail = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const portalEmail = window.CASANOVA_GESTION_RESERVAS?.currentUser?.email;
+    const adminEmail = window.WP_TRAVEL_GIAV?.currentUser?.email;
+    return portalEmail || adminEmail || '';
+  }, []);
+
+  const normalizeAgentOption = (agent) => {
+    if (!agent) return null;
+    const id = String(agent.id ?? agent.Id ?? agent.ID ?? '');
+    const label = String(agent.label ?? agent.title ?? agent.Nombre ?? agent.AliasAgente ?? '');
+    if (!id || !label) return null;
+    return { value: id, label, email: agent.email ?? agent.Correo ?? '' };
+  };
+
+  const upsertAgentOption = (option) => {
+    if (!option) return;
+    setSelectedAgent(option);
+    setAgentOptions((prev) => {
+      const next = prev.filter((item) => item.value !== option.value);
+      return [option, ...next];
+    });
+  };
+
+  const fetchAgents = async ({ query = '', email = '' } = {}) => {
+    const term = String(query || '').trim();
+    const emailValue = String(email || '').trim();
+    const inferredEmail = !emailValue && term.includes('@') ? term : '';
+    const searchEmail = emailValue || inferredEmail;
+    const searchTerm = inferredEmail ? '' : term;
+
+    if (searchTerm.length < 2 && !searchEmail) {
+      setAgentError('');
+      return;
+    }
+
+    setAgentLoading(true);
+    setAgentError('');
+
+    try {
+      const res = await API.searchGiavAgents({
+        q: searchTerm || undefined,
+        email: searchEmail || undefined,
+        pageSize: 20,
+        pageIndex: 0,
+        includeLinked: true,
+        includeBlocked: false,
+      });
+
+      const nextOptions = (res?.items || [])
+        .map(normalizeAgentOption)
+        .filter(Boolean);
+
+      setAgentOptions((prev) => {
+        const base = [...nextOptions];
+        if (selectedAgent && !base.some((item) => item.value === selectedAgent.value)) {
+          base.unshift(selectedAgent);
+        }
+        return base;
+      });
+    } catch (e) {
+      setAgentError(e?.message || 'Error buscando agentes en GIAV');
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+
+  const scheduleAgentSearch = (nextQuery) => {
+    setAgentError('');
+    if (agentSearchTimer.current) {
+      clearTimeout(agentSearchTimer.current);
+    }
+    agentSearchTimer.current = setTimeout(() => {
+      fetchAgents({ query: nextQuery });
+    }, 250);
+  };
+
+  useEffect(() => {
+    if (agentAutofillDone.current) {
+      return;
+    }
+    if (!currentUserEmail || values.giav_agent_id) {
+      return;
+    }
+    agentAutofillDone.current = true;
+
+    let active = true;
+    const run = async () => {
+      try {
+        const res = await API.searchGiavAgents({
+          email: currentUserEmail,
+          pageSize: 5,
+          pageIndex: 0,
+          includeLinked: true,
+          includeBlocked: false,
+        });
+        if (!active) return;
+        const list = res?.items || [];
+        if (list.length === 0) return;
+        const exact = list.find((item) => (item.email || '').toLowerCase() === currentUserEmail.toLowerCase());
+        const option = normalizeAgentOption(exact || list[0]);
+        if (!option) return;
+
+        setValues((prev) => {
+          if (prev.giav_agent_id) {
+            return prev;
+          }
+          return { ...prev, giav_agent_id: option.value };
+        });
+        upsertAgentOption(option);
+      } catch (e) {
+        if (active) {
+          setAgentError(e?.message || 'No se pudo autocompletar el agente.');
+        }
+      }
+    };
+
+    run();
+    return () => {
+      active = false;
+    };
+  }, [currentUserEmail, values.giav_agent_id]);
+
+  useEffect(() => {
+    const currentId = values.giav_agent_id ? String(values.giav_agent_id) : '';
+    if (!currentId) {
+      setSelectedAgent(null);
+      return;
+    }
+    if (selectedAgent && selectedAgent.value === currentId) {
+      return;
+    }
+    const existing = agentOptions.find((item) => item.value === currentId);
+    if (existing) {
+      setSelectedAgent(existing);
+      return;
+    }
+
+    let active = true;
+    const load = async () => {
+      try {
+        const res = await API.getGiavAgent(currentId);
+        if (!active) return;
+        const option = normalizeAgentOption(res);
+        if (option) {
+          upsertAgentOption(option);
+        }
+      } catch (e) {
+        // ignore lookup errors
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [values.giav_agent_id, agentOptions, selectedAgent]);
 
   const set = (key) => (val) => {
     setValues((v) => {
@@ -543,7 +713,10 @@ const defaults = useMemo(() => {
       return { message: 'El email no parece valido (si lo rellenas, que sea correcto).', field: 'customer_email' };
     }
     if (values.customer_country && values.customer_country.length !== 2) {
-      return { message: 'Pais debe ser ISO2 (2 letras) o vacio.', field: 'customer_country' };
+      return { message: 'Destino debe ser ISO2 (2 letras) o vacio.', field: 'customer_country' };
+    }
+    if (values.giav_agent_id && !/^\d+$/.test(String(values.giav_agent_id))) {
+      return { message: 'Agente comercial debe ser un ID valido o vacio.', field: 'giav_agent_id' };
     }
     return null;
   };
@@ -575,6 +748,10 @@ const defaults = useMemo(() => {
       pax_total: parseInt(values.pax_total, 10),
       players_count: Math.max(0, parseInt(values.players_count, 10)),
       customer_country: values.customer_country ? values.customer_country.toUpperCase() : '',
+      giav_agent_id: (() => {
+        const agentId = parseInt(values.giav_agent_id, 10);
+        return Number.isFinite(agentId) && agentId > 0 ? agentId : null;
+      })(),
     };
 
     try {
@@ -626,6 +803,10 @@ const defaults = useMemo(() => {
       pax_total: parseInt(values.pax_total, 10),
       players_count: Math.max(0, parseInt(values.players_count, 10)),
       customer_country: values.customer_country ? values.customer_country.toUpperCase() : '',
+      giav_agent_id: (() => {
+        const agentId = parseInt(values.giav_agent_id, 10);
+        return Number.isFinite(agentId) && agentId > 0 ? agentId : null;
+      })(),
     };
 
     try {
@@ -644,6 +825,22 @@ const defaults = useMemo(() => {
       (option) => option.label.toLowerCase().includes(search) || option.value.toLowerCase().includes(search)
     );
   }, [countryQuery]);
+
+  const agentOptionsWithSelected = useMemo(() => {
+    if (!selectedAgent) {
+      return agentOptions;
+    }
+    if (agentOptions.some((item) => item.value === selectedAgent.value)) {
+      return agentOptions;
+    }
+    return [selectedAgent, ...agentOptions];
+  }, [agentOptions, selectedAgent]);
+
+  const agentHelp = agentError
+    ? agentError
+    : agentLoading
+    ? 'Buscando agentes en GIAV...'
+    : 'Se enviara a GIAV al crear el expediente.';
 
   const paxValue = parseInt(values.pax_total, 10);
   const playersValue = parseInt(values.players_count, 10);
@@ -824,12 +1021,42 @@ const defaults = useMemo(() => {
                 ref={registerField('customer_country')}
               >
                 <ComboboxControl
-                  label="País"
+                  label="Destino Viaje"
                   value={values.customer_country}
                   options={filteredCountryOptions}
                   onFilterValueChange={setCountryQuery}
                   onChange={(next) => set('customer_country')(next ? next.toUpperCase() : '')}
-                  placeholder="Busca país o código"
+                  placeholder="Busca destino o codigo"
+                />
+              </div>
+
+              <div
+                className={`proposal-basics__field ${fieldError === 'giav_agent_id' ? 'is-error' : ''}`.trim()}
+                ref={registerField('giav_agent_id')}
+              >
+                <ComboboxControl
+                  label="Agente Comercial"
+                  value={values.giav_agent_id}
+                  options={agentOptionsWithSelected}
+                  onFilterValueChange={scheduleAgentSearch}
+                  onChange={(next) => {
+                    const id = next ? String(next) : '';
+                    if (!id) {
+                      set('giav_agent_id')('');
+                      setSelectedAgent(null);
+                      return;
+                    }
+                    const picked = agentOptionsWithSelected.find((item) => item.value === id);
+                    if (!picked && !/^\d+$/.test(id)) {
+                      return;
+                    }
+                    set('giav_agent_id')(id);
+                    if (picked) {
+                      setSelectedAgent(picked);
+                    }
+                  }}
+                  placeholder="Busca por nombre, alias o email"
+                  help={agentHelp}
                 />
               </div>
 

@@ -310,11 +310,20 @@ function wp_travel_giav_cliente_create( array $data, array &$trace = null ) {
 }
 
 function wp_travel_giav_expediente_create( array $data, array &$trace = null ) {
+    $agent_id = 0;
+    if ( isset( $data['id_agente_comercial'] ) ) {
+        $agent_id = (int) $data['id_agente_comercial'];
+    } elseif ( isset( $data['giav_agent_id'] ) ) {
+        $agent_id = (int) $data['giav_agent_id'];
+    } elseif ( isset( $data['agent_id'] ) ) {
+        $agent_id = (int) $data['agent_id'];
+    }
+
     $params = [
         'idOficina'             => null,
         'idCliente'             => (int) $data['id_cliente'],
         'idDepartamento'        => null,
-        'idAgenteComercial'     => null,
+        'idAgenteComercial'     => $agent_id > 0 ? $agent_id : null,
         'idEntityStage'         => null,
         'esGrupo'               => false,
         'titulo'                => $data['titulo'] ?? '',
@@ -806,6 +815,17 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
         $proposal['proposal_token'] ?? ''
     );
 
+    $giav_agent_id = 0;
+    if ( ! empty( $snapshot['header']['giav_agent_id'] ) ) {
+        $giav_agent_id = (int) $snapshot['header']['giav_agent_id'];
+    }
+    if ( $giav_agent_id <= 0 && ! empty( $snapshot['header']['agent_id'] ) ) {
+        $giav_agent_id = (int) $snapshot['header']['agent_id'];
+    }
+    if ( $giav_agent_id <= 0 ) {
+        $giav_agent_id = (int) ( $proposal['giav_agent_id'] ?? 0 );
+    }
+
     $expediente_response = wp_travel_giav_expediente_create(
         [
             'id_cliente'    => $giav_client_id,
@@ -816,6 +836,7 @@ function wp_travel_giav_create_expediente_from_proposal( int $proposal_id ) {
             'fecha_hasta'   => $fecha_hasta,
             'destinationCountryISO3166Code' => $destination_meta['code'] ?? null,
             'destinationIdCountryZone'      => $destination_meta['zone'] ?? 'XX_No_requerido',
+            'id_agente_comercial'           => $giav_agent_id > 0 ? $giav_agent_id : null,
         ],
         $trace
     );

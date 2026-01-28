@@ -201,4 +201,109 @@ class WP_Travel_GIAV_Soap_Client {
 
         return [];
     }
+
+    /**
+     * AgenteComercial_GET by ID.
+     *
+     * @return object|WP_Error
+     */
+    public function agente_comercial_get( int $id_agente ) {
+        if ( $id_agente <= 0 ) {
+            return new WP_Error( 'bad_id', 'ID agente comercial invalido' );
+        }
+
+        $res = $this->call( 'AgenteComercial_GET', [ 'id' => $id_agente ] );
+        if ( is_wp_error( $res ) ) {
+            return $res;
+        }
+
+        if ( is_object( $res ) && isset( $res->AgenteComercial_GETResult ) ) {
+            return $res->AgenteComercial_GETResult;
+        }
+        return $res;
+    }
+
+    /**
+     * AgenteComercial_SEARCH by name/alias/email.
+     *
+     * According to the WSDL, several fields are mandatory:
+     * - incluirVinculados (bool)
+     * - incluirBloqueados (bool)
+     * - pageSize (int)
+     * - pageIndex (int)
+     *
+     * @return array|WP_Error Array of WsAgenteComercial
+     */
+    public function agente_comercial_search(
+        string $q = '',
+        string $email = '',
+        int $page_size = 20,
+        int $page_index = 0,
+        bool $include_linked = true,
+        bool $include_blocked = false
+    ) {
+        $q = trim( (string) $q );
+        $email = trim( (string) $email );
+
+        if ( $q === '' && $email === '' ) {
+            return [];
+        }
+
+        $page_size  = max( 1, min( 100, (int) $page_size ) );
+        $page_index = max( 0, (int) $page_index );
+
+        $p = new stdClass();
+        $p->apikey                   = CASANOVA_GIAV_APIKEY;
+        $p->idsAgente                = null;
+        $p->aliasAgente              = $q !== '' ? $q : null;
+        $p->nombre                   = $q !== '' ? $q : null;
+        $p->correo                   = $email !== '' ? $email : null;
+        $p->incluirVinculados        = (bool) $include_linked;
+        $p->incluirBloqueados        = (bool) $include_blocked;
+        $p->fechaHoraModificacionDesde = null;
+        $p->fechaHoraModificacionHasta = null;
+        $p->customDataValues         = null;
+        $p->pageSize                 = $page_size;
+        $p->pageIndex                = $page_index;
+
+        $res = $this->call( 'AgenteComercial_SEARCH', $p );
+        if ( is_wp_error( $res ) ) {
+            return $res;
+        }
+
+        $list = null;
+        if ( is_object( $res ) && isset( $res->AgenteComercial_SEARCHResult ) ) {
+            $list = $res->AgenteComercial_SEARCHResult;
+        } else {
+            $list = $res;
+        }
+
+        if ( $list === null ) {
+            return [];
+        }
+        if ( is_object( $list ) && count( get_object_vars( $list ) ) === 0 ) {
+            return [];
+        }
+        if ( is_array( $list ) ) {
+            return $list;
+        }
+        if ( is_object( $list ) && isset( $list->WsAgenteComercial ) ) {
+            $items = $list->WsAgenteComercial;
+            if ( $items === null ) {
+                return [];
+            }
+            if ( is_array( $items ) ) {
+                return $items;
+            }
+            if ( is_object( $items ) ) {
+                return [ $items ];
+            }
+            return [];
+        }
+        if ( is_object( $list ) ) {
+            return [ $list ];
+        }
+
+        return [];
+    }
 }
