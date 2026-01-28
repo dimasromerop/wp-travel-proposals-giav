@@ -149,15 +149,42 @@ function wp_travel_giav_resolve_destination( array $proposal, array $snapshot ):
     $country = wp_travel_giav_get_destination_country_code( $proposal, $snapshot );
     $country = $country !== null ? strtoupper( $country ) : '';
 
-    $eu_countries = [
-        'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU',
-        'IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
-    ];
+    $country_only = (bool) apply_filters( 'wp_travel_giav_destination_country_only', true );
+    if ( $country_only ) {
+        return [
+            'code'    => $country !== '' ? $country : null,
+            'destino' => 'XX_No_Requerido',
+            'zone'    => null,
+        ];
+    }
+
+    if ( $country === '' ) {
+        return [
+            'code'    => null,
+            'destino' => 'XX_No_Requerido',
+            'zone'    => 'XX_No_requerido',
+        ];
+    }
+
+    $eu_countries = apply_filters(
+        'wp_travel_giav_eu_countries',
+        [
+            'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU',
+            'IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','SE',
+        ]
+    );
+    $eu_countries = array_values( array_unique( array_map( 'strtoupper', array_filter( (array) $eu_countries ) ) ) );
+
+    $can_ceuta_melilla = apply_filters( 'wp_travel_giav_can_ceuta_melilla_codes', [] );
+    $can_ceuta_melilla = array_values( array_unique( array_map( 'strtoupper', array_filter( (array) $can_ceuta_melilla ) ) ) );
 
     $destino = 'RestoMundo';
-    $zone = 'XX_No_requerido';
+    $zone = 'ES_RestoMundo';
 
-    if ( $country === 'ES' ) {
+    if ( ! empty( $can_ceuta_melilla ) && in_array( $country, $can_ceuta_melilla, true ) ) {
+        $destino = 'CanCeuMel';
+        $zone = 'ES_CanCeuMel';
+    } elseif ( $country === 'ES' ) {
         $destino = 'Nacional';
         $zone = 'ES_Nacional';
     } elseif ( in_array( $country, $eu_countries, true ) ) {
@@ -331,7 +358,8 @@ function wp_travel_giav_expediente_create( array $data, array &$trace = null ) {
         'fechaApertura'         => $data['fecha_apertura'] ?? null,
         'fechaDesde'            => $data['fecha_desde'] ?? null,
         'fechaHasta'            => $data['fecha_hasta'] ?? null,
-        'destinationIdCountryZone' => null,
+        'destinationCountryISO3166Code' => $data['destinationCountryISO3166Code'] ?? null,
+        'destinationIdCountryZone'      => $data['destinationIdCountryZone'] ?? null,
     ];
 
     return wp_travel_giav_call( 'Expediente_POST', $params, $trace );
