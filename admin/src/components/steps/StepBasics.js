@@ -840,7 +840,7 @@ const defaults = useMemo(() => {
     ? agentError
     : agentLoading
     ? 'Buscando agentes en GIAV...'
-    : 'Se enviara a GIAV al crear el expediente.';
+    : '';
 
   const paxValue = parseInt(values.pax_total, 10);
   const playersValue = parseInt(values.players_count, 10);

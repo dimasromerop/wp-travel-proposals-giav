@@ -1026,6 +1026,7 @@
     .components-base-control__field {
       align-items: center;
     }
+  }
 
   /* ---------- Form controls (Select / Combobox) ---------- */
   /* WP components sometimes ship their own borders. We override to match Casanova. */
@@ -1115,14 +1116,13 @@
     box-shadow: none !important;
   }
 
-    .components-combobox-control__input {
-      line-height: 1.4;
-    }
+  .components-combobox-control__input {
+    line-height: 1.4;
+  }
 
-    /* Clear (x) button should also align */
-    .components-button {
-      height: 44px;
-    }
+  /* Clear (x) button should also align */
+  .components-combobox-control__clear-button {
+    height: 44px;
   }
 
   /* Focus treatment consistent with the rest of the UI */
@@ -1457,8 +1457,7 @@
 }
 
 .proposal-basics__field input,
-.proposal-basics__field select,
-.proposal-basics__field .components-combobox-control__input {
+.proposal-basics__field select {
   border-radius: 10px;
   border: 1px solid var(--casanova-border);
   height: 38px;
@@ -1466,9 +1465,82 @@
   font-size: 13px;
 }
 
+.casanova-portal .proposal-basics__field .components-combobox-control__control {
+  min-height: 38px;
+  align-items: center;
+}
+
+.casanova-portal .proposal-basics__field .components-combobox-control__suggestions-container,
+.casanova-portal .proposal-basics__field .components-combobox-control__control {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.casanova-portal .proposal-basics__field .components-combobox-control {
+  position: relative;
+}
+
+.casanova-portal .proposal-basics__field .components-combobox-control__suggestions-container {
+  position: static;
+}
+
+.casanova-portal .proposal-basics__field .components-form-token-field__suggestions-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--casanova-border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+  box-sizing: border-box;
+  z-index: 20;
+}
+
+.casanova-portal .proposal-basics__field .components-form-token-field__suggestion {
+  padding: 8px 12px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.casanova-portal .proposal-basics__field .components-form-token-field__input-container {
+  height: 38px;
+  min-height: 38px !important;
+  padding: 0 12px !important;
+  border-radius: 10px;
+  border: 1px solid var(--casanova-border) !important;
+  background: #fff !important;
+  display: flex;
+  align-items: center;
+  box-shadow: none !important;
+}
+
+.casanova-portal .proposal-basics__field .components-form-token-field__input,
+.casanova-portal .proposal-basics__field .components-combobox-control__input {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  height: 100%;
+  min-height: 0 !important;
+  font-size: 13px;
+}
+
+.casanova-portal .proposal-basics__field .components-combobox-control__clear-button {
+  height: 38px;
+  align-self: center;
+  margin-right: 6px;
+}
+
 .proposal-basics__field.is-error input,
 .proposal-basics__field.is-error select,
-.proposal-basics__field.is-error .components-combobox-control__input {
+.proposal-basics__field.is-error .components-combobox-control__input,
+.proposal-basics__field.is-error .components-form-token-field__input-container {
   border-color: #b91c1c;
   box-shadow: 0 0 0 2px rgba(185, 28, 28, 0.1);
 }
