@@ -1,5 +1,5 @@
-import { useMemo, useState } from '@wordpress/element';
-import { Button, Card, CardBody, CardHeader, Notice, Spinner } from '@wordpress/components';
+import { useEffect, useMemo, useState } from '@wordpress/element';
+import { Button, Card, CardBody, CardHeader, Notice, Spinner, TextareaControl } from '@wordpress/components';
 import API from '../../api';
 import { buildCustomerFullName } from '../../utils/customer';
 import { getStoredProposalId } from '../../utils/proposal';
@@ -92,6 +92,32 @@ function buildInformativeExtraLine(hotelName, label, perRoomPrice, currency) {
   return line;
 }
 
+function normalizeCancellationText(value) {
+  if (value === null || value === undefined) return '';
+  let text = String(value);
+  text = text.replace(/\r\n/g, '\n');
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+  text = text.replace(/<[^>]+>/g, '');
+  return text.trim();
+}
+
+function buildCancellationText(items = []) {
+  const hotels = (items || [])
+    .filter((it) => it?.service_type === 'hotel')
+    .map((it) => ({
+      name: it.display_name || it.title || 'Hotel',
+      text: normalizeCancellationText(it.condiciones_cancelacion || ''),
+    }))
+    .filter((it) => it.text);
+
+  if (hotels.length === 0) return '';
+  if (hotels.length === 1) return hotels[0].text;
+
+  return hotels
+    .map((it) => `${it.name}:\n${it.text}`)
+    .join('\n\n');
+}
+
 export default function StepPreview({
   proposalId,
   basics,
@@ -102,15 +128,28 @@ export default function StepPreview({
   onProposalCreated,
   mode = 'create',
   versionNumber = 1,
+  initialCancellationTerms = '',
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [basicsSaved, setBasicsSaved] = useState('');
   const [savingBasics, setSavingBasics] = useState(false);
+  const [cancellationTouched, setCancellationTouched] = useState(
+    Boolean(initialCancellationTerms && String(initialCancellationTerms).trim())
+  );
+  const [cancellationText, setCancellationText] = useState(initialCancellationTerms || '');
   const sourceTag =
     typeof window !== 'undefined' && window.CASANOVA_GESTION_RESERVAS
       ? 'wp-travel-giav-portal'
       : 'wp-travel-giav-admin';
+
+  const defaultCancellationText = useMemo(() => buildCancellationText(items), [items]);
+
+  useEffect(() => {
+    if (!cancellationTouched) {
+      setCancellationText(defaultCancellationText);
+    }
+  }, [defaultCancellationText, cancellationTouched]);
 
   // Snapshot completo (cabecera + items + totales + metadata)
   const snapshot = useMemo(() => {
@@ -220,6 +259,7 @@ export default function StepPreview({
 
       notes_public: it.notes_public ?? '',
       notes_internal: it.notes_internal ?? '',
+      condiciones_cancelacion: it.condiciones_cancelacion ?? '',
     }));
 
     const t = totals || {
@@ -238,6 +278,7 @@ export default function StepPreview({
         totals_margin_abs: round2(t.totals_margin_abs),
         totals_margin_pct: round2(t.totals_margin_pct),
       },
+      condiciones_cancelacion: String(cancellationText || '').trim(),
       template_id: null,
       terms_version: null,
       metadata: {
@@ -247,7 +288,7 @@ export default function StepPreview({
         schema_version: 'v2',
       },
     };
-  }, [basics, items, totals]);
+  }, [basics, items, totals, cancellationText, sourceTag]);
 
   // Snapshot = fuente de verdad (sin recalcular ni consultar backends en este paso).
   const snapshotHeader = snapshot?.header || {};
@@ -258,6 +299,10 @@ export default function StepPreview({
   );
   const snapshotTotals = snapshot?.totals || {};
   const snapshotItems = Array.isArray(snapshot?.items) ? snapshot.items : [];
+  const hasHotelItems = useMemo(
+    () => (Array.isArray(items) ? items.some((it) => it?.service_type === 'hotel') : false),
+    [items]
+  );
 
   const issueSummary = useMemo(() => {
     let warningCount = 0;
@@ -804,6 +849,20 @@ export default function StepPreview({
           </div>
         </div>
 
+        {(hasHotelItems || cancellationText) && (
+          <div className="proposal-preview__cancellation">
+            <div className="proposal-preview__cancellation-title">Condiciones de cancelación</div>
+            <TextareaControl
+              value={cancellationText}
+              onChange={(v) => {
+                setCancellationText(v);
+                setCancellationTouched(true);
+              }}
+              rows={6}
+              help="Este texto se mostrara al cliente antes de aceptar la propuesta."
+            />
+          </div>
+        )}
 
         <div className="proposal-preview__actions">
           <Button variant="secondary" onClick={onBack} disabled={loading}>

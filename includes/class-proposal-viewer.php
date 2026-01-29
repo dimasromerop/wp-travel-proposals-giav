@@ -198,6 +198,38 @@ class WP_Travel_Proposal_Viewer {
             'totals_margin_pct' => 0,
         ] );
 
+        $cancellation_terms = '';
+        if ( ! empty( $snapshot['condiciones_cancelacion'] ) ) {
+            $cancellation_terms = trim( (string) $snapshot['condiciones_cancelacion'] );
+        }
+        if ( $cancellation_terms === '' ) {
+            $parts = [];
+            foreach ( $items as $item ) {
+                if ( ( $item['service_type'] ?? '' ) !== 'hotel' ) {
+                    continue;
+                }
+                $term = trim( (string) ( $item['condiciones_cancelacion'] ?? '' ) );
+                if ( $term === '' ) {
+                    continue;
+                }
+                $name = trim( (string) ( $item['display_name'] ?? $item['title'] ?? 'Hotel' ) );
+                $parts[] = [
+                    'name' => $name !== '' ? $name : 'Hotel',
+                    'text' => $term,
+                ];
+            }
+
+            if ( count( $parts ) === 1 ) {
+                $cancellation_terms = $parts[0]['text'];
+            } elseif ( ! empty( $parts ) ) {
+                $lines = [];
+                foreach ( $parts as $part ) {
+                    $lines[] = sprintf( "%s:\n%s", $part['name'], $part['text'] );
+                }
+                $cancellation_terms = implode( "\n\n", $lines );
+            }
+        }
+
         // Render in the proposal's client language (stored in snapshot header).
         // This is essential when WPML is active: we want the proposal language,
         // not the global site/admin language.
@@ -217,7 +249,8 @@ class WP_Travel_Proposal_Viewer {
                 $header,
                 $items,
                 array_values( $warnings ),
-                $totals
+                $totals,
+                $cancellation_terms
             );
         } finally {
             if ( $switched && function_exists( 'restore_previous_locale' ) ) {
@@ -270,7 +303,8 @@ class WP_Travel_Proposal_Viewer {
         array $header,
         array $items,
         array $warnings,
-        array $totals
+        array $totals,
+        string $cancellation_terms
     ) {
         status_header( 200 );
         header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
@@ -746,6 +780,11 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                     border: 1px solid rgba(15, 23, 42, 0.06);
                     box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
                     backdrop-filter: blur(6px);
+                }
+                .proposal-cancellation__text {
+                    color: #0f172a;
+                    font-size: 14px;
+                    line-height: 1.6;
                 }
                 .proposal-accept {
                     display: flex;
@@ -1288,39 +1327,6 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
                                             $nightly_rates = $item['hotel_nightly_rates'];
                                         }
                                         ?>
-                                        <?php if ( $hotel_pricing_mode === 'per_night' && ! empty( $nightly_rates ) ) : ?>
-                                            <details class="service-card__details" style="margin-top:10px;">
-                                                <summary><?php echo esc_html__( 'Precio variable por noche', 'wp-travel-giav' ); ?></summary>
-                                                <div style="overflow:auto; margin-top:8px;">
-                                                    <table style="width:100%; border-collapse:collapse;">
-                                                        <thead>
-                                                            <tr>
-                                                                <th style="text-align:left; padding:6px 8px; border-bottom:1px solid #e2e8f0;"><?php echo esc_html__( 'Fecha', 'wp-travel-giav' ); ?></th>
-                                                                <th style="text-align:right; padding:6px 8px; border-bottom:1px solid #e2e8f0;"><?php echo esc_html__( 'Neto', 'wp-travel-giav' ); ?></th>
-                                                                <th style="text-align:right; padding:6px 8px; border-bottom:1px solid #e2e8f0;"><?php echo esc_html__( 'Margen', 'wp-travel-giav' ); ?></th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            <?php foreach ( $nightly_rates as $row ) : ?>
-                                                                <?php
-                                                                if ( ! is_array( $row ) ) {
-                                                                    continue;
-                                                                }
-                                                                $row_date = self::format_spanish_date( (string) ( $row['date'] ?? '' ) );
-                                                                $net = isset( $row['net_price'] ) ? (float) $row['net_price'] : (float) ( $row['unit_cost_net'] ?? 0 );
-                                                                $margin_pct = isset( $row['margin_pct'] ) ? (float) $row['margin_pct'] : (float) ( $row['margin'] ?? 0 );
-                                                                ?>
-                                                                <tr>
-                                                                    <td style="padding:6px 8px; border-bottom:1px solid #f1f5f9;"><?php echo esc_html( $row_date ?: (string) ( $row['date'] ?? '' ) ); ?></td>
-                                                                    <td style="padding:6px 8px; border-bottom:1px solid #f1f5f9; text-align:right;"><?php echo esc_html( $currency_symbol ); ?> <?php echo esc_html( number_format( $net, 2 ) ); ?></td>
-                                                                    <td style="padding:6px 8px; border-bottom:1px solid #f1f5f9; text-align:right;"><?php echo esc_html( number_format( $margin_pct, 2 ) ); ?>%</td>
-                                                                </tr>
-                                                            <?php endforeach; ?>
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </details>
-                                        <?php endif; ?>
 
                                         <?php if ( $notes ) : ?>
                                             <div class="service-card__note"><?php echo esc_html( $notes ); ?></div>
@@ -1677,6 +1683,15 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
 
 
 
+
+            <?php if ( $cancellation_terms !== '' ) : ?>
+                <div class="proposal-section proposal-cancellation">
+                    <h2><?php echo esc_html__( 'Condiciones de cancelacion', 'wp-travel-giav' ); ?></h2>
+                    <div class="proposal-cancellation__text">
+                        <?php echo nl2br( esc_html( $cancellation_terms ) ); ?>
+                    </div>
+                </div>
+            <?php endif; ?>
 
             <?php if ( $accepted_message || $can_accept ) : ?>
                 <div class="proposal-section proposal-accept" id="proposal-accept">

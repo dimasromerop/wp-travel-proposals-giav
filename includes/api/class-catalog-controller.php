@@ -333,9 +333,14 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
             ARRAY_A
         );
 
+        $cancellation_terms = '';
+        if ( $wp_object_type === 'hotel' && $wp_object_id > 0 && class_exists( 'WP_Travel_GIAV_Snapshot_Resolver' ) ) {
+            $cancellation_terms = WP_Travel_GIAV_Snapshot_Resolver::resolve_hotel_cancellation_terms_for_object( $wp_object_id, $wp_object_type );
+        }
+
         if (!$row) {
             // Provide a safe default supplier so the UI can show something actionable.
-            return rest_ensure_response([
+            $payload = [
                 'status' => 'needs_review',
                 'giav_entity_type'   => 'supplier',
                 'giav_entity_id'     => WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_ID,
@@ -343,7 +348,15 @@ class WP_Travel_Catalog_Controller extends WP_REST_Controller {
                 'giav_supplier_name' => WP_TRAVEL_GIAV_DEFAULT_SUPPLIER_NAME,
                 'match_type'         => 'auto_generic',
                 'is_fallback'        => true,
-            ]);
+            ];
+            if ( $cancellation_terms !== '' ) {
+                $payload['condiciones_cancelacion'] = $cancellation_terms;
+            }
+            return rest_ensure_response( $payload );
+        }
+
+        if ( $cancellation_terms !== '' ) {
+            $row['condiciones_cancelacion'] = $cancellation_terms;
         }
 
         return rest_ensure_response($row);

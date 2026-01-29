@@ -5,6 +5,25 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class WP_Travel_GIAV_Snapshot_Resolver {
 
+    private static function normalize_text_value( $value ) : string {
+        if ( is_array( $value ) ) {
+            $parts = [];
+            array_walk_recursive( $value, function ( $v ) use ( &$parts ) {
+                if ( is_scalar( $v ) ) {
+                    $text = trim( (string) $v );
+                    if ( $text !== '' ) {
+                        $parts[] = $text;
+                    }
+                }
+            } );
+            return $parts ? implode( "\n", $parts ) : '';
+        }
+        if ( is_object( $value ) ) {
+            return '';
+        }
+        return trim( (string) $value );
+    }
+
     /**
      * Try to resolve the hotel image from the Hotel CPT.
      *
@@ -53,6 +72,28 @@ class WP_Travel_GIAV_Snapshot_Resolver {
         return [ 'url' => $url, 'alt' => $alt ];
     }
 
+    /**
+     * Try to resolve hotel cancellation terms from a Hotel CPT.
+     *
+     * Expects a custom field named "condiciones_cancelacion".
+     * - If ACF is present (get_field), supports return types: string | array.
+     * - Otherwise falls back to post_meta.
+     */
+    private static function resolve_hotel_cancellation_terms( int $post_id ) : string {
+        $text = '';
+
+        if ( function_exists( 'get_field' ) ) {
+            $val = get_field( 'condiciones_cancelacion', $post_id );
+            $text = self::normalize_text_value( $val );
+        }
+
+        if ( $text === '' ) {
+            $meta = get_post_meta( $post_id, 'condiciones_cancelacion', true );
+            $text = self::normalize_text_value( $meta );
+        }
+
+        return $text;
+    }
 
     /**
      * Try to resolve the hotel image from a JetEngine Custom Content Type (CCT) item.
@@ -175,6 +216,112 @@ class WP_Travel_GIAV_Snapshot_Resolver {
         }
 
         return [ 'url' => $url, 'alt' => $alt ];
+    }
+
+    /**
+     * Try to resolve hotel cancellation terms from a JetEngine CCT item.
+     *
+     * Field: condiciones_cancelacion
+     */
+    private static function resolve_cct_hotel_cancellation_terms( int $cct_id, string $slug = 'hoteles' ) : string {
+        $text = '';
+
+        $cct_id = absint( $cct_id );
+        if ( $cct_id <= 0 ) {
+            return $text;
+        }
+
+        // Basic hardening: only allow safe slugs in table names.
+        $slug = strtolower( trim( $slug ) );
+        if ( $slug === '' || ! preg_match( '/^[a-z0-9_]+$/', $slug ) ) {
+            $slug = 'hoteles';
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'jet_cct_' . $slug;
+
+        $maybe_table = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+        if ( ! $maybe_table ) {
+            return $text;
+        }
+
+        $columns = $wpdb->get_results( "SHOW COLUMNS FROM {$table}", ARRAY_A );
+        $col_names = [];
+        if ( is_array( $columns ) ) {
+            foreach ( $columns as $col ) {
+                if ( ! empty( $col['Field'] ) ) {
+                    $col_names[] = (string) $col['Field'];
+                }
+            }
+        }
+
+        $pk = '_ID';
+        if ( ! in_array( $pk, $col_names, true ) ) {
+            $pk = in_array( 'id', $col_names, true ) ? 'id' : ( in_array( 'ID', $col_names, true ) ? 'ID' : '' );
+        }
+        if ( $pk === '' ) {
+            return $text;
+        }
+
+        if ( ! in_array( 'condiciones_cancelacion', $col_names, true ) ) {
+            return $text;
+        }
+
+        $row = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT condiciones_cancelacion FROM {$table} WHERE {$pk} = %d LIMIT 1",
+                $cct_id
+            ),
+            ARRAY_A
+        );
+
+        if ( empty( $row ) || ! array_key_exists( 'condiciones_cancelacion', $row ) ) {
+            return $text;
+        }
+
+        $raw = $row['condiciones_cancelacion'];
+        if ( is_string( $raw ) ) {
+            $raw = trim( $raw );
+        }
+
+        $maybe = maybe_unserialize( $raw );
+        if ( $maybe !== $raw ) {
+            $raw = $maybe;
+        } elseif ( is_string( $raw ) && $raw !== '' ) {
+            $json = json_decode( $raw, true );
+            if ( is_array( $json ) ) {
+                $raw = $json;
+            }
+        }
+
+        return self::normalize_text_value( $raw );
+    }
+
+    /**
+     * Public resolver for hotel cancellation terms (CCT or CPT).
+     */
+    public static function resolve_hotel_cancellation_terms_for_object( int $object_id, string $object_type = '', string $object_subtype = '' ) : string {
+        $object_id = absint( $object_id );
+        if ( $object_id <= 0 ) {
+            return '';
+        }
+
+        $object_type = (string) $object_type;
+        $object_subtype = (string) $object_subtype;
+
+        $text = '';
+        $try_cct = ( $object_type === 'cct' || $object_type === 'hotel' );
+        if ( $try_cct ) {
+            $slug = $object_subtype !== '' ? $object_subtype : 'hoteles';
+            $text = self::resolve_cct_hotel_cancellation_terms( $object_id, $slug );
+            if ( $text === '' ) {
+                $text = self::resolve_hotel_cancellation_terms( $object_id );
+            }
+        } else {
+            $text = self::resolve_hotel_cancellation_terms( $object_id );
+        }
+
+        return $text;
     }
 
     /**
@@ -463,6 +610,14 @@ if ( $try_cct ) {
                         if ( ! empty( $img['alt'] ) ) {
                             $item['hotel_image_alt'] = (string) $img['alt'];
                         }
+                    }
+                }
+
+                // Enrich snapshot with hotel cancellation terms (optional).
+                if ( empty( $item['condiciones_cancelacion'] ) && ! $is_manual && $wp_object_id > 0 ) {
+                    $terms = self::resolve_hotel_cancellation_terms_for_object( $wp_object_id, $wp_object_type, $wp_object_subtype );
+                    if ( $terms !== '' ) {
+                        $item['condiciones_cancelacion'] = $terms;
                     }
                 }
 

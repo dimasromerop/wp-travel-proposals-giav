@@ -240,6 +240,7 @@ export default function ProposalWizard({
         totals={totals}
         mode={mode}
         versionNumber={nextVersionNumber}
+        initialCancellationTerms={initialSnapshot?.condiciones_cancelacion || ''}
         onBack={() => setStep(2)}
         onSent={({ versionId: vId, snapshot: sentSnapshot, publicUrl: sentUrl, publicToken: sentToken, status }) => {
           setVersionId(vId);

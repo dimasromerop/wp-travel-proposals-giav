@@ -1730,6 +1730,22 @@ details[open] > .service-card__section-summary::after {
   color: #64748b;
 }
 
+.proposal-preview__cancellation {
+  margin-top: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.proposal-preview__cancellation-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
 .proposal-preview__actions {
   margin-top: 16px;
   display: flex;

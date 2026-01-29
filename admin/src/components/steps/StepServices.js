@@ -430,6 +430,7 @@ function defaultItem(basics, defaultMarkupPct = 0) {
     hotel_regimen: '',
     hotel_pricing_mode: 'simple',
     nightly_rates: [],
+    condiciones_cancelacion: '',
 
     // Generic quantity for non-hotel
     quantity: 1,
@@ -749,12 +750,13 @@ function computeTotals(items) {
     { cost: 0, sell: 0 }
   );
 
-  const marginAbs = round2(totals.sell - totals.cost);
-  const marginPct = totals.sell > 0 ? round2((marginAbs / totals.sell) * 100) : 0;
+  const roundedSell = Math.ceil(round2(totals.sell));
+  const marginAbs = round2(roundedSell - totals.cost);
+  const marginPct = roundedSell > 0 ? round2((marginAbs / roundedSell) * 100) : 0;
 
   return {
     totals_cost_net: round2(totals.cost),
-    totals_sell_price: round2(totals.sell),
+    totals_sell_price: roundedSell,
     totals_margin_abs: marginAbs,
     totals_margin_pct: marginPct,
   };
@@ -2093,6 +2095,7 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                                   giav_entity_id: m.giav_entity_id,
                                   giav_supplier_id: m.giav_supplier_id ?? DEFAULT_SUPPLIER_ID,
                                   giav_supplier_name: m.giav_supplier_name ?? DEFAULT_SUPPLIER_NAME,
+                                  condiciones_cancelacion: m.condiciones_cancelacion ?? '',
                                 });
                               } else {
                                 updateItem(idx, {
@@ -2101,6 +2104,7 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                                   giav_entity_id: DEFAULT_SUPPLIER_ID,
                                   giav_supplier_id: DEFAULT_SUPPLIER_ID,
                                   giav_supplier_name: DEFAULT_SUPPLIER_NAME,
+                                  condiciones_cancelacion: m?.condiciones_cancelacion ?? '',
                                 });
                               }
                             } catch {
@@ -2110,6 +2114,7 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                                 giav_entity_id: DEFAULT_SUPPLIER_ID,
                                 giav_supplier_id: DEFAULT_SUPPLIER_ID,
                                 giav_supplier_name: DEFAULT_SUPPLIER_NAME,
+                                condiciones_cancelacion: '',
                               });
                             }
                           }}
@@ -2150,6 +2155,7 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                                 supplier_override: false,
                                 display_name: manualLabel,
                                 title: manualLabel,
+                                condiciones_cancelacion: '',
                               });
                             } else {
                               updateItem(idx, {
@@ -2160,6 +2166,7 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
                                 giav_mapping_status: 'missing',
                                 supplier_override: false,
                                 display_name: '',
+                                condiciones_cancelacion: '',
                               });
                             }
                           }}
