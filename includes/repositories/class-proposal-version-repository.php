@@ -57,6 +57,36 @@ class WP_Travel_Proposal_Version_Repository extends WP_Travel_GIAV_DB {
         return max( 1, $max + 1 );
     }
 
+    public function update_snapshot_header( int $version_id, array $header ): int {
+        if ( empty( $header ) ) {
+            return 0;
+        }
+
+        $version = $this->get_by_id( $version_id );
+        if ( empty( $version ) || empty( $version['json_snapshot'] ) ) {
+            return 0;
+        }
+
+        $snapshot = json_decode( $version['json_snapshot'], true );
+        if ( ! is_array( $snapshot ) ) {
+            $snapshot = [];
+        }
+
+        $current_header = [];
+        if ( isset( $snapshot['header'] ) && is_array( $snapshot['header'] ) ) {
+            $current_header = $snapshot['header'];
+        }
+
+        $snapshot['header'] = array_merge( $current_header, $header );
+
+        return $this->update(
+            [ 'json_snapshot' => wp_json_encode( $snapshot ) ],
+            [ 'id' => $version_id ],
+            [ '%s' ],
+            [ '%d' ]
+        );
+    }
+
     public function mark_sync_status( int $version_id, string $status, ?string $giav_booking_id = null ) {
         $data = [
             'giav_last_sync_status' => $status,

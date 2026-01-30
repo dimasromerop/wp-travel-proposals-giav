@@ -171,6 +171,7 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
 
     public function update_proposal( WP_REST_Request $request ) {
         $repo = new WP_Travel_Proposal_Repository();
+        $version_repo = new WP_Travel_Proposal_Version_Repository();
         $proposal_id = (int) $request['id'];
 
         $proposal = $repo->get_by_id( $proposal_id );
@@ -230,6 +231,39 @@ class WP_Travel_Proposals_Controller extends WP_Travel_REST_Controller {
         }
 
         $repo->update_basics( $proposal_id, $data );
+
+        $header_fields = [
+            'customer_name',
+            'first_name',
+            'last_name',
+            'customer_email',
+            'customer_country',
+            'customer_language',
+            'start_date',
+            'end_date',
+            'pax_total',
+            'players_count',
+            'currency',
+            'proposal_title',
+            'giav_agent_id',
+        ];
+        $header_update = [];
+        foreach ( $header_fields as $field ) {
+            if ( array_key_exists( $field, $data ) ) {
+                $header_update[ $field ] = $data[ $field ];
+            }
+        }
+
+        if ( ! empty( $header_update ) ) {
+            $current_version_id = isset( $proposal['current_version_id'] ) ? (int) $proposal['current_version_id'] : 0;
+            if ( $current_version_id <= 0 ) {
+                $latest = $version_repo->get_latest_for_proposal( $proposal_id );
+                $current_version_id = $latest ? (int) $latest['id'] : 0;
+            }
+            if ( $current_version_id > 0 ) {
+                $version_repo->update_snapshot_header( $current_version_id, $header_update );
+            }
+        }
 
         return $this->response( [
             'proposal_id' => $proposal_id,

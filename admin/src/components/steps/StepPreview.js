@@ -665,7 +665,8 @@ export default function StepPreview({
     setBasicsSaved('');
     setSavingBasics(true);
     try {
-      await API.updateProposal(id, basics || {});
+      const payload = buildProposalPayload();
+      await API.updateProposal(id, payload);
       setBasicsSaved('Cambios guardados.');
     } catch (e) {
       setError(e?.message || 'Error guardando datos básicos.');

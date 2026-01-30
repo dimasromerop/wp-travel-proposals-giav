@@ -15,6 +15,7 @@ import {
 import API from '../../api';
 import CatalogSelect from '../CatalogSelect';
 import SupplierSearchSelect from '../SupplierSearchSelect';
+import { buildCustomerFullName } from '../../utils/customer';
 
 const DEFAULT_SUPPLIER_ID = '1734698';
 const DEFAULT_SUPPLIER_NAME = 'Proveedores varios';
@@ -2013,10 +2014,27 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
     setSaveMsg('');
     setSavingBasics(true);
     try {
-      await API.updateProposal(proposalId, basics);
+      const computedCustomerName = buildCustomerFullName(
+        basics?.first_name,
+        basics?.last_name,
+        basics?.customer_name
+      );
+      const payload = {
+        ...(basics || {}),
+        customer_name: computedCustomerName,
+        pax_total: Math.max(1, toInt(basics?.pax_total ?? 1, 1)),
+        players_count: Math.max(0, toInt(basics?.players_count ?? 0, 0)),
+        customer_country: basics?.customer_country ? String(basics.customer_country).toUpperCase() : '',
+        giav_agent_id: (() => {
+          const agentId = parseInt(basics?.giav_agent_id, 10);
+          return Number.isFinite(agentId) && agentId > 0 ? agentId : null;
+        })(),
+      };
+
+      await API.updateProposal(proposalId, payload);
       setSaveMsg('Cambios guardados.');
     } catch (e) {
-      setActionError(e?.message || 'Error guardando datos básicos.');
+      setActionError(e?.message || 'Error guardando datos b??sicos.');
     } finally {
       setSavingBasics(false);
     }
