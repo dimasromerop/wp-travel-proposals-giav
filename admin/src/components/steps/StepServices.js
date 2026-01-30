@@ -53,6 +53,95 @@ function clampNumber(n, min, max) {
 function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
+
+function gcd(a, b) {
+  let x = Math.abs(a);
+  let y = Math.abs(b);
+  while (y) {
+    const t = y;
+    y = x % y;
+    x = t;
+  }
+  return x;
+}
+
+function adjustTotalToMultiple(total, divisor) {
+  if (!divisor || divisor <= 1) return total;
+  return Math.ceil(total / divisor) * divisor;
+}
+
+function computeRoundedPricingTotals({
+  totalTrip,
+  playersCount,
+  nonPlayersCount,
+  pricePlayerRaw,
+  priceNonPlayerRaw,
+}) {
+  const total = Math.max(0, Math.round(totalTrip || 0));
+  const players = Math.max(0, toInt(playersCount, 0));
+  const nonPlayers = Math.max(0, toInt(nonPlayersCount, 0));
+
+  if (players <= 0 && nonPlayers <= 0) {
+    return { totalTrip: total, pricePlayer: null, priceNonPlayer: null };
+  }
+
+  const divisor = players > 0 && nonPlayers > 0 ? gcd(players, nonPlayers) : Math.max(players, nonPlayers);
+  const adjustedTotal = adjustTotalToMultiple(total, divisor);
+
+  if (players > 0 && nonPlayers > 0) {
+    const baseNon = Math.max(0, Math.round(priceNonPlayerRaw || 0));
+    let best = null;
+    let bestScore = null;
+    const maxSteps = Math.max(players + nonPlayers, 10);
+
+    for (let step = 0; step <= maxSteps; step += 1) {
+      const candidates = [baseNon + step, baseNon - step];
+      for (const candidate of candidates) {
+        if (candidate < 0) continue;
+        const remaining = adjustedTotal - nonPlayers * candidate;
+        if (remaining < 0) continue;
+        if (remaining % players !== 0) continue;
+        const player = remaining / players;
+        const score =
+          Math.abs(candidate - (priceNonPlayerRaw || 0)) +
+          Math.abs(player - (pricePlayerRaw ?? player));
+        if (bestScore === null || score < bestScore) {
+          bestScore = score;
+          best = { priceNonPlayer: candidate, pricePlayer: player };
+        }
+      }
+      if (bestScore === 0) break;
+    }
+
+    if (best) {
+      return { totalTrip: adjustedTotal, ...best };
+    }
+
+    const fallbackNon = Math.max(0, baseNon);
+    const fallbackPlayer = players > 0
+      ? Math.max(0, Math.round((adjustedTotal - nonPlayers * fallbackNon) / players))
+      : null;
+    return {
+      totalTrip: players > 0 ? (players * fallbackPlayer + nonPlayers * fallbackNon) : adjustedTotal,
+      pricePlayer: fallbackPlayer,
+      priceNonPlayer: fallbackNon,
+    };
+  }
+
+  if (players > 0) {
+    return {
+      totalTrip: adjustedTotal,
+      pricePlayer: adjustedTotal / players,
+      priceNonPlayer: null,
+    };
+  }
+
+  return {
+    totalTrip: adjustedTotal,
+    pricePlayer: null,
+    priceNonPlayer: nonPlayers > 0 ? adjustedTotal / nonPlayers : null,
+  };
+}
 function daysDiff(startISO, endISO) {
   if (!startISO || !endISO) return 0;
   // Use UTC dates to avoid timezone shifting (e.g. local midnight -> previous day in ISO).
@@ -762,6 +851,39 @@ function computeTotals(items) {
   };
 }
 
+function adjustTotalsForRoundedPricing(totals, basics) {
+  if (!totals) return totals;
+  const paxTotal = Math.max(0, toInt(basics?.pax_total ?? 0, 0));
+  const rawPlayers = toInt(basics?.players_count ?? paxTotal ?? 0, 0);
+  const playersCount = Math.min(Math.max(rawPlayers, 0), paxTotal);
+  const nonPlayersCount = Math.max(0, paxTotal - playersCount);
+  const divisor =
+    playersCount > 0 && nonPlayersCount > 0
+      ? gcd(playersCount, nonPlayersCount)
+      : Math.max(playersCount, nonPlayersCount);
+
+  if (!divisor || divisor <= 1) {
+    return totals;
+  }
+
+  const baseSell = Math.max(0, toNumber(totals.totals_sell_price ?? 0));
+  const adjustedSell = adjustTotalToMultiple(Math.round(baseSell), divisor);
+  if (adjustedSell === baseSell) {
+    return totals;
+  }
+
+  const cost = Math.max(0, toNumber(totals.totals_cost_net ?? 0));
+  const marginAbs = round2(adjustedSell - cost);
+  const marginPct = adjustedSell > 0 ? round2((marginAbs / adjustedSell) * 100) : 0;
+
+  return {
+    ...totals,
+    totals_sell_price: adjustedSell,
+    totals_margin_abs: marginAbs,
+    totals_margin_pct: marginPct,
+  };
+}
+
 function HotelPricingPanel({ item, idx, updateItem, currency, pax, basics, globalMarkupPct }) {
   const roomPricing = item.room_pricing || getDefaultRoomPricing(globalMarkupPct);
   const defaultPricing = getDefaultRoomPricing(globalMarkupPct);
@@ -1440,7 +1562,8 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
     });
   });
 
-  const totals = useMemo(() => computeTotals(items), [items]);
+  const totalsRaw = useMemo(() => computeTotals(items), [items]);
+  const totals = useMemo(() => adjustTotalsForRoundedPricing(totalsRaw, basics), [totalsRaw, basics]);
   useEffect(() => {
   if (!onDraftChange) return;
 
@@ -1511,6 +1634,16 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
     if (hasSingleSupplement) {
       supplementSingle = Math.max(0, ppSingle - ppDouble);
     }
+    const displaySupplementSingle =
+      hasSingleSupplement && supplementSingle !== null ? Math.round(supplementSingle) : null;
+
+    const roundedDisplay = computeRoundedPricingTotals({
+      totalTrip,
+      playersCount: summary.playersCount,
+      nonPlayersCount: summary.nonPlayersCount,
+      pricePlayerRaw: pricePlayerDouble,
+      priceNonPlayerRaw: priceNonPlayerDouble,
+    });
 
     return {
       ...summary,
@@ -1520,6 +1653,10 @@ export default function StepServices({ proposalId, basics, initialItems = [], on
       pricePlayerDouble,
       supplementSingle,
       hasSingleSupplement,
+      displaySupplementSingle,
+      displayTotalTrip: roundedDisplay.totalTrip,
+      displayPricePlayer: roundedDisplay.pricePlayer,
+      displayPriceNonPlayer: roundedDisplay.priceNonPlayer,
     };
   }, [basics?.pax_total, basics?.players_count, items, totals.totals_sell_price]);
 
@@ -2494,7 +2631,7 @@ Desayuno incluido`}
           <div>
             <div className="services-summary__label">Total viaje</div>
             {renderSummaryValue(
-              `${currency} ${round2(pricingSummary.totalTrip).toFixed(2)}`,
+              `${currency} ${round2(pricingSummary.displayTotalTrip ?? pricingSummary.totalTrip).toFixed(2)}`,
               {
                 missing: totals.totals_sell_price <= 0,
                 tooltip: 'Completa servicios para calcular.',
@@ -2509,7 +2646,7 @@ Desayuno incluido`}
             <div>
               <div className="services-summary__label">Precio jugador en doble</div>
               {renderSummaryValue(
-                `${currency} ${round2(pricingSummary.pricePlayerDouble || 0).toFixed(2)}`,
+                `${currency} ${round2(pricingSummary.displayPricePlayer ?? pricingSummary.pricePlayerDouble ?? 0).toFixed(2)}`,
                 {
                   missing: pricingSummary.playersCount <= 0,
                   tooltip: 'Completa jugadores y servicios para calcular.',
@@ -2522,7 +2659,7 @@ Desayuno incluido`}
             <div>
               <div className="services-summary__label">Precio no jugador en doble</div>
               {renderSummaryValue(
-                `${currency} ${round2(pricingSummary.priceNonPlayerDouble || 0).toFixed(2)}`,
+                `${currency} ${round2(pricingSummary.displayPriceNonPlayer ?? pricingSummary.priceNonPlayerDouble ?? 0).toFixed(2)}`,
                 {
                   missing: pricingSummary.nonPlayersCount <= 0,
                   tooltip: 'Completa no jugadores para calcular.',
@@ -2535,7 +2672,7 @@ Desayuno incluido`}
             <div>
               <div className="services-summary__label">Suplemento individual</div>
               {renderSummaryValue(
-                `${currency} ${round2(pricingSummary.supplementSingle || 0).toFixed(2)}`,
+                `${currency} ${round2(pricingSummary.displaySupplementSingle ?? pricingSummary.supplementSingle ?? 0).toFixed(2)}`,
                 {
                   missing: !pricingSummary.hasSingleSupplement,
                   tooltip: 'Completa habitaciones para calcular.',
@@ -2584,7 +2721,7 @@ Desayuno incluido`}
             </div>
             <div className="services-footer__summary">
               <span>Total viaje</span>
-              <strong>{currency} {round2(pricingSummary.totalTrip).toFixed(2)}</strong>
+              <strong>{currency} {round2(pricingSummary.displayTotalTrip ?? pricingSummary.totalTrip).toFixed(2)}</strong>
             </div>
             <div className="services-footer__right">
               <Button

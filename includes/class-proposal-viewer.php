@@ -1837,6 +1837,24 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
         return home_url( '/travel-proposal/' . $token . '/' );
     }
 
+    private static function gcd_int( int $a, int $b ) : int {
+        $a = abs( $a );
+        $b = abs( $b );
+        while ( $b !== 0 ) {
+            $tmp = $b;
+            $b = $a % $b;
+            $a = $tmp;
+        }
+        return $a;
+    }
+
+    private static function adjust_total_to_multiple( float $total, int $divisor ) : float {
+        if ( $divisor <= 1 ) {
+            return $total;
+        }
+        return ceil( $total / $divisor ) * $divisor;
+    }
+
     private static function compute_pricing_breakdown( array $items, array $totals, array $header ) : array {
         $pax_total = absint( $header['pax_total'] ?? 0 );
         $players_raw = isset( $header['players_count'] ) ? (int) $header['players_count'] : $pax_total;
@@ -1927,6 +1945,12 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
             $informative_supplement_single = max( 0, $pp_option_single - $pp_double );
             $has_informative_single_option = true;
         }
+        if ( null !== $supplement_single ) {
+            $supplement_single = round( $supplement_single );
+        }
+        if ( null !== $informative_supplement_single ) {
+            $informative_supplement_single = round( $informative_supplement_single );
+        }
 
         // common_total = total_trip - hotel_double - hotel_single - golf_total
         $common_total = $total_trip - ( $total_double + $total_single ) - $golf_total;
@@ -1941,14 +1965,78 @@ $hero_image_alt = $hero_image_alt !== '' ? $hero_image_alt : ( $destination ?: (
             $price_player_double = $price_non_player_double + ( $golf_total / $players_count );
         }
 
+        $total_trip_display = max( 0.0, round( $total_trip ) );
+        if ( $players_count > 0 || $non_players_count > 0 ) {
+            $divisor = ( $players_count > 0 && $non_players_count > 0 )
+                ? self::gcd_int( $players_count, $non_players_count )
+                : max( $players_count, $non_players_count );
+            $total_trip_display = self::adjust_total_to_multiple( $total_trip_display, $divisor );
+        }
+
+        $rounded_player = $price_player_double;
+        $rounded_non_player = $price_non_player_double;
+
+        if ( $players_count > 0 && $non_players_count > 0 ) {
+            $base_non = max( 0, (int) round( $price_non_player_double ) );
+            $best_non = null;
+            $best_player = null;
+            $best_score = null;
+            $max_steps = max( $players_count + $non_players_count, 10 );
+
+            for ( $step = 0; $step <= $max_steps; $step++ ) {
+                $candidates = [ $base_non + $step, $base_non - $step ];
+                foreach ( $candidates as $candidate ) {
+                    if ( $candidate < 0 ) {
+                        continue;
+                    }
+                    $remaining = $total_trip_display - ( $non_players_count * $candidate );
+                    if ( $remaining < 0 ) {
+                        continue;
+                    }
+                    if ( $remaining % $players_count !== 0 ) {
+                        continue;
+                    }
+                    $player = $remaining / $players_count;
+                    $score = abs( $candidate - $price_non_player_double ) + abs( $player - ( $price_player_double ?? $player ) );
+                    if ( $best_score === null || $score < $best_score ) {
+                        $best_score = $score;
+                        $best_non = $candidate;
+                        $best_player = $player;
+                    }
+                }
+                if ( 0.0 === $best_score ) {
+                    break;
+                }
+            }
+
+            if ( null !== $best_non && null !== $best_player ) {
+                $rounded_non_player = $best_non;
+                $rounded_player = $best_player;
+            } else {
+                $rounded_non_player = $base_non;
+                $rounded_player = ( $players_count > 0 )
+                    ? max( 0, (int) round( ( $total_trip_display - ( $non_players_count * $rounded_non_player ) ) / $players_count ) )
+                    : null;
+                if ( $players_count > 0 ) {
+                    $total_trip_display = ( $players_count * $rounded_player ) + ( $non_players_count * $rounded_non_player );
+                }
+            }
+        } elseif ( $players_count > 0 ) {
+            $rounded_player = $total_trip_display / $players_count;
+            $rounded_non_player = null;
+        } elseif ( $non_players_count > 0 ) {
+            $rounded_non_player = $total_trip_display / $non_players_count;
+            $rounded_player = null;
+        }
+
         return [
             'pax_total'                => $pax_total,
             'players_count'            => $players_count,
             'non_players_count'        => $non_players_count,
             'golf_total'               => $golf_total,
-            'total_trip'               => $total_trip,
-            'price_non_player_double'  => $price_non_player_double,
-            'price_player_double'      => $price_player_double,
+            'total_trip'               => $total_trip_display,
+            'price_non_player_double'  => $rounded_non_player,
+            'price_player_double'      => $rounded_player,
             'base_room_type'         => $base_room_type,
             'has_single_supplement'    => $has_single_supplement,
             'supplement_single'        => $supplement_single,

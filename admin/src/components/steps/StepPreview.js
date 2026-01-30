@@ -10,6 +10,22 @@ function round2(n) {
   return Math.round((x + Number.EPSILON) * 100) / 100;
 }
 
+function gcd(a, b) {
+  let x = Math.abs(a);
+  let y = Math.abs(b);
+  while (y) {
+    const t = y;
+    y = x % y;
+    x = t;
+  }
+  return x;
+}
+
+function adjustTotalToMultiple(total, divisor) {
+  if (!divisor || divisor <= 1) return total;
+  return Math.ceil(total / divisor) * divisor;
+}
+
 function toNumber(v) {
   const x = parseFloat(String(v).replace(',', '.'));
   return Number.isFinite(x) ? x : 0;
@@ -18,6 +34,79 @@ function toNumber(v) {
 function toInt(v, fallback = 0) {
   const n = parseInt(v, 10);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function computeRoundedPricingTotals({
+  totalTrip,
+  playersCount,
+  nonPlayersCount,
+  pricePlayerRaw,
+  priceNonPlayerRaw,
+}) {
+  const total = Math.max(0, Math.round(totalTrip || 0));
+  const players = Math.max(0, toInt(playersCount, 0));
+  const nonPlayers = Math.max(0, toInt(nonPlayersCount, 0));
+
+  if (players <= 0 && nonPlayers <= 0) {
+    return { totalTrip: total, pricePlayer: null, priceNonPlayer: null };
+  }
+
+  const divisor = players > 0 && nonPlayers > 0 ? gcd(players, nonPlayers) : Math.max(players, nonPlayers);
+  const adjustedTotal = adjustTotalToMultiple(total, divisor);
+
+  if (players > 0 && nonPlayers > 0) {
+    const baseNon = Math.max(0, Math.round(priceNonPlayerRaw || 0));
+    let best = null;
+    let bestScore = null;
+    const maxSteps = Math.max(players + nonPlayers, 10);
+
+    for (let step = 0; step <= maxSteps; step += 1) {
+      const candidates = [baseNon + step, baseNon - step];
+      for (const candidate of candidates) {
+        if (candidate < 0) continue;
+        const remaining = adjustedTotal - nonPlayers * candidate;
+        if (remaining < 0) continue;
+        if (remaining % players !== 0) continue;
+        const player = remaining / players;
+        const score =
+          Math.abs(candidate - (priceNonPlayerRaw || 0)) +
+          Math.abs(player - (pricePlayerRaw ?? player));
+        if (bestScore === null || score < bestScore) {
+          bestScore = score;
+          best = { priceNonPlayer: candidate, pricePlayer: player };
+        }
+      }
+      if (bestScore === 0) break;
+    }
+
+    if (best) {
+      return { totalTrip: adjustedTotal, ...best };
+    }
+
+    const fallbackNon = Math.max(0, baseNon);
+    const fallbackPlayer = players > 0
+      ? Math.max(0, Math.round((adjustedTotal - nonPlayers * fallbackNon) / players))
+      : null;
+    return {
+      totalTrip: players > 0 ? (players * fallbackPlayer + nonPlayers * fallbackNon) : adjustedTotal,
+      pricePlayer: fallbackPlayer,
+      priceNonPlayer: fallbackNon,
+    };
+  }
+
+  if (players > 0) {
+    return {
+      totalTrip: adjustedTotal,
+      pricePlayer: adjustedTotal / players,
+      priceNonPlayer: null,
+    };
+  }
+
+  return {
+    totalTrip: adjustedTotal,
+    pricePlayer: null,
+    priceNonPlayer: nonPlayers > 0 ? adjustedTotal / nonPlayers : null,
+  };
 }
 
 const ROOM_ALLOCATION_ORDER = [
@@ -386,6 +475,16 @@ export default function StepPreview({
     if (hasSingleSupplement) {
       supplementSingle = Math.max(0, ppSingle - ppDouble);
     }
+    const displaySupplementSingle =
+      hasSingleSupplement && supplementSingle !== null ? Math.round(supplementSingle) : null;
+
+    const roundedDisplay = computeRoundedPricingTotals({
+      totalTrip,
+      playersCount: summary.playersCount,
+      nonPlayersCount: summary.nonPlayersCount,
+      pricePlayerRaw: pricePlayerBase,
+      priceNonPlayerRaw: priceNonPlayerBase,
+    });
 
     return {
       ...summary,
@@ -396,6 +495,10 @@ export default function StepPreview({
       pricePlayerBase,
       supplementSingle,
       hasSingleSupplement,
+      displaySupplementSingle,
+      displayTotalTrip: roundedDisplay.totalTrip,
+      displayPricePlayer: roundedDisplay.pricePlayer,
+      displayPriceNonPlayer: roundedDisplay.priceNonPlayer,
     };
   }, [snapshotHeader?.pax_total, snapshotHeader?.players_count, snapshotItems, snapshotTotals?.totals_sell_price]);
   const { includeRoomLines, informativeExtras } = useMemo(() => {
@@ -823,20 +926,20 @@ export default function StepPreview({
           <div className="proposal-preview__totals">
             <div className="proposal-preview__totals-label">Total viaje</div>
             <div className="proposal-preview__totals-value">
-              {snapshotHeader.currency} {round2(pricingSummary.totalTrip).toFixed(2)}
+              {snapshotHeader.currency} {round2(pricingSummary.displayTotalTrip ?? pricingSummary.totalTrip).toFixed(2)}
             </div>
 
             {pricingSummary.playersCount > 0 && (
               <div className="proposal-preview__totals-line">
-                Precio jugador en {pricingSummary.baseRoomType === 'single' ? 'individual' : 'doble'}: {snapshotHeader.currency} {round2(pricingSummary.pricePlayerBase || 0).toFixed(2)}
+                Precio jugador en {pricingSummary.baseRoomType === 'single' ? 'individual' : 'doble'}: {snapshotHeader.currency} {round2(pricingSummary.displayPricePlayer ?? pricingSummary.pricePlayerBase ?? 0).toFixed(2)}
               </div>
             )}
             <div className="proposal-preview__totals-line">
-              Precio no jugador en {pricingSummary.baseRoomType === 'single' ? 'individual' : 'doble'}: {snapshotHeader.currency} {round2(pricingSummary.priceNonPlayerBase || 0).toFixed(2)}
+              Precio no jugador en {pricingSummary.baseRoomType === 'single' ? 'individual' : 'doble'}: {snapshotHeader.currency} {round2(pricingSummary.displayPriceNonPlayer ?? pricingSummary.priceNonPlayerBase ?? 0).toFixed(2)}
             </div>
             {pricingSummary.hasSingleSupplement && (
               <div className="proposal-preview__totals-line">
-                Suplemento individual: {snapshotHeader.currency} {round2(pricingSummary.supplementSingle || 0).toFixed(2)}
+                Suplemento individual: {snapshotHeader.currency} {round2(pricingSummary.displaySupplementSingle ?? pricingSummary.supplementSingle ?? 0).toFixed(2)}
               </div>
             )}
             <div className="proposal-preview__totals-note">
